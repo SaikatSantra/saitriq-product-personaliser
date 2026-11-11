@@ -145,14 +145,62 @@
   background-color: #f8fafc;
   background-image: radial-gradient(#e2e8f0 1.2px, transparent 1.2px);
   background-size: 20px 20px;
-  padding: 24px;
+  padding: 16px 24px 20px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   overflow: hidden;
   position: relative;
   border-right: 1px solid #e2e8f0;
+}
+
+/* Front / Back Multi-Side Switcher */
+.saitriq-side-switcher {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: #ffffff;
+  padding: 4px;
+  border-radius: 30px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
+  margin-bottom: 12px;
+  z-index: 10;
+  flex-shrink: 0;
+}
+
+.saitriq-side-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 18px;
+  border-radius: 24px;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  outline: none;
+}
+
+.saitriq-side-tab:hover {
+  color: #0f172a;
+  background: #f1f5f9;
+}
+
+.saitriq-side-tab.is-active {
+  background: #0f172a;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.2);
+}
+
+.saitriq-side-tab-icon {
+  font-size: 14px;
+  line-height: 1;
 }
 
 .saitriq-canvas-stage {

@@ -13,6 +13,10 @@
       this.activePhotoLayer = null;
       this.isLoading = false;
       this.pendingOpen = false;
+      this.activeSide = "front";
+      this.sidesData = { front: null, back: null };
+      this.customerUploadedImageDataUrls = { front: null, back: null };
+      this.customerUploadedImageDataUrl = null;
     }
 
     async connectedCallback() {
@@ -156,6 +160,29 @@
         }
       }
       return "";
+    }
+
+    getSideBaseImage(side) {
+      if (side === "front") {
+        const variantImg = this.getSelectedVariantImage();
+        if (variantImg) return variantImg;
+      }
+
+      if (this.variantsData && Array.isArray(this.variantsData.images) && this.variantsData.images.length > 0) {
+        if (side === "back" && this.variantsData.images.length > 1) {
+          let backImg = this.variantsData.images[1];
+          if (backImg.startsWith("//")) backImg = "https:" + backImg;
+          return backImg;
+        }
+        if (side === "front") {
+          let frontImg = this.variantsData.images[0];
+          if (frontImg.startsWith("//")) frontImg = "https:" + frontImg;
+          return frontImg;
+        }
+      }
+
+      const pageImg = this.detectPageProductImage();
+      return pageImg || "";
     }
 
     async handleTriggerClick() {
@@ -345,12 +372,24 @@
           <div class="saitriq-modal-body">
             <!-- Canvas Preview Studio -->
             <div class="saitriq-canvas-viewport">
+              <!-- Front / Back Multi-Side Switcher -->
+              <div class="saitriq-side-switcher">
+                <button type="button" class="saitriq-side-tab is-active" data-side="front">
+                  <span class="saitriq-side-tab-icon">👕</span>
+                  <span>Front Side</span>
+                </button>
+                <button type="button" class="saitriq-side-tab" data-side="back">
+                  <span class="saitriq-side-tab-icon">🔄</span>
+                  <span>Back Side</span>
+                </button>
+              </div>
+
               <div class="saitriq-canvas-stage">
                 <canvas id="saitriq-storefront-canvas"></canvas>
               </div>
               <div class="saitriq-canvas-badge">
                 <span class="saitriq-pulse-dot"></span>
-                <span>Live 300 DPI Studio Preview</span>
+                <span id="saitriq-canvas-badge-text">Live 300 DPI Studio Preview • Front</span>
               </div>
             </div>
 
@@ -389,6 +428,14 @@
       });
 
       modal.querySelector(".saitriq-submit-cart-btn").addEventListener("click", () => this.handleAddToCart());
+
+      // Multi-side tab switcher event listeners
+      modal.querySelectorAll(".saitriq-side-tab").forEach((tab) => {
+        tab.addEventListener("click", () => {
+          const side = tab.getAttribute("data-side");
+          this.switchSide(side);
+        });
+      });
 
       return modal;
     }
@@ -533,13 +580,16 @@
       if (viewportEl) {
         const rect = viewportEl.getBoundingClientRect();
         if (rect.width > 0) availW = rect.width - 48;
-        if (rect.height > 0) availH = rect.height - 48;
+        if (rect.height > 0) availH = rect.height - 76;
       }
       const maxAvail = Math.min(availW, availH);
       const targetWidth = Math.min(500, Math.max(300, maxAvail > 0 ? maxAvail : 460));
       const canvasW = tpl.canvasWidth || 1200;
       const canvasH = tpl.canvasHeight || 1200;
       const scale = targetWidth / canvasW;
+
+      this.canvasW = canvasW;
+      this.canvasH = canvasH;
 
       this.fabricCanvas = new window.fabric.Canvas(canvasEl, {
         width: canvasW * scale,
@@ -550,75 +600,100 @@
 
       this.fabricCanvas.setZoom(scale);
 
-      // 1. Prepare template layers
-      let layersToLoad = tpl.layers;
-      if (typeof layersToLoad === "string") {
-        try { layersToLoad = JSON.parse(layersToLoad); } catch(e) {}
-      }
-      if (Array.isArray(layersToLoad)) {
-        layersToLoad = { objects: layersToLoad };
+      // 1. Prepare multi-side template layers
+      let rawLayers = tpl.layers;
+      if (typeof rawLayers === "string") {
+        try { rawLayers = JSON.parse(rawLayers); } catch (e) {}
       }
 
-      // Check if template explicitly contains a merchant-uploaded mockup underlay
-      let templateHasUnderlay = false;
-      const rawObjects = Array.isArray(layersToLoad?.objects)
-        ? layersToLoad.objects
-        : Array.isArray(layersToLoad)
-        ? layersToLoad
-        : [];
+      if (rawLayers && rawLayers.sides) {
+        this.sidesData.front = rawLayers.sides.front || { objects: [] };
+        this.sidesData.back = rawLayers.sides.back || { objects: [] };
+      } else {
+        let frontObjs = [];
+        if (Array.isArray(rawLayers?.objects)) {
+          frontObjs = rawLayers.objects;
+        } else if (Array.isArray(rawLayers)) {
+          frontObjs = rawLayers;
+        }
+        this.sidesData.front = { objects: frontObjs };
+        this.sidesData.back = { objects: [] };
+      }
 
-      for (const obj of rawObjects) {
+      this.activeSide = "front";
+      await this.loadSideIntoCanvas("front");
+      this.buildDynamicControls();
+    }
+
+    serializeCanvasObjects() {
+      if (!this.fabricCanvas) return { objects: [] };
+      return this.fabricCanvas.toObject([
+        "name",
+        "customType",
+        "isCustomerEditable",
+        "optionLabel",
+        "maxCharacters",
+        "enableAiBackgroundRemoval",
+        "selectable",
+        "evented",
+      ]);
+    }
+
+    async loadSideIntoCanvas(side) {
+      if (!this.fabricCanvas) return;
+
+      let sideData = this.sidesData[side];
+      if (!sideData || !Array.isArray(sideData.objects)) {
+        sideData = { objects: [] };
+      }
+
+      // Check if sideData explicitly contains an underlay object
+      let hasUnderlay = false;
+      for (const obj of sideData.objects) {
         const type = (obj.type || "").toLowerCase();
         const objName = (obj.name || "").toLowerCase();
         const customType = (obj.customType || "").toLowerCase();
         if (
           type === "image" &&
-          (objName.includes("mockup") || objName.includes("underlay") || customType === "background_mockup")
+          (objName.includes("mockup") || objName.includes("underlay") || objName.includes("base") || customType === "background_mockup")
         ) {
-          templateHasUnderlay = true;
+          hasUnderlay = true;
           break;
         }
       }
 
-      // Load layers into Fabric canvas
-      try {
-        if (layersToLoad && (layersToLoad.objects || Array.isArray(layersToLoad))) {
-          if (Array.isArray(layersToLoad.objects)) {
-            layersToLoad.objects.forEach((o) => {
-              if (o && o.type) {
-                const lower = o.type.toLowerCase();
-                if (lower === "image") o.type = "Image";
-                else if (lower === "rect") o.type = "Rect";
-                else if (lower === "i-text" || lower === "itext") o.type = "IText";
-                else if (lower === "text") o.type = "Text";
-              }
-            });
-          }
+      // Normalise object types for Fabric 7
+      sideData.objects.forEach((o) => {
+        if (o && o.type) {
+          const lower = o.type.toLowerCase();
+          if (lower === "image") o.type = "Image";
+          else if (lower === "rect") o.type = "Rect";
+          else if (lower === "i-text" || lower === "itext") o.type = "IText";
+          else if (lower === "text") o.type = "Text";
+        }
+      });
 
-          // In Fabric 7 loadFromJSON returns a Promise
-          const res = this.fabricCanvas.loadFromJSON(layersToLoad);
+      // Clear existing canvas objects
+      this.fabricCanvas.clear();
+      this.fabricCanvas.backgroundColor = "#ffffff";
+
+      // Load side objects
+      try {
+        if (sideData.objects.length > 0) {
+          const res = this.fabricCanvas.loadFromJSON(sideData);
           if (res && typeof res.then === "function") {
             await res;
           }
         }
       } catch (err) {
-        console.error("[Saitriq] Error loading template layers:", err);
+        console.error("[Saitriq] Error loading side layers:", err);
       }
 
-      this.canvasW = canvasW;
-      this.canvasH = canvasH;
-
-      // Check if user selected a variant with a specific image (e.g. Blue T-Shirt)
-      const selectedVariantImg = this.getSelectedVariantImage();
-
-      // If the customer selected a variant that has its own image (like Blue T-shirt):
-      // The selected variant image MUST take precedence so the user customizes what they chose!
-      if (selectedVariantImg) {
-        await this.addBaseProductImage(selectedVariantImg, canvasW, canvasH);
-      } else if (!templateHasUnderlay) {
-        const baseImgUrl = this.detectPageProductImage();
-        if (baseImgUrl) {
-          await this.addBaseProductImage(baseImgUrl, canvasW, canvasH);
+      // Check if variant image or product image should be loaded as underlay
+      if (!hasUnderlay) {
+        const sideImg = this.getSideBaseImage(side);
+        if (sideImg) {
+          await this.addBaseProductImage(sideImg, this.canvasW, this.canvasH);
         }
       }
 
@@ -627,7 +702,40 @@
       } else {
         this.fabricCanvas.renderAll();
       }
+    }
 
+    async switchSide(targetSide) {
+      if (!targetSide || targetSide === this.activeSide || !this.fabricCanvas) return;
+
+      // Discard selection
+      this.fabricCanvas.discardActiveObject();
+
+      // 1. Serialize current canvas
+      this.sidesData[this.activeSide] = this.serializeCanvasObjects();
+
+      // 2. Update activeSide state and tabs
+      this.activeSide = targetSide;
+
+      const modal = document.getElementById("saitriq-personalizer-modal");
+      if (modal) {
+        modal.querySelectorAll(".saitriq-side-tab").forEach((tab) => {
+          if (tab.getAttribute("data-side") === targetSide) {
+            tab.classList.add("is-active");
+          } else {
+            tab.classList.remove("is-active");
+          }
+        });
+
+        const badgeText = modal.querySelector("#saitriq-canvas-badge-text");
+        if (badgeText) {
+          badgeText.textContent = `Live 300 DPI Studio Preview • ${targetSide === "front" ? "Front" : "Back"}`;
+        }
+      }
+
+      // 3. Load target side into canvas
+      await this.loadSideIntoCanvas(targetSide);
+
+      // 4. Rebuild dynamic controls for target side
       this.buildDynamicControls();
     }
 
@@ -878,6 +986,9 @@
           reader.onload = (fEvent) => {
             const dataUrl = fEvent.target?.result;
             this.customerUploadedImageDataUrl = dataUrl;
+            if (this.customerUploadedImageDataUrls) {
+              this.customerUploadedImageDataUrls[this.activeSide] = dataUrl;
+            }
             this.customerUploadedImageFileName = file.name;
             const imgEl = new Image();
             imgEl.src = dataUrl;
@@ -1252,77 +1363,131 @@
       }
 
       try {
-        // 1. Remove active selection so control handles don't get baked into snapshot
+        // 1. Remove active selection and serialize current side
         this.fabricCanvas.discardActiveObject();
         if (this.fabricCanvas.requestRenderAll) {
           this.fabricCanvas.requestRenderAll();
         } else {
           this.fabricCanvas.renderAll();
         }
-
-        // Brief delay for render cycle to settle
         await new Promise((r) => setTimeout(r, 60));
 
-        // 2. Generate snapshot preview JPEG (compressed to ~40-60KB to fit easily in Shopify line item limits)
-        let previewDataUrl = "";
-        try {
-          const exportMultiplier = Math.max(1, 600 / (this.fabricCanvas.width || 460));
-          previewDataUrl = this.fabricCanvas.toDataURL({
-            format: "jpeg",
-            quality: 0.88,
-            multiplier: exportMultiplier,
-          });
-        } catch (exportErr) {
-          console.warn("[Saitriq] Direct toDataURL error (tainted canvas?), trying safe fallback:", exportErr);
-          try {
-            const bg = this.fabricCanvas.getObjects().find(
-              (o) => o.customType === "background_mockup" || o.name === "Product Base Image"
-            );
-            if (bg) bg.visible = false;
-            previewDataUrl = this.fabricCanvas.toDataURL({
-              format: "jpeg",
-              quality: 0.85,
-            });
-            if (bg) bg.visible = true;
-          } catch (err2) {
-            console.error("[Saitriq] Fallback export also failed:", err2);
-            previewDataUrl = "";
+        this.sidesData[this.activeSide] = this.serializeCanvasObjects();
+
+        // 2. Helper to export snapshot of a side
+        const exportSideSnapshot = async (side) => {
+          if (this.activeSide !== side) {
+            await this.loadSideIntoCanvas(side);
+            this.fabricCanvas.discardActiveObject();
+            if (this.fabricCanvas.requestRenderAll) {
+              this.fabricCanvas.requestRenderAll();
+            } else {
+              this.fabricCanvas.renderAll();
+            }
+            await new Promise((r) => setTimeout(r, 80));
           }
+
+          let dataUrl = "";
+          try {
+            const exportMultiplier = Math.max(1, 600 / (this.fabricCanvas.width || 460));
+            dataUrl = this.fabricCanvas.toDataURL({
+              format: "jpeg",
+              quality: 0.88,
+              multiplier: exportMultiplier,
+            });
+          } catch (exportErr) {
+            console.warn("[Saitriq] Export error for side:", side, exportErr);
+            try {
+              const bg = this.fabricCanvas.getObjects().find(
+                (o) => o.customType === "background_mockup" || o.name === "Product Base Image"
+              );
+              if (bg) bg.visible = false;
+              dataUrl = this.fabricCanvas.toDataURL({ format: "jpeg", quality: 0.85 });
+              if (bg) bg.visible = true;
+            } catch (e2) {
+              dataUrl = "";
+            }
+          }
+          return dataUrl;
+        };
+
+        const initialSide = this.activeSide;
+        const otherSide = initialSide === "front" ? "back" : "front";
+
+        const snapshotCurrent = await exportSideSnapshot(initialSide);
+        const snapshotOther = await exportSideSnapshot(otherSide);
+
+        // Restore user's current side in canvas
+        if (this.activeSide !== initialSide) {
+          await this.loadSideIntoCanvas(initialSide);
+          this.activeSide = initialSide;
         }
+
+        const frontPreviewDataUrl = initialSide === "front" ? snapshotCurrent : snapshotOther;
+        const backPreviewDataUrl = initialSide === "front" ? snapshotOther : snapshotCurrent;
 
         const customizationId = "cust_" + Date.now() + "_" + Math.random().toString(36).substring(2, 8);
         const resolvedTemplateId =
           this.templateData?.id || (this.productId ? `tpl-${this.productId}` : "custom-template");
 
-        // Attempt server-side image upload so line items get a clean HTTPS URL instead of raw base64
-        let finalPreviewUrl = previewDataUrl;
-        if (previewDataUrl) {
+        // 3. Upload Front Preview
+        let finalFrontUrl = frontPreviewDataUrl;
+        if (frontPreviewDataUrl) {
           try {
-            if (submitBtn) submitBtn.textContent = "Uploading Design...";
+            if (submitBtn) submitBtn.textContent = "Uploading Front Design...";
             const uploadRes = await fetch("/apps/personalizer/upload", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
-                customizationId: customizationId,
-                image: previewDataUrl,
+                customizationId: customizationId + "_front",
+                image: frontPreviewDataUrl,
                 shop: this.shopDomain || window.Shopify?.shop || "",
               }),
             });
             if (uploadRes.ok) {
               const uploadJson = await uploadRes.json();
               if (uploadJson.previewUrl || uploadJson.directUrl) {
-                finalPreviewUrl = uploadJson.previewUrl || uploadJson.directUrl;
-                console.log("[Saitriq] Design preview uploaded:", finalPreviewUrl);
+                finalFrontUrl = uploadJson.previewUrl || uploadJson.directUrl;
               }
             }
           } catch (uploadErr) {
-            console.warn("[Saitriq] Preview upload notice (using fallback):", uploadErr);
+            console.warn("[Saitriq] Front preview upload notice:", uploadErr);
           }
         }
 
-        // Upload customer's raw uploaded image (if customer uploaded one)
+        // 4. Upload Back Preview
+        let finalBackUrl = backPreviewDataUrl;
+        if (backPreviewDataUrl) {
+          try {
+            if (submitBtn) submitBtn.textContent = "Uploading Back Design...";
+            const uploadRes = await fetch("/apps/personalizer/upload", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                customizationId: customizationId + "_back",
+                image: backPreviewDataUrl,
+                shop: this.shopDomain || window.Shopify?.shop || "",
+              }),
+            });
+            if (uploadRes.ok) {
+              const uploadJson = await uploadRes.json();
+              if (uploadJson.previewUrl || uploadJson.directUrl) {
+                finalBackUrl = uploadJson.previewUrl || uploadJson.directUrl;
+              }
+            }
+          } catch (uploadErr) {
+            console.warn("[Saitriq] Back preview upload notice:", uploadErr);
+          }
+        }
+
+        // 5. Upload customer's raw uploaded image (if customer uploaded one)
         let finalUploadedImageUrl = "";
-        if (this.customerUploadedImageDataUrl) {
+        const rawPhoto =
+          this.customerUploadedImageDataUrls?.front ||
+          this.customerUploadedImageDataUrls?.back ||
+          this.customerUploadedImageDataUrl;
+
+        if (rawPhoto) {
           try {
             if (submitBtn) submitBtn.textContent = "Uploading Photo...";
             const uploadCustRes = await fetch("/apps/personalizer/upload", {
@@ -1330,7 +1495,7 @@
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 customizationId: customizationId + "_upload",
-                image: this.customerUploadedImageDataUrl,
+                image: rawPhoto,
                 shop: this.shopDomain || window.Shopify?.shop || "",
               }),
             });
@@ -1338,24 +1503,27 @@
               const uploadCustJson = await uploadCustRes.json();
               if (uploadCustJson.previewUrl || uploadCustJson.directUrl) {
                 finalUploadedImageUrl = uploadCustJson.previewUrl || uploadCustJson.directUrl;
-                console.log("[Saitriq] Raw customer image uploaded:", finalUploadedImageUrl);
               }
             }
           } catch (uploadCustErr) {
-            console.warn("[Saitriq] Raw customer image upload notice (using fallback):", uploadCustErr);
-            finalUploadedImageUrl = this.customerUploadedImageDataUrl;
+            console.warn("[Saitriq] Raw customer image upload notice:", uploadCustErr);
+            finalUploadedImageUrl = rawPhoto;
           }
         }
 
         if (submitBtn) submitBtn.textContent = "Adding to Cart...";
 
-        // 3. Gather customer inputs for line item properties
+        // 6. Gather customer inputs for line item properties
         const properties = {
           _customization_id: customizationId,
           _template_id: resolvedTemplateId,
-          _customization_preview: finalPreviewUrl,
-          "Custom Design Preview": finalPreviewUrl,
-          "Custom Design": "Personalized ✨",
+          _customization_preview: finalFrontUrl,
+          _customization_preview_front: finalFrontUrl,
+          _customization_preview_back: finalBackUrl,
+          "Custom Design Preview": finalFrontUrl,
+          "Front Design Preview": finalFrontUrl,
+          "Back Design Preview": finalBackUrl,
+          "Custom Design": "Front & Back Personalization ✨",
         };
 
         if (finalUploadedImageUrl) {
@@ -1363,22 +1531,28 @@
           properties["Uploaded Image"] = finalUploadedImageUrl;
         }
 
-        const objects = this.fabricCanvas.getObjects();
-        objects.forEach((obj, idx) => {
-          const type = (obj.type || "").toLowerCase();
-          if (
-            (type.includes("text") || obj.text !== undefined) &&
-            !obj.name?.toLowerCase().includes("mockup") &&
-            !obj.name?.toLowerCase().includes("base")
-          ) {
-            const label = obj.optionLabel || `Custom Text ${idx + 1}`;
-            if (obj.text && obj.text.trim()) {
-              properties[label] = obj.text;
+        // Extract custom text from Front and Back side objects
+        const extractTexts = (sideObjects, sideLabel) => {
+          if (!Array.isArray(sideObjects)) return;
+          sideObjects.forEach((obj, idx) => {
+            const type = (obj.type || "").toLowerCase();
+            if (
+              (type.includes("text") || obj.text !== undefined) &&
+              !obj.name?.toLowerCase().includes("mockup") &&
+              !obj.name?.toLowerCase().includes("base")
+            ) {
+              const label = `${sideLabel} Text` + (idx > 0 ? ` ${idx + 1}` : "");
+              if (obj.text && String(obj.text).trim()) {
+                properties[label] = String(obj.text).trim();
+              }
             }
-          }
-        });
+          });
+        };
 
-        // 4. Find variant ID from the active Shopify product form or personalizer selection
+        extractTexts(this.sidesData.front?.objects, "Front");
+        extractTexts(this.sidesData.back?.objects, "Back");
+
+        // 7. Find variant ID from the active Shopify product form or personalizer selection
         let variantId = this.activeSelectedVariantId || null;
         if (!variantId) {
           const formInput = document.querySelector('form[action*="/cart/add"] input[name="id"]');
@@ -1401,18 +1575,18 @@
           return;
         }
 
-        // 5. Store preview in sessionStorage specifically for this customized variant
+        // 8. Store preview in sessionStorage specifically for this customized variant
         try {
-          if (previewDataUrl) {
-            sessionStorage.setItem("saitriq_preview_" + variantId, previewDataUrl);
-            sessionStorage.setItem("saitriq_preview_" + customizationId, previewDataUrl);
+          if (frontPreviewDataUrl) {
+            sessionStorage.setItem("saitriq_preview_" + variantId, frontPreviewDataUrl);
+            sessionStorage.setItem("saitriq_preview_" + customizationId, frontPreviewDataUrl);
           }
-          if (finalPreviewUrl && finalPreviewUrl !== previewDataUrl) {
-            sessionStorage.setItem("saitriq_url_" + variantId, finalPreviewUrl);
+          if (finalFrontUrl && finalFrontUrl !== frontPreviewDataUrl) {
+            sessionStorage.setItem("saitriq_url_" + variantId, finalFrontUrl);
           }
         } catch (storageErr) {}
 
-        // 6. Submit to Shopify Cart API (/cart/add.js)
+        // 9. Submit to Shopify Cart API (/cart/add.js)
         const cartResponse = await fetch("/cart/add.js", {
           method: "POST",
           headers: { "Content-Type": "application/json" },

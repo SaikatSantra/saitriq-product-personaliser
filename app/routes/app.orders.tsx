@@ -69,10 +69,17 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           attrMap["_template_id"];
 
         if (isCustomized) {
-          const preview =
+          const frontPreview =
+            attrMap["Front Design Preview"] ||
+            attrMap["_customization_preview_front"] ||
             attrMap["Custom Design Preview"] ||
             attrMap["_customization_preview"] ||
             item.image?.url ||
+            "";
+
+          const backPreview =
+            attrMap["Back Design Preview"] ||
+            attrMap["_customization_preview_back"] ||
             "";
 
           const uploadedImage =
@@ -88,7 +95,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             lineItemId: itemNumericId,
             productTitle: item.title,
             quantity: item.quantity,
-            previewImageUrl: preview,
+            previewImageUrl: frontPreview,
+            frontPreviewUrl: frontPreview,
+            backPreviewUrl: backPreview,
             uploadedImageUrl: uploadedImage,
             customerSelections: attrMap,
             createdAt: order.createdAt,
@@ -360,10 +369,11 @@ export default function CustomizedOrdersPage() {
                     key={o.orderGid + "_" + o.lineItemId + "_" + idx}
                     style={{ borderBottom: "1px solid #f1f2f3" }}
                   >
-                    {/* 1. Preview Image Thumbnail */}
+                    {/* 1. Preview Image Thumbnails (Front, Back, Raw) */}
                     <td style={{ padding: "12px 16px" }}>
-                      <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                        {o.previewImageUrl ? (
+                      <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+                        {/* Front Preview */}
+                        {(o.frontPreviewUrl || o.previewImageUrl) ? (
                           <div
                             style={{
                               position: "relative",
@@ -375,12 +385,12 @@ export default function CustomizedOrdersPage() {
                               border: "1px solid #d4d6d8",
                               background: "#fafafa",
                             }}
-                            onClick={() => setActiveModalImage(o.previewImageUrl)}
-                            title="Click to view Mockup Preview"
+                            onClick={() => setActiveModalImage(o.frontPreviewUrl || o.previewImageUrl)}
+                            title="Click to view Front Design Preview"
                           >
                             <img
-                              src={o.previewImageUrl}
-                              alt="Mockup Preview"
+                              src={o.frontPreviewUrl || o.previewImageUrl}
+                              alt="Front Preview"
                               style={{
                                 width: "100%",
                                 height: "100%",
@@ -391,19 +401,64 @@ export default function CustomizedOrdersPage() {
                               style={{
                                 position: "absolute",
                                 bottom: "2px",
-                                right: "2px",
-                                background: "rgba(0,0,0,0.6)",
+                                left: "2px",
+                                background: "rgba(15, 23, 42, 0.75)",
                                 color: "#fff",
-                                fontSize: "9px",
+                                fontSize: "8px",
                                 padding: "1px 3px",
                                 borderRadius: "2px",
+                                fontWeight: 700,
                               }}
                             >
-                              🔍
+                              FRONT
                             </div>
                           </div>
                         ) : null}
 
+                        {/* Back Preview */}
+                        {o.backPreviewUrl ? (
+                          <div
+                            style={{
+                              position: "relative",
+                              cursor: "pointer",
+                              width: "56px",
+                              height: "56px",
+                              borderRadius: "6px",
+                              overflow: "hidden",
+                              border: "1px solid #d4d6d8",
+                              background: "#fafafa",
+                            }}
+                            onClick={() => setActiveModalImage(o.backPreviewUrl)}
+                            title="Click to view Back Design Preview"
+                          >
+                            <img
+                              src={o.backPreviewUrl}
+                              alt="Back Preview"
+                              style={{
+                                width: "100%",
+                                height: "100%",
+                                objectFit: "contain",
+                              }}
+                            />
+                            <div
+                              style={{
+                                position: "absolute",
+                                bottom: "2px",
+                                left: "2px",
+                                background: "rgba(15, 23, 42, 0.75)",
+                                color: "#fff",
+                                fontSize: "8px",
+                                padding: "1px 3px",
+                                borderRadius: "2px",
+                                fontWeight: 700,
+                              }}
+                            >
+                              BACK
+                            </div>
+                          </div>
+                        ) : null}
+
+                        {/* Customer Raw Upload */}
                         {o.uploadedImageUrl ? (
                           <div
                             style={{
@@ -446,7 +501,7 @@ export default function CustomizedOrdersPage() {
                           </div>
                         ) : null}
 
-                        {!o.previewImageUrl && !o.uploadedImageUrl && (
+                        {!o.previewImageUrl && !o.frontPreviewUrl && !o.backPreviewUrl && !o.uploadedImageUrl && (
                           <div
                             style={{
                               width: "56px",

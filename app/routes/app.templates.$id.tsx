@@ -166,6 +166,11 @@ export default function TemplateStudio() {
   const canvasContainerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fabricCanvasRef = useRef<any>(null);
+  const [activeSide, setActiveSide] = useState<"front" | "back">("front");
+  const sidesDataRef = useRef<{ front: any; back: any }>({
+    front: null,
+    back: null,
+  });
   const [activeLayer, setActiveLayer] = useState<any>(null);
   const [layersList, setLayersList] = useState<any[]>([]);
   const [showProductModal, setShowProductModal] = useState(false);
@@ -197,19 +202,38 @@ export default function TemplateStudio() {
       // Scale context according to zoom
       canvas.setZoom(zoomLevel);
 
-      // Load existing layers if present
-      if (template.layersJson && template.layersJson !== "[]") {
-        try {
-          const parsed = JSON.parse(template.layersJson);
-          if (parsed.objects && parsed.objects.length > 0) {
-            canvas.loadFromJSON(parsed, () => {
-              canvas.renderAll();
-              updateLayersState(canvas);
-            });
+      // Parse sides data if not already cached in ref
+      if (!sidesDataRef.current.front && !sidesDataRef.current.back) {
+        if (template.layersJson && template.layersJson !== "[]") {
+          try {
+            const parsed = JSON.parse(template.layersJson);
+            if (parsed.sides) {
+              sidesDataRef.current = {
+                front: parsed.sides.front || { objects: [] },
+                back: parsed.sides.back || { objects: [] },
+              };
+            } else {
+              sidesDataRef.current = {
+                front: parsed.objects ? parsed : { objects: Array.isArray(parsed) ? parsed : [] },
+                back: { objects: [] },
+              };
+            }
+          } catch (e) {
+            console.error("Failed to parse layers JSON", e);
+            sidesDataRef.current = { front: { objects: [] }, back: { objects: [] } };
           }
-        } catch (e) {
-          console.error("Failed to parse layers JSON", e);
+        } else {
+          sidesDataRef.current = { front: { objects: [] }, back: { objects: [] } };
         }
+      }
+
+      // Load active side layers if present
+      const currentSideLayers = sidesDataRef.current[activeSide] || { objects: [] };
+      if (currentSideLayers.objects && currentSideLayers.objects.length > 0) {
+        canvas.loadFromJSON(currentSideLayers, () => {
+          canvas.renderAll();
+          updateLayersState(canvas);
+        });
       }
 
       canvas.on("selection:created", (e: any) => {
@@ -258,6 +282,30 @@ export default function TemplateStudio() {
     if (!canvas) return;
     const objects = canvas.getObjects();
     setLayersList([...objects]);
+  };
+
+  const handleSwitchSide = (targetSide: "front" | "back") => {
+    if (targetSide === activeSide || !fabricCanvasRef.current) return;
+
+    // 1. Serialize current canvas to sidesDataRef
+    sidesDataRef.current[activeSide] = fabricCanvasRef.current.toObject([
+      "name",
+      "customType",
+      "isCustomerEditable",
+      "optionLabel",
+      "maxCharacters",
+      "enableAiBackgroundRemoval",
+    ]);
+
+    setActiveSide(targetSide);
+    setActiveLayer(null);
+
+    // 2. Load target side JSON
+    const targetLayers = sidesDataRef.current[targetSide] || { objects: [] };
+    fabricCanvasRef.current.loadFromJSON(targetLayers, () => {
+      fabricCanvasRef.current.renderAll();
+      updateLayersState(fabricCanvasRef.current);
+    });
   };
 
   // Add Layer actions
@@ -369,35 +417,68 @@ export default function TemplateStudio() {
   const handleSave = () => {
     if (!fabricCanvasRef.current) return;
 
-    const canvasJson = JSON.stringify(fabricCanvasRef.current.toObject([
+    // Serialize current active side to cache
+    sidesDataRef.current[activeSide] = fabricCanvasRef.current.toObject([
       "name",
       "customType",
       "isCustomerEditable",
       "optionLabel",
       "maxCharacters",
       "enableAiBackgroundRemoval",
-    ]));
+    ]);
 
-    // Generate option groups automatically from customer-editable layers
-    const objects = fabricCanvasRef.current.getObjects();
-    const generatedOptionGroups = objects
+    const fullLayers = {
+      sides: {
+        front: sidesDataRef.current.front || { objects: [] },
+        back: sidesDataRef.current.back || { objects: [] },
+      },
+      objects: sidesDataRef.current.front?.objects || [],
+    };
+
+    const canvasJson = JSON.stringify(fullLayers);
+
+    // Generate option groups automatically from customer-editable layers across BOTH sides
+    const frontEditable = (sidesDataRef.current.front?.objects || [])
       .filter((obj: any) => obj.isCustomerEditable)
       .map((obj: any, idx: number) => ({
-        name: obj.optionLabel || `Option ${idx + 1}`,
+        name: `Front: ${obj.optionLabel || `Option ${idx + 1}`}`,
         displayType: obj.customType === "image_upload" ? "image_upload" : "text_input",
         position: idx,
         conditionalRules: "{}",
         options: [
           {
-            label: obj.optionLabel || `Option ${idx + 1}`,
+            label: `Front: ${obj.optionLabel || `Option ${idx + 1}`}`,
             priceExtra: 0.0,
             metadata: JSON.stringify({
+              side: "front",
               layerName: obj.name,
               maxCharacters: obj.maxCharacters || 50,
             }),
           },
         ],
       }));
+
+    const backEditable = (sidesDataRef.current.back?.objects || [])
+      .filter((obj: any) => obj.isCustomerEditable)
+      .map((obj: any, idx: number) => ({
+        name: `Back: ${obj.optionLabel || `Option ${idx + 1}`}`,
+        displayType: obj.customType === "image_upload" ? "image_upload" : "text_input",
+        position: frontEditable.length + idx,
+        conditionalRules: "{}",
+        options: [
+          {
+            label: `Back: ${obj.optionLabel || `Option ${idx + 1}`}`,
+            priceExtra: 0.0,
+            metadata: JSON.stringify({
+              side: "back",
+              layerName: obj.name,
+              maxCharacters: obj.maxCharacters || 50,
+            }),
+          },
+        ],
+      }));
+
+    const generatedOptionGroups = [...frontEditable, ...backEditable];
 
     fetcher.submit(
       {
@@ -581,7 +662,7 @@ export default function TemplateStudio() {
               color: "#0066cc",
             }}
           >
-            <span>👕</span> Upload Mockup Underlay
+            <span>{activeSide === "front" ? "👕" : "🔄"}</span> Upload {activeSide === "front" ? "Front" : "Back"} Underlay
             <input
               type="file"
               accept="image/*"
@@ -653,13 +734,71 @@ export default function TemplateStudio() {
             borderRadius: "8px",
             border: "1px solid #c9cccf",
             display: "flex",
+            flexDirection: "column",
             alignItems: "center",
-            justifyContent: "center",
+            justifyContent: "flex-start",
             overflow: "auto",
-            padding: "30px",
+            padding: "20px 30px",
             boxShadow: "inset 0 0 10px rgba(0,0,0,0.05)",
           }}
         >
+          {/* Side Switcher Control */}
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "center",
+              marginBottom: "16px",
+              background: "#d8dcde",
+              padding: "4px",
+              borderRadius: "10px",
+              gap: "4px",
+              boxShadow: "inset 0 1px 3px rgba(0,0,0,0.08)",
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => handleSwitchSide("front")}
+              style={{
+                padding: "8px 24px",
+                borderRadius: "8px",
+                border: "none",
+                fontSize: "13px",
+                fontWeight: 700,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                background: activeSide === "front" ? "#ffffff" : "transparent",
+                color: activeSide === "front" ? "#202223" : "#5c5f62",
+                boxShadow: activeSide === "front" ? "0 2px 6px rgba(0,0,0,0.12)" : "none",
+                transition: "all 0.15s ease",
+              }}
+            >
+              <span>👕</span> Front Side
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSwitchSide("back")}
+              style={{
+                padding: "8px 24px",
+                borderRadius: "8px",
+                border: "none",
+                fontSize: "13px",
+                fontWeight: 700,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                background: activeSide === "back" ? "#ffffff" : "transparent",
+                color: activeSide === "back" ? "#202223" : "#5c5f62",
+                boxShadow: activeSide === "back" ? "0 2px 6px rgba(0,0,0,0.12)" : "none",
+                transition: "all 0.15s ease",
+              }}
+            >
+              <span>🔄</span> Back Side
+            </button>
+          </div>
+
           <div
             style={{
               boxShadow: "0 4px 20px rgba(0,0,0,0.15)",
