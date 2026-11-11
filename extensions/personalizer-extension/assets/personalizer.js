@@ -161,8 +161,10 @@
     async handleTriggerClick() {
       if (this.isLoading) {
         if (this.btn) this.btn.textContent = "⏳ Loading studio...";
-        while (this.isLoading) {
+        let waitCount = 0;
+        while (this.isLoading && waitCount < 30) {
           await new Promise((r) => setTimeout(r, 100));
+          waitCount++;
         }
         if (this.btn) this.btn.textContent = this.buttonText;
       }
@@ -305,10 +307,11 @@
       }
 
       let modal = document.getElementById("saitriq-personalizer-modal");
-      if (!modal) {
-        modal = this.createModalElement();
-        document.body.appendChild(modal);
+      if (modal) {
+        modal.remove();
       }
+      modal = this.createModalElement();
+      document.body.appendChild(modal);
 
       modal.classList.add("is-open");
       document.body.style.overflow = "hidden";
@@ -1235,7 +1238,6 @@
         </div>
       `;
       container.appendChild(summaryCard);
-    }
     }
 
     async handleAddToCart() {
