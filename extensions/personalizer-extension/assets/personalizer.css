@@ -1,0 +1,282 @@
+/* Saitriq Product Personalizer Storefront Styles */
+
+.saitriq-personalizer-root {
+  margin: 16px 0;
+  width: 100%;
+}
+
+.saitriq-customize-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 14px 24px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #ffffff;
+  background-color: var(--saitriq-primary, #008060);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+  text-decoration: none;
+  letter-spacing: 0.5px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+}
+
+.saitriq-customize-btn:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.18);
+}
+
+/* Modal Overlay */
+.saitriq-modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+  z-index: 999999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  box-sizing: border-box;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease-out;
+}
+
+.saitriq-modal-backdrop.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Modal Window */
+.saitriq-modal-window {
+  background: #ffffff;
+  width: 100%;
+  max-width: 1040px;
+  max-height: 90vh;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+  transform: translateY(20px);
+  transition: transform 0.25s ease-out;
+}
+
+.saitriq-modal-backdrop.is-open .saitriq-modal-window {
+  transform: translateY(0);
+}
+
+/* Modal Header */
+.saitriq-modal-header {
+  padding: 16px 24px;
+  border-bottom: 1px solid #e1e3e5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #fafbfb;
+}
+
+.saitriq-modal-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: #202223;
+}
+
+.saitriq-close-btn {
+  background: none;
+  border: none;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  color: #6d7175;
+  padding: 4px;
+}
+
+.saitriq-close-btn:hover {
+  color: #202223;
+}
+
+/* Modal Body: Split Canvas & Controls */
+.saitriq-modal-body {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  flex: 1;
+  overflow: hidden;
+  min-height: 520px;
+}
+
+/* Left Canvas Area */
+.saitriq-canvas-viewport {
+  background-color: #ebeef0;
+  padding: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: auto;
+  position: relative;
+}
+
+.saitriq-canvas-stage {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  background: #ffffff;
+  line-height: 0;
+  border-radius: 4px;
+}
+
+/* Right Controls Area */
+.saitriq-controls-panel {
+  padding: 24px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  background: #ffffff;
+}
+
+.saitriq-control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.saitriq-control-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #202223;
+}
+
+.saitriq-text-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #c9cccf;
+  border-radius: 6px;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+.saitriq-text-input:focus {
+  border-color: var(--saitriq-primary, #008060);
+  outline: none;
+  box-shadow: 0 0 0 1px var(--saitriq-primary, #008060);
+}
+
+.saitriq-select-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #c9cccf;
+  border-radius: 6px;
+  font-size: 14px;
+  background-color: #ffffff;
+  box-sizing: border-box;
+}
+
+/* Color Swatches Grid */
+.saitriq-swatches-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.saitriq-color-swatch {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 0 1px #c9cccf;
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+
+.saitriq-color-swatch:hover,
+.saitriq-color-swatch.is-active {
+  transform: scale(1.15);
+  box-shadow: 0 0 0 2px var(--saitriq-primary, #008060);
+}
+
+/* Photo Upload Box */
+.saitriq-upload-dropzone {
+  border: 2px dashed #c9cccf;
+  border-radius: 8px;
+  padding: 24px 16px;
+  text-align: center;
+  background-color: #fafbfb;
+  cursor: pointer;
+  transition: border-color 0.2s, background-color 0.2s;
+}
+
+.saitriq-upload-dropzone:hover {
+  border-color: var(--saitriq-primary, #008060);
+  background-color: #f0f8ff;
+}
+
+.saitriq-upload-icon {
+  font-size: 32px;
+  margin-bottom: 8px;
+}
+
+.saitriq-upload-dropzone p {
+  margin: 0;
+  font-size: 13px;
+  color: #6d7175;
+}
+
+/* Modal Footer Action Bar */
+.saitriq-modal-footer {
+  padding: 16px 24px;
+  border-top: 1px solid #e1e3e5;
+  background-color: #fafbfb;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.saitriq-preview-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #6d7175;
+}
+
+.saitriq-submit-cart-btn {
+  padding: 12px 24px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #ffffff;
+  background-color: var(--saitriq-primary, #008060);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.saitriq-submit-cart-btn:hover {
+  opacity: 0.92;
+}
+
+.saitriq-submit-cart-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Responsive Stacking for Mobile */
+@media (max-width: 768px) {
+  .saitriq-modal-body {
+    grid-template-columns: 1fr;
+    max-height: 80vh;
+  }
+
+  .saitriq-canvas-viewport {
+    padding: 12px;
+    min-height: 280px;
+  }
+}

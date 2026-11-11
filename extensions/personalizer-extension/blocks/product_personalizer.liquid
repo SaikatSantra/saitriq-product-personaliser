@@ -1,0 +1,53 @@
+{{ 'personalizer.css' | asset_url | stylesheet_tag }}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js" defer></script>
+<script src="{{ 'personalizer.js' | asset_url }}" defer></script>
+
+<div class="saitriq-personalizer-root" id="saitriq-personalizer-{{ block.id }}">
+  <saitriq-personalizer
+    data-product-id="{{ product.id }}"
+    data-shop="{{ shop.permanent_domain }}"
+    data-app-url="{{ block.settings.custom_app_url }}"
+    data-button-text="{{ block.settings.button_text | default: 'Customize This Product' | escape }}"
+    data-primary-color="{{ block.settings.primary_color | default: '#008060' }}"
+    data-auto-open="{{ block.settings.auto_open | default: false }}"
+  >
+    <!-- Placeholder while customizer script loads -->
+    <div class="saitriq-personalizer-loading" style="display: none;">
+      <span>Loading customizer...</span>
+    </div>
+  </saitriq-personalizer>
+</div>
+
+{% schema %}
+{
+  "name": "Product Personalizer",
+  "target": "section",
+  "templates": ["product"],
+  "settings": [
+    {
+      "type": "text",
+      "id": "button_text",
+      "label": "Customize Button Text",
+      "default": "🎨 Customize This Product"
+    },
+    {
+      "type": "color",
+      "id": "primary_color",
+      "label": "Primary Accent Color",
+      "default": "#008060"
+    },
+    {
+      "type": "text",
+      "id": "custom_app_url",
+      "label": "App Backend URL (leave blank to auto-detect)",
+      "default": ""
+    },
+    {
+      "type": "checkbox",
+      "id": "auto_open",
+      "label": "Open personalizer studio inline on page load",
+      "default": false
+    }
+  ]
+}
+{% endschema %}
