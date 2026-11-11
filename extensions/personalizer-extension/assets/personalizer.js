@@ -17,6 +17,8 @@
 
     async connectedCallback() {
       this.productId = this.getAttribute("data-product-id") || "";
+      this.productTitle = this.getAttribute("data-product-title") || "";
+      this.productImage = this.getAttribute("data-product-image") || "";
       this.shop = this.getAttribute("data-shop") || window.location.hostname;
       this.appUrl = this.getAttribute("data-app-url") || "";
       this.fabricUrl = this.getAttribute("data-fabric-url") || "";
@@ -41,6 +43,30 @@
       await this.fetchTemplate();
     }
 
+    detectPageProductImage() {
+      if (this.productImage) return this.productImage;
+
+      // Detect product image from storefront DOM (Dawn and OS 2.0 theme standards)
+      const selectors = [
+        ".product__media img",
+        ".product-media img",
+        ".product__main-photos img",
+        ".product-single__photo",
+        ".product-gallery img",
+        "img[src*='/products/']",
+      ];
+      for (const sel of selectors) {
+        const img = document.querySelector(sel);
+        if (img && (img.currentSrc || img.src)) {
+          const src = img.currentSrc || img.src;
+          if (!src.includes("icon") && !src.includes("badge") && !src.includes("logo")) {
+            return src;
+          }
+        }
+      }
+      return "";
+    }
+
     handleTriggerClick() {
       if (this.templateData) {
         this.openModal();
@@ -48,7 +74,7 @@
         this.pendingOpen = true;
         if (this.btn) this.btn.textContent = "⏳ Loading studio...";
       } else {
-        // Fallback demo template if offline or no template assigned yet
+        // Fallback preview template with product base image
         this.templateData = this.getDefaultPreviewTemplate();
         this.openModal();
       }
@@ -65,11 +91,13 @@
           {
             type: "IText",
             text: "Your Custom Text",
-            fontSize: 40,
+            fontSize: 44,
             fontFamily: "Roboto",
             fill: "#111111",
-            left: 240,
-            top: 240,
+            left: 400,
+            top: 320,
+            originX: "center",
+            originY: "center",
             optionLabel: "Front Custom Text",
             maxCharacters: 30,
           },
@@ -78,10 +106,12 @@
             customType: "image_upload",
             name: "Photo Upload Zone",
             optionLabel: "Upload Photo / Logo",
-            left: 250,
-            top: 360,
-            width: 300,
-            height: 220,
+            left: 400,
+            top: 480,
+            originX: "center",
+            originY: "center",
+            width: 260,
+            height: 180,
             fill: "rgba(0, 128, 96, 0.08)",
             stroke: "#008060",
             strokeWidth: 2,
@@ -259,6 +289,63 @@
       });
     }
 
+    async addBaseProductImage(imageUrl, canvasW, canvasH) {
+      if (!imageUrl || !this.fabricCanvas) return;
+      const ImageClass = window.fabric.FabricImage || window.fabric.Image;
+      const imgEl = new Image();
+      imgEl.crossOrigin = "anonymous";
+      imgEl.src = imageUrl;
+
+      await new Promise((resolve) => {
+        imgEl.onload = resolve;
+        imgEl.onerror = () => {
+          console.warn("[Saitriq] Could not load base image from:", imageUrl);
+          resolve();
+        };
+      });
+
+      if (!imgEl.width || !imgEl.height) return;
+
+      // Remove any previously added base image
+      const existing = this.fabricCanvas.getObjects().filter(
+        (o) => o.name === "Product Base Image" || o.name?.includes("Mockup") || o.customType === "background_mockup"
+      );
+      existing.forEach((o) => this.fabricCanvas.remove(o));
+
+      // Calculate scale to nicely contain product image on canvas
+      const maxW = canvasW * 0.94;
+      const maxH = canvasH * 0.94;
+      const scale = Math.min(maxW / imgEl.width, maxH / imgEl.height);
+
+      const baseImg = new ImageClass(imgEl, {
+        left: canvasW / 2,
+        top: canvasH / 2,
+        originX: "center",
+        originY: "center",
+        scaleX: scale,
+        scaleY: scale,
+        selectable: false,
+        evented: false,
+        hoverCursor: "default",
+        name: "Product Base Image",
+        customType: "background_mockup",
+      });
+
+      // Insert at bottom (index 0) so custom design layers sit on top of the product
+      if (typeof this.fabricCanvas.insertAt === "function") {
+        this.fabricCanvas.insertAt(0, baseImg);
+      } else {
+        this.fabricCanvas.add(baseImg);
+        this.fabricCanvas.sendObjectToBack(baseImg);
+      }
+
+      if (this.fabricCanvas.requestRenderAll) {
+        this.fabricCanvas.requestRenderAll();
+      } else {
+        this.fabricCanvas.renderAll();
+      }
+    }
+
     async initFabricCanvas() {
       await this.ensureFabric();
       if (!window.fabric) {
@@ -276,8 +363,8 @@
 
       const tpl = this.templateData || this.getDefaultPreviewTemplate();
       const targetWidth = Math.min(460, window.innerWidth - 60);
-      const canvasW = tpl.canvasWidth || 1200;
-      const canvasH = tpl.canvasHeight || 1200;
+      const canvasW = tpl.canvasWidth || 800;
+      const canvasH = tpl.canvasHeight || 800;
       const scale = targetWidth / canvasW;
 
       this.fabricCanvas = new window.fabric.Canvas(canvasEl, {
@@ -289,7 +376,7 @@
 
       this.fabricCanvas.setZoom(scale);
 
-      // Load layers
+      // 1. Load template layers
       try {
         let layersToLoad = tpl.layers;
         if (typeof layersToLoad === "string") {
@@ -321,6 +408,24 @@
         }
       } catch (err) {
         console.error("[Saitriq] Error loading template layers:", err);
+      }
+
+      // 2. Ensure product base image (mockup) is present
+      const baseImgUrl = this.detectPageProductImage();
+      const objects = this.fabricCanvas.getObjects();
+      const hasMockupImage = objects.some(
+        (o) => (o.type === "Image" || o.type === "image") && (o.name?.includes("Mockup") || o.customType === "background_mockup" || o.src)
+      );
+
+      // If no mockup image or if using default preview template or if on a product page with its own base image
+      if (baseImgUrl && (!hasMockupImage || this.templateData?.id === "preview-default-tpl")) {
+        await this.addBaseProductImage(baseImgUrl, canvasW, canvasH);
+      } else if (baseImgUrl && hasMockupImage) {
+        // If the template has a generic mockup (e.g. t-shirt) but this product has its own image (e.g. Cap, Mug)
+        const isGenericMockup = objects.some((o) => o.name === "Mockup Underlay" || o.customType === "background_mockup");
+        if (isGenericMockup && this.productTitle && !this.productTitle.toLowerCase().includes("t-shirt")) {
+          await this.addBaseProductImage(baseImgUrl, canvasW, canvasH);
+        }
       }
 
       if (this.fabricCanvas.requestRenderAll) {
@@ -358,7 +463,7 @@
           type === "itext" ||
           type === "text" ||
           obj.customType === "text" ||
-          (obj.text !== undefined && !obj.name?.toLowerCase().includes("mockup"))
+          (obj.text !== undefined && !obj.name?.toLowerCase().includes("mockup") && !obj.name?.toLowerCase().includes("base"))
         ) {
           hasTextControl = true;
           const group = document.createElement("div");
@@ -533,15 +638,15 @@
           const val = e.target.value;
           const ITextClass = window.fabric.IText || window.fabric.Text;
           if (!activeAddedText) {
-            const targetLeft = printRect ? printRect.left : 600;
-            const targetTop = printRect ? (printRect.top - 80) : 400;
+            const targetLeft = printRect ? printRect.left : 400;
+            const targetTop = printRect ? (printRect.top - 60) : 340;
             activeAddedText = new ITextClass(val, {
               left: targetLeft,
               top: targetTop,
               originX: "center",
               originY: "center",
               fontFamily: "Roboto",
-              fontSize: 48,
+              fontSize: 44,
               fill: "#111111",
               name: "Customer Text",
               optionLabel: "Custom Text",
@@ -632,9 +737,9 @@
             imgEl.src = dataUrl;
             imgEl.onload = () => {
               const ImageClass = window.fabric.FabricImage || window.fabric.Image;
-              const targetLeft = printRect ? printRect.left : 600;
-              const targetTop = printRect ? printRect.top : 600;
-              const targetW = printRect ? (printRect.width * (printRect.scaleX || 1)) : 300;
+              const targetLeft = printRect ? printRect.left : 400;
+              const targetTop = printRect ? printRect.top : 480;
+              const targetW = printRect ? (printRect.width * (printRect.scaleX || 1)) : 260;
 
               const fabricImg = new ImageClass(imgEl, {
                 left: targetLeft,

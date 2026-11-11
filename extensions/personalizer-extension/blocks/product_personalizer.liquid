@@ -1,8 +1,19 @@
-{% assign target_product = block.settings.product | default: product %}
+{% assign current_product = product %}
+{% if current_product == nil and block.settings.product != blank %}
+  {% assign current_product = block.settings.product %}
+{% endif %}
+
+{% assign base_image = current_product.featured_image | default: current_product.featured_media %}
+{% assign base_image_url = '' %}
+{% if base_image %}
+  {% assign base_image_url = base_image | image_url: width: 1200 %}
+{% endif %}
 
 <div class="saitriq-personalizer-root" id="saitriq-personalizer-{{ block.id }}" {{ block.shopify_attributes }}>
   <saitriq-personalizer
-    data-product-id="{{ target_product.id }}"
+    data-product-id="{{ current_product.id }}"
+    data-product-title="{{ current_product.title | escape }}"
+    data-product-image="{{ base_image_url }}"
     data-shop="{{ shop.permanent_domain }}"
     data-fabric-url="{{ 'fabric.min.js' | asset_url }}"
     data-button-text="{{ block.settings.button_text | default: '🎨 Customize This Product' | escape }}"
