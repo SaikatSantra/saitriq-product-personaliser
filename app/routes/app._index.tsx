@@ -1,254 +1,242 @@
-import { useEffect } from "react";
-import type {
-  ActionFunctionArgs,
-  HeadersFunction,
-  LoaderFunctionArgs,
-} from "react-router";
-import { useFetcher } from "react-router";
-import { useAppBridge } from "@shopify/app-bridge-react";
+import type { LoaderFunctionArgs } from "react-router";
+import { useLoaderData, Link } from "react-router";
 import { authenticate } from "../shopify.server";
-import { boundary } from "@shopify/shopify-app-react-router/server";
+import { listTemplates } from "../models/template.server";
+import { listCustomizedOrders } from "../models/order.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  await authenticate.admin(request);
+  const { session } = await authenticate.admin(request);
+  const templates = await listTemplates(session.shop);
+  const orders = await listCustomizedOrders(session.shop);
 
-  return null;
-};
-
-export const action = async ({ request }: ActionFunctionArgs) => {
-  const { admin } = await authenticate.admin(request);
-  const color = ["Red", "Orange", "Yellow", "Green"][
-    Math.floor(Math.random() * 4)
-  ];
-  const response = await admin.graphql(
-    `#graphql
-      mutation populateProduct($product: ProductCreateInput!) {
-        productCreate(product: $product) {
-          product {
-            id
-            title
-            handle
-            status
-            variants(first: 10) {
-              edges {
-                node {
-                  id
-                  price
-                  barcode
-                  createdAt
-                }
-              }
-            }
-          }
-        }
-      }`,
-    {
-      variables: {
-        product: {
-          title: `${color} Snowboard`,
-        },
-      },
-    },
+  const totalProductsLinked = templates.reduce(
+    (acc, t) => acc + (t.products?.length || 0),
+    0,
   );
-  const responseJson = await response.json();
-
-  const product = responseJson.data!.productCreate!.product!;
-  const variantId = product.variants.edges[0]!.node!.id!;
-
-  const variantResponse = await admin.graphql(
-    `#graphql
-    mutation shopifyReactRouterTemplateUpdateVariant($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
-      productVariantsBulkUpdate(productId: $productId, variants: $variants) {
-        productVariants {
-          id
-          price
-          barcode
-          createdAt
-        }
-      }
-    }`,
-    {
-      variables: {
-        productId: product.id,
-        variants: [{ id: variantId, price: "100.00" }],
-      },
-    },
-  );
-
-  const variantResponseJson = await variantResponse.json();
 
   return {
-    product: responseJson!.data!.productCreate!.product,
-    variant:
-      variantResponseJson!.data!.productVariantsBulkUpdate!.productVariants,
+    shop: session.shop,
+    templates: templates.slice(0, 5),
+    totalTemplates: templates.length,
+    totalProductsLinked,
+    orders: orders.slice(0, 5),
+    totalOrders: orders.length,
   };
 };
 
-export default function Index() {
-  const fetcher = useFetcher<typeof action>();
-
-  const shopify = useAppBridge();
-  const isLoading =
-    ["loading", "submitting"].includes(fetcher.state) &&
-    fetcher.formMethod === "POST";
-
-  useEffect(() => {
-    if (fetcher.data?.product?.id) {
-      shopify.toast.show("Product created");
-    }
-  }, [fetcher.data?.product?.id, shopify]);
-
-  const generateProduct = () => fetcher.submit({}, { method: "POST" });
+export default function PersonalizerDashboard() {
+  const {
+    shop,
+    templates,
+    totalTemplates,
+    totalProductsLinked,
+    orders,
+    totalOrders,
+  } = useLoaderData<typeof loader>();
 
   return (
-    <s-page heading="Shopify app template">
-      <s-button slot="primary-action" onClick={generateProduct}>
-        Generate a product
+    <s-page heading="Product Personalizer & Print Studio">
+      <s-button slot="primary-action" variant="primary" href="/app/templates">
+        Manage Templates
       </s-button>
 
-      <s-section heading="Congrats on creating a new Shopify app 🎉">
-        <s-paragraph>
-          This embedded app template uses{" "}
-          <s-link
-            href="https://shopify.dev/docs/apps/tools/app-bridge"
-            target="_blank"
-          >
-            App Bridge
-          </s-link>{" "}
-          interface examples like an{" "}
-          <s-link href="/app/additional">additional page in the app nav</s-link>
-          , as well as an{" "}
-          <s-link
-            href="https://shopify.dev/docs/api/admin-graphql"
-            target="_blank"
-          >
-            Admin GraphQL
-          </s-link>{" "}
-          mutation demo, to provide a starting point for app development.
-        </s-paragraph>
-      </s-section>
-      <s-section heading="Get started with products">
-        <s-paragraph>
-          Generate a product with GraphQL and get the JSON output for that
-          product. Learn more about the{" "}
-          <s-link
-            href="https://shopify.dev/docs/api/admin-graphql/latest/mutations/productCreate"
-            target="_blank"
-          >
-            productCreate
-          </s-link>{" "}
-          mutation in our API references.
-        </s-paragraph>
-        <s-stack direction="inline" gap="base">
-          <s-button
-            onClick={generateProduct}
-            {...(isLoading ? { loading: true } : {})}
-          >
-            Generate a product
-          </s-button>
-          {fetcher.data?.product && (
-            <s-button
-              onClick={() => {
-                shopify.intents.invoke?.("edit:shopify/Product", {
-                  value: fetcher.data?.product?.id,
-                });
+      {/* Banner */}
+      <div
+        style={{
+          background: "linear-gradient(135deg, #1e3c72 0%, #2a5298 100%)",
+          color: "#fff",
+          padding: "24px",
+          borderRadius: "10px",
+          marginBottom: "24px",
+          boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "16px" }}>
+          <div>
+            <span style={{ background: "rgba(255,255,255,0.2)", padding: "4px 10px", borderRadius: "12px", fontSize: "12px", fontWeight: 600, letterSpacing: "0.5px" }}>
+              ONLINE STORE 2.0 READY
+            </span>
+            <h1 style={{ fontSize: "22px", margin: "10px 0 6px", color: "#fff" }}>
+              Welcome to Saitriq Personalizer on {shop}
+            </h1>
+            <p style={{ margin: 0, opacity: 0.85, fontSize: "14px", maxWidth: "600px" }}>
+              Empower your customers to personalize products in real-time with custom text, photo uploads, and clipart. Generates 300 DPI print-ready files automatically upon checkout.
+            </p>
+          </div>
+          <div style={{ display: "flex", gap: "10px" }}>
+            <Link
+              to="/app/templates"
+              style={{
+                background: "#fff",
+                color: "#1e3c72",
+                fontWeight: 600,
+                padding: "10px 18px",
+                borderRadius: "6px",
+                textDecoration: "none",
+                fontSize: "13px",
               }}
-              target="_blank"
-              variant="tertiary"
             >
-              Edit product
-            </s-button>
-          )}
-        </s-stack>
-        {fetcher.data?.product && (
-          <s-section heading="productCreate mutation">
-            <s-stack direction="block" gap="base">
-              <s-box
-                padding="base"
-                borderWidth="base"
-                borderRadius="base"
-                background="subdued"
-              >
-                <pre style={{ margin: 0 }}>
-                  <code>{JSON.stringify(fetcher.data.product, null, 2)}</code>
-                </pre>
-              </s-box>
+              Open Template Studio
+            </Link>
+          </div>
+        </div>
+      </div>
 
-              <s-heading>productVariantsBulkUpdate mutation</s-heading>
-              <s-box
-                padding="base"
-                borderWidth="base"
-                borderRadius="base"
-                background="subdued"
-              >
-                <pre style={{ margin: 0 }}>
-                  <code>{JSON.stringify(fetcher.data.variant, null, 2)}</code>
-                </pre>
-              </s-box>
-            </s-stack>
-          </s-section>
-        )}
-      </s-section>
+      {/* Stat Cards */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "16px", marginBottom: "24px" }}>
+        <div style={{ background: "#fff", border: "1px solid #e1e3e5", borderRadius: "8px", padding: "18px" }}>
+          <div style={{ color: "#6d7175", fontSize: "13px", fontWeight: 500 }}>Active Templates</div>
+          <div style={{ fontSize: "26px", fontWeight: 700, margin: "6px 0", color: "#202223" }}>{totalTemplates}</div>
+          <Link to="/app/templates" style={{ color: "#005bd3", fontSize: "12px", textDecoration: "none" }}>
+            View all templates &rarr;
+          </Link>
+        </div>
 
-      <s-section slot="aside" heading="App template specs">
-        <s-paragraph>
-          <s-text>Framework: </s-text>
-          <s-link href="https://reactrouter.com/" target="_blank">
-            React Router
-          </s-link>
-        </s-paragraph>
-        <s-paragraph>
-          <s-text>Interface: </s-text>
-          <s-link
-            href="https://shopify.dev/docs/api/app-home/using-polaris-components"
-            target="_blank"
-          >
-            Polaris web components
-          </s-link>
-        </s-paragraph>
-        <s-paragraph>
-          <s-text>API: </s-text>
-          <s-link
-            href="https://shopify.dev/docs/api/admin-graphql"
-            target="_blank"
-          >
-            GraphQL
-          </s-link>
-        </s-paragraph>
-        <s-paragraph>
-          <s-text>Database: </s-text>
-          <s-link href="https://www.prisma.io/" target="_blank">
-            Prisma
-          </s-link>
-        </s-paragraph>
-      </s-section>
+        <div style={{ background: "#fff", border: "1px solid #e1e3e5", borderRadius: "8px", padding: "18px" }}>
+          <div style={{ color: "#6d7175", fontSize: "13px", fontWeight: 500 }}>Customized Products</div>
+          <div style={{ fontSize: "26px", fontWeight: 700, margin: "6px 0", color: "#202223" }}>{totalProductsLinked}</div>
+          <span style={{ color: "#108043", fontSize: "12px" }}>Linked to store products</span>
+        </div>
 
-      <s-section slot="aside" heading="Next steps">
-        <s-unordered-list>
-          <s-list-item>
-            Build an{" "}
-            <s-link
-              href="https://shopify.dev/docs/apps/getting-started/build-app-example"
-              target="_blank"
-            >
-              example app
-            </s-link>
-          </s-list-item>
-          <s-list-item>
-            Explore Shopify&apos;s API with{" "}
-            <s-link
-              href="https://shopify.dev/docs/apps/tools/graphiql-admin-api"
-              target="_blank"
-            >
-              GraphiQL
-            </s-link>
-          </s-list-item>
-        </s-unordered-list>
-      </s-section>
+        <div style={{ background: "#fff", border: "1px solid #e1e3e5", borderRadius: "8px", padding: "18px" }}>
+          <div style={{ color: "#6d7175", fontSize: "13px", fontWeight: 500 }}>Customized Orders</div>
+          <div style={{ fontSize: "26px", fontWeight: 700, margin: "6px 0", color: "#202223" }}>{totalOrders}</div>
+          <Link to="/app/orders" style={{ color: "#005bd3", fontSize: "12px", textDecoration: "none" }}>
+            View print queue &rarr;
+          </Link>
+        </div>
+
+        <div style={{ background: "#fff", border: "1px solid #e1e3e5", borderRadius: "8px", padding: "18px" }}>
+          <div style={{ color: "#6d7175", fontSize: "13px", fontWeight: 500 }}>Print File Quality</div>
+          <div style={{ fontSize: "26px", fontWeight: 700, margin: "6px 0", color: "#202223" }}>300 DPI</div>
+          <span style={{ color: "#6d7175", fontSize: "12px" }}>Vector PDF / High-Res PNG</span>
+        </div>
+      </div>
+
+      {/* Main Grid: Recent Templates & Quick Guide */}
+      <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "20px" }}>
+        
+        {/* Recent Templates */}
+        <s-section heading="Personalization Templates">
+          <div style={{ background: "#fff", border: "1px solid #e1e3e5", borderRadius: "8px", overflow: "hidden" }}>
+            {templates.length === 0 ? (
+              <div style={{ padding: "40px 20px", textAlign: "center" }}>
+                <p style={{ color: "#6d7175", margin: "0 0 16px", fontSize: "14px" }}>
+                  No templates created yet. Set up your first canvas template.
+                </p>
+                <Link
+                  to="/app/templates"
+                  style={{
+                    background: "#008060",
+                    color: "#fff",
+                    padding: "8px 16px",
+                    borderRadius: "6px",
+                    textDecoration: "none",
+                    fontSize: "13px",
+                    fontWeight: 500,
+                  }}
+                >
+                  Create Template
+                </Link>
+              </div>
+            ) : (
+              <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
+                <thead>
+                  <tr style={{ background: "#fafbfb", borderBottom: "1px solid #e1e3e5" }}>
+                    <th style={{ padding: "10px 14px", fontSize: "12px", color: "#6d7175" }}>Title</th>
+                    <th style={{ padding: "10px 14px", fontSize: "12px", color: "#6d7175" }}>Canvas</th>
+                    <th style={{ padding: "10px 14px", fontSize: "12px", color: "#6d7175" }}>Products</th>
+                    <th style={{ padding: "10px 14px", fontSize: "12px", color: "#6d7175", textAlign: "right" }}>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {templates.map((t) => (
+                    <tr key={t.id} style={{ borderBottom: "1px solid #f1f2f3" }}>
+                      <td style={{ padding: "12px 14px", fontWeight: 600, fontSize: "13px" }}>{t.title}</td>
+                      <td style={{ padding: "12px 14px", fontSize: "12px", color: "#6d7175" }}>
+                        {t.canvasWidth}×{t.canvasHeight} px ({t.printDpi} DPI)
+                      </td>
+                      <td style={{ padding: "12px 14px", fontSize: "12px" }}>
+                        <span style={{ color: (t.products?.length || 0) > 0 ? "#108043" : "#6d7175" }}>
+                          {t.products?.length || 0} linked
+                        </span>
+                      </td>
+                      <td style={{ padding: "12px 14px", textAlign: "right" }}>
+                        <Link
+                          to={`/app/templates/${t.id}`}
+                          style={{
+                            color: "#005bd3",
+                            fontSize: "12px",
+                            fontWeight: 600,
+                            textDecoration: "none",
+                          }}
+                        >
+                          Open Studio &rarr;
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </s-section>
+
+        {/* Setup & Integration Guide */}
+        <s-section heading="Quick Setup Guide">
+          <div style={{ background: "#fff", border: "1px solid #e1e3e5", borderRadius: "8px", padding: "16px" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+              <div style={{ display: "flex", gap: "12px" }}>
+                <div style={{ width: "24px", height: "24px", borderRadius: "50%", background: "#008060", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px", fontWeight: 700, flexShrink: 0 }}>
+                  1
+                </div>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: "13px" }}>Design Canvas Template</div>
+                  <div style={{ color: "#6d7175", fontSize: "12px", marginTop: "2px" }}>
+                    Configure print bounds, add text layers, upload areas, and mockups in Template Studio.
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", gap: "12px" }}>
+                <div style={{ width: "24px", height: "24px", borderRadius: "50%", background: "#008060", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px", fontWeight: 700, flexShrink: 0 }}>
+                  2
+                </div>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: "13px" }}>Assign Shopify Products</div>
+                  <div style={{ color: "#6d7175", fontSize: "12px", marginTop: "2px" }}>
+                    Link which catalog products should load this customization experience.
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", gap: "12px" }}>
+                <div style={{ width: "24px", height: "24px", borderRadius: "50%", background: "#008060", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px", fontWeight: 700, flexShrink: 0 }}>
+                  3
+                </div>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: "13px" }}>Add Theme App Block</div>
+                  <div style={{ color: "#6d7175", fontSize: "12px", marginTop: "2px" }}>
+                    In Shopify Theme Editor (Online Store 2.0), add the "Product Personalizer" app block to your product page template.
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", gap: "12px" }}>
+                <div style={{ width: "24px", height: "24px", borderRadius: "50%", background: "#008060", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px", fontWeight: 700, flexShrink: 0 }}>
+                  4
+                </div>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: "13px" }}>Automatic 300 DPI Output</div>
+                  <div style={{ color: "#6d7175", fontSize: "12px", marginTop: "2px" }}>
+                    When a shopper completes checkout, the 300 DPI print file renders automatically in your Orders Queue.
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </s-section>
+      </div>
     </s-page>
   );
 }
-
-export const headers: HeadersFunction = (headersArgs) => {
-  return boundary.headers(headersArgs);
-};
