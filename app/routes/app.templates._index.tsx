@@ -4,6 +4,7 @@ import { authenticate } from "../shopify.server";
 import {
   listTemplates,
   createTemplate,
+  updateTemplate,
   deleteTemplate,
   duplicateTemplate,
 } from "../models/template.server";
@@ -37,6 +38,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return { success: true, createdId: newTemplate.id };
   }
 
+  if (intent === "rename" && templateId) {
+    const title = (formData.get("title") as string)?.trim();
+    if (title) {
+      await updateTemplate(templateId, session.shop, { title });
+      return { success: true, message: `Template renamed to "${title}"` };
+    }
+  }
+
   if (intent === "duplicate" && templateId) {
     await duplicateTemplate(templateId, session.shop);
     return { success: true };
@@ -61,10 +70,22 @@ export default function TemplatesIndex() {
   }
 
   const handleCreateNew = () => {
+    const enteredName = prompt("Enter a name for the new template:", "New Customizer Template");
+    if (enteredName === null) return;
     fetcher.submit(
-      { intent: "create", title: "New Customizer Template" },
+      { intent: "create", title: enteredName.trim() || "New Customizer Template" },
       { method: "POST" },
     );
+  };
+
+  const handleRename = (id: string, currentTitle: string) => {
+    const newName = prompt("Enter new template name:", currentTitle);
+    if (newName && newName.trim() && newName.trim() !== currentTitle) {
+      fetcher.submit(
+        { intent: "rename", templateId: id, title: newName.trim() },
+        { method: "POST" },
+      );
+    }
   };
 
   const handleDuplicate = (id: string) => {
@@ -149,12 +170,30 @@ export default function TemplatesIndex() {
                   return (
                     <tr key={tpl.id} style={{ borderBottom: "1px solid #f1f2f3" }}>
                       <td style={{ padding: "16px", fontWeight: 600 }}>
-                        <Link
-                          to={`/app/templates/${tpl.id}`}
-                          style={{ color: "#005bd3", textDecoration: "none" }}
-                        >
-                          {tpl.title}
-                        </Link>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <Link
+                            to={`/app/templates/${tpl.id}`}
+                            style={{ color: "#005bd3", textDecoration: "none", fontSize: "14px" }}
+                          >
+                            {tpl.title}
+                          </Link>
+                          <button
+                            type="button"
+                            onClick={() => handleRename(tpl.id, tpl.title)}
+                            title="Rename template"
+                            style={{
+                              background: "none",
+                              border: "none",
+                              cursor: "pointer",
+                              padding: "2px 6px",
+                              fontSize: "12px",
+                              color: "#6d7175",
+                              borderRadius: "4px",
+                            }}
+                          >
+                            ✏️
+                          </button>
+                        </div>
                       </td>
                       <td style={{ padding: "16px", color: "#6d7175", fontSize: "13px" }}>
                         {tpl.canvasWidth} × {tpl.canvasHeight} px ({tpl.printDpi} DPI)
@@ -174,6 +213,21 @@ export default function TemplatesIndex() {
                       </td>
                       <td style={{ padding: "16px", textAlign: "right" }}>
                         <div style={{ display: "inline-flex", gap: "8px", alignItems: "center" }}>
+                          <button
+                            type="button"
+                            onClick={() => handleRename(tpl.id, tpl.title)}
+                            style={{
+                              padding: "6px 10px",
+                              borderRadius: "6px",
+                              border: "1px solid #c9cccf",
+                              background: "#fff",
+                              color: "#202223",
+                              fontSize: "13px",
+                              cursor: "pointer",
+                            }}
+                          >
+                            Rename
+                          </button>
                           <Link
                             to={`/app/templates/${tpl.id}`}
                             style={{

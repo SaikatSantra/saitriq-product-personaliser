@@ -464,6 +464,63 @@ export default function TemplateStudio() {
         </div>
       )}
 
+      {/* Top Template Bar: Name & Canvas Specs */}
+      <div
+        style={{
+          background: "#ffffff",
+          borderRadius: "8px",
+          border: "1px solid #e1e3e5",
+          padding: "12px 18px",
+          marginBottom: "16px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: "16px",
+          flexWrap: "wrap",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", flex: 1, minWidth: "300px" }}>
+          <label style={{ fontSize: "13px", fontWeight: 700, color: "#202223", display: "flex", alignItems: "center", gap: "6px", whiteSpace: "nowrap" }}>
+            <span>✏️ Template Name:</span>
+          </label>
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="e.g. Custom Cap Front Studio, T-Shirt Print Template..."
+            style={{
+              flex: 1,
+              maxWidth: "460px",
+              padding: "8px 12px",
+              fontSize: "14px",
+              fontWeight: 600,
+              border: "1px solid #8c9196",
+              borderRadius: "6px",
+              outline: "none",
+              color: "#202223",
+              background: "#fafbfb",
+            }}
+          />
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: "16px", fontSize: "13px", color: "#6d7175" }}>
+          <div>
+            <span>Print Size: </span>
+            <strong style={{ color: "#202223" }}>{canvasWidth} × {canvasHeight} px</strong>
+          </div>
+          <div>
+            <span>Quality: </span>
+            <strong style={{ color: "#202223" }}>{printDpi} DPI</strong>
+          </div>
+          <div>
+            <span>Products: </span>
+            <strong style={{ color: assignedProductIds.length > 0 ? "#108043" : "#6d7175" }}>
+              {assignedProductIds.length} linked
+            </strong>
+          </div>
+        </div>
+      </div>
+
       {/* Main Studio Layout */}
       <div style={{ display: "grid", gridTemplateColumns: "240px 1fr 300px", gap: "16px", minHeight: "750px" }}>
         
@@ -737,8 +794,97 @@ export default function TemplateStudio() {
               </div>
             </div>
           ) : (
-            <div style={{ textAlign: "center", padding: "20px 0", color: "#6d7175", fontSize: "13px" }}>
-              Click on any layer on the canvas to inspect and edit its properties.
+            <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+              <div style={{ paddingBottom: "10px", borderBottom: "1px solid #e1e3e5" }}>
+                <h4 style={{ margin: "0 0 4px", fontSize: "14px", fontWeight: 700, color: "#202223" }}>
+                  📋 Template Settings
+                </h4>
+                <p style={{ margin: 0, fontSize: "12px", color: "#6d7175" }}>
+                  Configure template name and print dimensions.
+                </p>
+              </div>
+
+              <label style={{ fontSize: "13px", fontWeight: 600, color: "#202223" }}>
+                Template Name:
+                <input
+                  type="text"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="Enter template name..."
+                  style={{
+                    width: "100%",
+                    padding: "8px 10px",
+                    border: "1px solid #c9cccf",
+                    borderRadius: "6px",
+                    marginTop: "6px",
+                    fontSize: "13px",
+                    fontWeight: 500,
+                    boxSizing: "border-box",
+                  }}
+                />
+              </label>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                <label style={{ fontSize: "12px", color: "#6d7175" }}>
+                  Width (px):
+                  <input
+                    type="number"
+                    value={canvasWidth}
+                    onChange={(e) => setCanvasWidth(parseInt(e.target.value) || 1200)}
+                    style={{
+                      width: "100%",
+                      padding: "6px 8px",
+                      border: "1px solid #c9cccf",
+                      borderRadius: "4px",
+                      marginTop: "4px",
+                      fontSize: "13px",
+                      boxSizing: "border-box",
+                    }}
+                  />
+                </label>
+                <label style={{ fontSize: "12px", color: "#6d7175" }}>
+                  Height (px):
+                  <input
+                    type="number"
+                    value={canvasHeight}
+                    onChange={(e) => setCanvasHeight(parseInt(e.target.value) || 1200)}
+                    style={{
+                      width: "100%",
+                      padding: "6px 8px",
+                      border: "1px solid #c9cccf",
+                      borderRadius: "4px",
+                      marginTop: "4px",
+                      fontSize: "13px",
+                      boxSizing: "border-box",
+                    }}
+                  />
+                </label>
+              </div>
+
+              <label style={{ fontSize: "12px", color: "#6d7175" }}>
+                Print Resolution:
+                <select
+                  value={printDpi}
+                  onChange={(e) => setPrintDpi(parseInt(e.target.value) || 300)}
+                  style={{
+                    width: "100%",
+                    padding: "6px 8px",
+                    border: "1px solid #c9cccf",
+                    borderRadius: "4px",
+                    marginTop: "4px",
+                    fontSize: "13px",
+                    boxSizing: "border-box",
+                  }}
+                >
+                  <option value={150}>150 DPI (Screen preview)</option>
+                  <option value={300}>300 DPI (Commercial print)</option>
+                  <option value={600}>600 DPI (Ultra fine print)</option>
+                </select>
+              </label>
+
+              <div style={{ background: "#f8f9fa", padding: "10px", borderRadius: "6px", fontSize: "12px", color: "#6d7175", marginTop: "4px" }}>
+                💡 <em>Tip: Select any layer on the canvas to inspect its fonts, colors, and options.</em>
+              </div>
             </div>
           )}
 
