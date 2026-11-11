@@ -3,13 +3,14 @@
   Enables live preview replacement for customized items in the cart and cart drawer
 {% endcomment %}
 
+{% # theme-check-disable AssetSizeAppBlockJavaScript %}
+<script src="{{ 'cart_preview.js' | asset_url }}" defer></script>
+{% # theme-check-enable AssetSizeAppBlockJavaScript %}
 
 {% schema %}
 {
   "name": "Cart Design Preview",
   "target": "body",
-  "javascript": "cart_preview.js",
-  "stylesheet": "personalizer.css",
   "settings": []
 }
 {% endschema %}

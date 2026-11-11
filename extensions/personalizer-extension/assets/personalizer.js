@@ -880,11 +880,40 @@
         const resolvedTemplateId =
           this.templateData?.id || (this.productId ? `tpl-${this.productId}` : "custom-template");
 
+        // Attempt server-side image upload so line items get a clean HTTPS URL instead of raw base64
+        let finalPreviewUrl = previewDataUrl;
+        if (previewDataUrl) {
+          try {
+            if (submitBtn) submitBtn.textContent = "Uploading Design...";
+            const uploadRes = await fetch("/apps/personalizer/upload", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                customizationId: customizationId,
+                image: previewDataUrl,
+                shop: this.shopDomain || window.Shopify?.shop || "",
+              }),
+            });
+            if (uploadRes.ok) {
+              const uploadJson = await uploadRes.json();
+              if (uploadJson.previewUrl || uploadJson.directUrl) {
+                finalPreviewUrl = uploadJson.previewUrl || uploadJson.directUrl;
+                console.log("[Saitriq] Design preview uploaded:", finalPreviewUrl);
+              }
+            }
+          } catch (uploadErr) {
+            console.warn("[Saitriq] Preview upload notice (using fallback):", uploadErr);
+          }
+        }
+
+        if (submitBtn) submitBtn.textContent = "Adding to Cart...";
+
         // 3. Gather customer inputs for line item properties
         const properties = {
           _customization_id: customizationId,
           _template_id: resolvedTemplateId,
-          _customization_preview: previewDataUrl,
+          _customization_preview: finalPreviewUrl,
+          "Custom Design Preview": finalPreviewUrl,
           "Custom Design": "Personalized ✨",
         };
 
@@ -929,6 +958,10 @@
           if (previewDataUrl) {
             sessionStorage.setItem("saitriq_latest_preview", previewDataUrl);
             sessionStorage.setItem("saitriq_preview_" + variantId, previewDataUrl);
+            sessionStorage.setItem("saitriq_preview_" + customizationId, previewDataUrl);
+          }
+          if (finalPreviewUrl && finalPreviewUrl !== previewDataUrl) {
+            sessionStorage.setItem("saitriq_url_" + variantId, finalPreviewUrl);
           }
         } catch (storageErr) {}
 
@@ -948,6 +981,10 @@
         });
 
         if (cartResponse.ok) {
+          document.dispatchEvent(new CustomEvent("cart:updated"));
+          document.dispatchEvent(new CustomEvent("cart:refresh"));
+          document.dispatchEvent(new CustomEvent("cart:change"));
+
           this.closeModal();
           window.location.href = "/cart";
         } else {
