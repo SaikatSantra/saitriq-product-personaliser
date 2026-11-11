@@ -364,9 +364,13 @@
         return;
       }
 
-      // Remove any previously added base image
+      // Remove any previously added base image or unclassified background image
       const existing = this.fabricCanvas.getObjects().filter(
-        (o) => o.name === "Product Base Image" || o.name?.includes("Mockup") || o.customType === "background_mockup"
+        (o) =>
+          o.name === "Product Base Image" ||
+          o.name?.includes("Mockup") ||
+          o.customType === "background_mockup" ||
+          (o.type?.toLowerCase() === "image" && !o.isCustomerEditable && o.name !== "Customer Uploaded Image")
       );
       existing.forEach((o) => this.fabricCanvas.remove(o));
 
@@ -434,18 +438,39 @@
 
       this.fabricCanvas.setZoom(scale);
 
-      // 1. Load template layers
-      try {
-        let layersToLoad = tpl.layers;
-        if (typeof layersToLoad === "string") {
-          try { layersToLoad = JSON.parse(layersToLoad); } catch(e) {}
-        }
-        if (Array.isArray(layersToLoad)) {
-          layersToLoad = { objects: layersToLoad };
-        }
+      // 1. Prepare template layers
+      let layersToLoad = tpl.layers;
+      if (typeof layersToLoad === "string") {
+        try { layersToLoad = JSON.parse(layersToLoad); } catch(e) {}
+      }
+      if (Array.isArray(layersToLoad)) {
+        layersToLoad = { objects: layersToLoad };
+      }
 
+      // Check if template explicitly contains a merchant-uploaded mockup underlay
+      let templateHasUnderlay = false;
+      const rawObjects = Array.isArray(layersToLoad?.objects)
+        ? layersToLoad.objects
+        : Array.isArray(layersToLoad)
+        ? layersToLoad
+        : [];
+
+      for (const obj of rawObjects) {
+        const type = (obj.type || "").toLowerCase();
+        const objName = (obj.name || "").toLowerCase();
+        const customType = (obj.customType || "").toLowerCase();
+        if (
+          type === "image" &&
+          (objName.includes("mockup") || objName.includes("underlay") || customType === "background_mockup")
+        ) {
+          templateHasUnderlay = true;
+          break;
+        }
+      }
+
+      // Load layers into Fabric canvas
+      try {
         if (layersToLoad && (layersToLoad.objects || Array.isArray(layersToLoad))) {
-          // Normalize object types for Fabric 7 compatibility (e.g. image -> Image, rect -> Rect)
           if (Array.isArray(layersToLoad.objects)) {
             layersToLoad.objects.forEach((o) => {
               if (o && o.type) {
@@ -466,37 +491,6 @@
         }
       } catch (err) {
         console.error("[Saitriq] Error loading template layers:", err);
-      }
-
-      // 2. Check if the template already has an uploaded mockup underlay image
-      let templateHasUnderlay = false;
-      const rawObjects = Array.isArray(layersToLoad?.objects)
-        ? layersToLoad.objects
-        : Array.isArray(layersToLoad)
-        ? layersToLoad
-        : [];
-
-      for (const obj of rawObjects) {
-        const type = (obj.type || "").toLowerCase();
-        if (
-          type === "image" &&
-          (obj.src || obj.name?.includes("Mockup") || obj.customType === "background_mockup")
-        ) {
-          templateHasUnderlay = true;
-          break;
-        }
-      }
-
-      const canvasObjects = this.fabricCanvas.getObjects();
-      const liveMockup = canvasObjects.find((o) => {
-        const type = (o.type || "").toLowerCase();
-        return (
-          type === "image" &&
-          (o.name === "Mockup Underlay" || o.customType === "background_mockup" || o.name === "Product Base Image")
-        );
-      });
-      if (liveMockup) {
-        templateHasUnderlay = true;
       }
 
       // If template has NO uploaded mockup underlay, load the current product's real catalog image!
