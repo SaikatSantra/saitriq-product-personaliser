@@ -1,0 +1,7 @@
+extends: theme-check:theme-app-extension
+
+AssetSizeAppBlockJavaScript:
+  enabled: false
+
+ValidSchema:
+  enabled: false
