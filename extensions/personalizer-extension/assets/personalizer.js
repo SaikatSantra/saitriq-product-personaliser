@@ -230,7 +230,25 @@
       return modal;
     }
 
+    async ensureFabric() {
+      if (window.fabric) return;
+      return new Promise((resolve) => {
+        const existing = document.querySelector('script[src*="fabric"]');
+        if (existing) {
+          if (window.fabric) return resolve();
+          existing.addEventListener("load", resolve, { once: true });
+          return;
+        }
+        const script = document.createElement("script");
+        script.src = "https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js";
+        script.async = true;
+        script.onload = () => resolve();
+        document.head.appendChild(script);
+      });
+    }
+
     async initFabricCanvas() {
+      await this.ensureFabric();
       if (!window.fabric) {
         console.warn("[Saitriq] Waiting for Fabric.js to load from CDN...");
         setTimeout(() => this.initFabricCanvas(), 100);
