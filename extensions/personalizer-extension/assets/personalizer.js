@@ -332,21 +332,28 @@
       modal.innerHTML = `
         <div class="saitriq-modal-window">
           <div class="saitriq-modal-header">
-            <h3>Customize Your Design</h3>
+            <div class="saitriq-header-titles">
+              <h3>Customize Your Design</h3>
+              <p class="saitriq-modal-subtitle">${this.productTitle ? this.productTitle + " • " : ""}Personalize text, upload photos & preview live</p>
+            </div>
             <button type="button" class="saitriq-close-btn" aria-label="Close">&times;</button>
           </div>
           
           <div class="saitriq-modal-body">
-            <!-- Canvas Preview -->
+            <!-- Canvas Preview Studio -->
             <div class="saitriq-canvas-viewport">
               <div class="saitriq-canvas-stage">
                 <canvas id="saitriq-storefront-canvas"></canvas>
+              </div>
+              <div class="saitriq-canvas-badge">
+                <span class="saitriq-pulse-dot"></span>
+                <span>Live 300 DPI Studio Preview</span>
               </div>
             </div>
 
             <!-- Customizer Controls -->
             <div class="saitriq-controls-panel">
-              <div id="saitriq-dynamic-controls">
+              <div id="saitriq-dynamic-controls" style="display: flex; flex-direction: column; gap: 14px; flex: 1;">
                 <!-- Injected dynamically from template layers -->
               </div>
             </div>
@@ -355,14 +362,16 @@
           <!-- Footer Actions -->
           <div class="saitriq-modal-footer">
             <div class="saitriq-preview-info">
-              <span>✨ Live 300 DPI Preview</span>
+              <span class="saitriq-pulse-dot"></span>
+              <span>High-Resolution Real-time Render</span>
             </div>
-            <div style="display: flex; gap: 10px;">
-              <button type="button" class="saitriq-close-btn-secondary" style="background: none; border: 1px solid #c9cccf; padding: 10px 16px; border-radius: 6px; cursor: pointer;">
+            <div style="display: flex; gap: 10px; align-items: center;">
+              <button type="button" class="saitriq-close-btn-secondary">
                 Cancel
               </button>
               <button type="button" class="saitriq-submit-cart-btn">
-                Add to Cart with Design
+                <span>Add to Cart with Design</span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
               </button>
             </div>
           </div>
@@ -466,8 +475,8 @@
       existing.forEach((o) => this.fabricCanvas.remove(o));
 
       // Calculate scale to nicely contain product image on canvas
-      const maxW = canvasW * 0.94;
-      const maxH = canvasH * 0.94;
+      const maxW = canvasW * 0.98;
+      const maxH = canvasH * 0.98;
       const scale = Math.min(maxW / loadedImg.width, maxH / loadedImg.height);
 
       const baseImg = new ImageClass(loadedImg, {
@@ -515,9 +524,18 @@
       }
 
       const tpl = this.templateData || this.getDefaultPreviewTemplate();
-      const targetWidth = Math.min(460, window.innerWidth - 60);
-      const canvasW = tpl.canvasWidth || 800;
-      const canvasH = tpl.canvasHeight || 800;
+      const viewportEl = document.querySelector(".saitriq-canvas-viewport");
+      let availW = 460;
+      let availH = 460;
+      if (viewportEl) {
+        const rect = viewportEl.getBoundingClientRect();
+        if (rect.width > 0) availW = rect.width - 48;
+        if (rect.height > 0) availH = rect.height - 48;
+      }
+      const maxAvail = Math.min(availW, availH);
+      const targetWidth = Math.min(500, Math.max(300, maxAvail > 0 ? maxAvail : 460));
+      const canvasW = tpl.canvasWidth || 1200;
+      const canvasH = tpl.canvasHeight || 1200;
       const scale = targetWidth / canvasW;
 
       this.fabricCanvas = new window.fabric.Canvas(canvasEl, {
@@ -610,83 +628,202 @@
       this.buildDynamicControls();
     }
 
+    getColorHex(name) {
+      if (!name) return "#6b7280";
+      const lower = name.toLowerCase().trim();
+      const COLOR_MAP = {
+        black: "#111111",
+        white: "#ffffff",
+        blue: "#2563eb",
+        navy: "#0f172a",
+        red: "#dc2626",
+        green: "#16a34a",
+        "forest green": "#14532d",
+        grey: "#6b7280",
+        gray: "#6b7280",
+        charcoal: "#374151",
+        yellow: "#eab308",
+        gold: "#d97706",
+        orange: "#ea580c",
+        pink: "#ec4899",
+        purple: "#9333ea",
+        maroon: "#881337",
+        burgundy: "#800020",
+        brown: "#78350f",
+        beige: "#f5f5dc",
+        olive: "#556b2f",
+        teal: "#0d9488",
+        cyan: "#06b6d4",
+      };
+      if (COLOR_MAP[lower]) return COLOR_MAP[lower];
+      for (const [key, hex] of Object.entries(COLOR_MAP)) {
+        if (lower.includes(key)) return hex;
+      }
+      return "#9ca3af";
+    }
+
+    getParsedOptions() {
+      if (!this.variantsData) return null;
+      const { options, variants } = this.variantsData;
+      if (!variants || variants.length <= 1) return null;
+
+      if (Array.isArray(options) && options.length > 0) {
+        const valid = options.filter(
+          (opt) => !(opt.name?.toLowerCase() === "title" && opt.values?.length === 1 && opt.values[0] === "Default Title")
+        );
+        if (valid.length > 0) return valid;
+      }
+
+      if (variants[0] && Array.isArray(variants[0].options)) {
+        const numOpts = variants[0].options.length;
+        const derived = [];
+        for (let i = 0; i < numOpts; i++) {
+          const uniqueVals = Array.from(new Set(variants.map((v) => v.options[i]).filter(Boolean)));
+          if (uniqueVals.length > 1) {
+            derived.push({
+              name: i === 0 ? "Color" : i === 1 ? "Size" : `Option ${i + 1}`,
+              position: i + 1,
+              values: uniqueVals,
+            });
+          }
+        }
+        if (derived.length > 0) return derived;
+      }
+
+      return null;
+    }
+
     buildDynamicControls() {
       const container = document.getElementById("saitriq-dynamic-controls");
       if (!container || !this.fabricCanvas) return;
 
       container.innerHTML = "";
 
-      // 1. Check if product has variants with images (e.g. Color: Black, Blue, etc.)
-      if (this.variantsData && Array.isArray(this.variantsData.variants) && this.variantsData.variants.length > 1) {
-        const activeVariant = this.getSelectedVariant();
-        const variantsWithImages = this.variantsData.variants.filter((v) => v.image);
+      const activeVariant = this.getSelectedVariant();
+      if (!this.selectedOptionValues && activeVariant && Array.isArray(activeVariant.options)) {
+        this.selectedOptionValues = [...activeVariant.options];
+      }
 
-        if (variantsWithImages.length > 1) {
-          const variantGroup = document.createElement("div");
-          variantGroup.className = "saitriq-control-group";
+      // 1. Product Options Card (Color, Size, etc.)
+      const parsedOptions = this.getParsedOptions();
+      if (parsedOptions && parsedOptions.length > 0) {
+        const optionsCard = document.createElement("div");
+        optionsCard.className = "saitriq-control-card";
+        optionsCard.innerHTML = `
+          <div class="saitriq-card-header">
+            <span class="saitriq-card-icon">🎨</span>
+            <span class="saitriq-card-title">Product Options</span>
+          </div>
+          <div class="saitriq-card-body" id="saitriq-options-body"></div>
+        `;
+        const optionsBody = optionsCard.querySelector("#saitriq-options-body");
 
-          const label = document.createElement("label");
-          label.className = "saitriq-control-label";
-          label.textContent = `🎨 Product Color / Variant: ${activeVariant?.title || ""}`;
+        parsedOptions.forEach((opt, optIdx) => {
+          const optPositionIdx = opt.position ? opt.position - 1 : optIdx;
+          const currentVal = this.selectedOptionValues?.[optPositionIdx] || opt.values[0];
+          const isColor = (opt.name || "").toLowerCase().includes("color") || (opt.name || "").toLowerCase().includes("colour");
 
-          const swatchesContainer = document.createElement("div");
-          swatchesContainer.className = "saitriq-swatches-grid";
-          swatchesContainer.style.cssText = "display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px;";
+          const section = document.createElement("div");
+          section.className = "saitriq-option-section";
 
-          variantsWithImages.forEach((v) => {
-            const btn = document.createElement("button");
-            btn.type = "button";
-            btn.className = "saitriq-variant-switch-btn";
-            const isActive = activeVariant && String(activeVariant.id) === String(v.id);
-            btn.style.cssText = `
-              padding: 6px 14px;
-              border-radius: 6px;
-              border: ${isActive ? "2px solid #008060" : "1px solid #d4d6d8"};
-              background: ${isActive ? "#f0fdf4" : "#ffffff"};
-              color: ${isActive ? "#008060" : "#202223"};
-              font-weight: ${isActive ? "600" : "400"};
-              font-size: 13px;
-              cursor: pointer;
-              transition: all 0.15s ease;
-            `;
-            btn.textContent = v.title;
+          const titleRow = document.createElement("div");
+          titleRow.className = "saitriq-option-title";
+          titleRow.innerHTML = `
+            <span>${opt.name}</span>
+            <span class="saitriq-option-selected-val" id="saitriq-opt-val-${optPositionIdx}">${currentVal}</span>
+          `;
+          section.appendChild(titleRow);
 
-            btn.addEventListener("click", async () => {
-              this.activeSelectedVariantId = String(v.id);
-              const formInput = document.querySelector('form[action*="/cart/add"] input[name="id"]');
-              if (formInput) formInput.value = v.id;
+          const pillsRow = document.createElement("div");
+          pillsRow.className = isColor ? "saitriq-color-pills-row" : "saitriq-size-pills-row";
 
-              label.textContent = `🎨 Product Color / Variant: ${v.title}`;
+          opt.values.forEach((val) => {
+            const pill = document.createElement("button");
+            pill.type = "button";
+            const isActive = (val === currentVal);
 
-              swatchesContainer.querySelectorAll(".saitriq-variant-switch-btn").forEach((b) => {
-                b.style.border = "1px solid #d4d6d8";
-                b.style.background = "#ffffff";
-                b.style.color = "#202223";
-                b.style.fontWeight = "400";
+            if (isColor) {
+              pill.className = `saitriq-color-pill ${isActive ? "is-active" : ""}`;
+              const hex = this.getColorHex(val);
+              pill.innerHTML = `
+                <span class="saitriq-color-dot" style="background-color: ${hex}; ${hex === '#ffffff' ? 'border: 1px solid #d1d5db;' : ''}"></span>
+                <span>${val}</span>
+              `;
+            } else {
+              pill.className = `saitriq-size-pill ${isActive ? "is-active" : ""}`;
+              pill.textContent = val;
+            }
+
+            pill.setAttribute("data-value", val);
+            pill.classList.add(`saitriq-opt-idx-${optPositionIdx}`);
+
+            pill.addEventListener("click", async () => {
+              if (!this.selectedOptionValues) this.selectedOptionValues = [];
+              this.selectedOptionValues[optPositionIdx] = val;
+
+              // Find variant matching current active options
+              let matched = this.variantsData.variants.find((v) => {
+                return Array.isArray(v.options) && v.options.every((oVal, idx) => oVal === this.selectedOptionValues[idx]);
               });
-              btn.style.border = "2px solid #008060";
-              btn.style.background = "#f0fdf4";
-              btn.style.color = "#008060";
-              btn.style.fontWeight = "600";
 
-              if (v.image) {
-                let imgUrl = v.image.startsWith("//") ? "https:" + v.image : v.image;
-                await this.addBaseProductImage(imgUrl, this.canvasW || 800, this.canvasH || 800);
+              // Fallback: find variant matching this option value
+              if (!matched) {
+                matched = this.variantsData.variants.find(
+                  (v) => Array.isArray(v.options) && v.options[optPositionIdx] === val
+                );
+                if (matched && Array.isArray(matched.options)) {
+                  this.selectedOptionValues = [...matched.options];
+                }
+              }
+
+              if (matched) {
+                this.activeSelectedVariantId = String(matched.id);
+
+                // Update theme cart form
+                const formInput = document.querySelector('form[action*="/cart/add"] input[name="id"]');
+                if (formInput) formInput.value = matched.id;
+
+                // Update labels & pills across all option sections
+                parsedOptions.forEach((otherOpt, oIdx) => {
+                  const oPos = otherOpt.position ? otherOpt.position - 1 : oIdx;
+                  const oVal = this.selectedOptionValues[oPos];
+                  const labelEl = optionsCard.querySelector(`#saitriq-opt-val-${oPos}`);
+                  if (labelEl) labelEl.textContent = oVal;
+
+                  const pills = optionsCard.querySelectorAll(`.saitriq-opt-idx-${oPos}`);
+                  pills.forEach((p) => {
+                    if (p.getAttribute("data-value") === oVal) {
+                      p.classList.add("is-active");
+                    } else {
+                      p.classList.remove("is-active");
+                    }
+                  });
+                });
+
+                // Update summary card
+                const sumVariantEl = document.getElementById("saitriq-summary-variant-title");
+                if (sumVariantEl) sumVariantEl.textContent = matched.title;
+
+                // Update mockup underlay image on canvas
+                if (matched.image) {
+                  let imgUrl = matched.image.startsWith("//") ? "https:" + matched.image : matched.image;
+                  await this.addBaseProductImage(imgUrl, this.canvasW || 1200, this.canvasH || 1200);
+                }
               }
             });
 
-            swatchesContainer.appendChild(btn);
+            pillsRow.appendChild(pill);
           });
 
-          variantGroup.appendChild(label);
-          variantGroup.appendChild(swatchesContainer);
-          container.appendChild(variantGroup);
-        }
+          section.appendChild(pillsRow);
+          optionsBody.appendChild(section);
+        });
+
+        container.appendChild(optionsCard);
       }
 
+      // Check objects in canvas
       const objects = this.fabricCanvas.getObjects();
-
-      let controlIndex = 1;
       let hasTextControl = false;
       let hasUploadControl = false;
 
@@ -696,183 +833,296 @@
         return type === "rect" && (o.strokeDashArray || o.customType === "image_upload" || o.name?.includes("Upload"));
       });
 
-      objects.forEach((obj) => {
-        const type = (obj.type || "").toLowerCase();
+      // 2. Photo Upload Zone
+      const uploadLayer = objects.find(
+        (obj) =>
+          obj.customType === "image_upload" ||
+          obj.name?.toLowerCase().includes("upload") ||
+          obj.name?.toLowerCase().includes("photo") ||
+          obj.optionLabel?.toLowerCase().includes("photo") ||
+          ((obj.type || "").toLowerCase() === "rect" && obj.strokeDashArray)
+      );
 
-        // Customer Editable Text Layer
-        if (
-          type === "i-text" ||
-          type === "itext" ||
-          type === "text" ||
-          obj.customType === "text" ||
-          (obj.text !== undefined && !obj.name?.toLowerCase().includes("mockup") && !obj.name?.toLowerCase().includes("base"))
-        ) {
-          hasTextControl = true;
-          const group = document.createElement("div");
-          group.className = "saitriq-control-group";
+      const renderPhotoControl = (targetObj) => {
+        hasUploadControl = true;
+        const photoCard = document.createElement("div");
+        photoCard.className = "saitriq-control-card";
+        photoCard.innerHTML = `
+          <div class="saitriq-card-header">
+            <span class="saitriq-card-icon">📷</span>
+            <span class="saitriq-card-title">${targetObj?.optionLabel || "Upload Photo or Logo"}</span>
+          </div>
+          <div class="saitriq-card-body">
+            <div class="saitriq-upload-dropzone">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="17 8 12 3 7 8"/>
+                <line x1="12" y1="3" x2="12" y2="15"/>
+              </svg>
+              <p class="saitriq-upload-main-text"><strong>Click to browse</strong> or drag & drop</p>
+              <p class="saitriq-upload-sub-text">High-res PNG, JPG, or WEBP</p>
+              <input type="file" accept="image/*" style="display: none;" />
+            </div>
+          </div>
+        `;
 
-          const label = document.createElement("label");
-          label.className = "saitriq-control-label";
-          label.textContent = obj.optionLabel || `Custom Text ${controlIndex}`;
+        const dropzone = photoCard.querySelector(".saitriq-upload-dropzone");
+        const fileInput = photoCard.querySelector("input[type='file']");
 
-          const input = document.createElement("input");
-          input.type = "text";
-          input.className = "saitriq-text-input";
-          input.value = obj.text || "";
-          input.placeholder = "Enter your text...";
-          if (obj.maxCharacters) input.maxLength = obj.maxCharacters;
+        const handleFile = (file) => {
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = (fEvent) => {
+            const dataUrl = fEvent.target?.result;
+            const imgEl = new Image();
+            imgEl.src = dataUrl;
+            imgEl.onload = () => {
+              const ImageClass = window.fabric.FabricImage || window.fabric.Image;
+              const targetRef = targetObj || printRect;
+              const targetW = targetRef ? (targetRef.width * (targetRef.scaleX || 1)) : 320;
+              const targetH = targetRef ? (targetRef.height * (targetRef.scaleY || 1)) : 320;
+              const bestScale = Math.min(targetW / imgEl.width, targetH / imgEl.height);
 
-          input.addEventListener("input", (e) => {
-            obj.set("text", e.target.value);
-            if (this.fabricCanvas.requestRenderAll) {
-              this.fabricCanvas.requestRenderAll();
-            } else {
-              this.fabricCanvas.renderAll();
-            }
-          });
+              const fabricImg = new ImageClass(imgEl, {
+                left: targetRef ? targetRef.left : (this.canvasW || 1200) / 2,
+                top: targetRef ? targetRef.top : (this.canvasH || 1200) / 2,
+                originX: targetRef?.originX || "center",
+                originY: targetRef?.originY || "center",
+                scaleX: bestScale,
+                scaleY: bestScale,
+                selectable: true,
+                name: "Customer Uploaded Image",
+              });
 
-          // Font Selector
-          const fontSelect = document.createElement("select");
-          fontSelect.className = "saitriq-select-input";
-          fontSelect.style.marginTop = "6px";
-          const fonts = ["Roboto", "Montserrat", "Playfair Display", "Pacifico", "Oswald", "Courier New"];
-          fonts.forEach((f) => {
-            const opt = document.createElement("option");
-            opt.value = f;
-            opt.textContent = f;
-            if (obj.fontFamily === f) opt.selected = true;
-            fontSelect.appendChild(opt);
-          });
+              if (targetRef && targetRef !== fabricImg) {
+                this.fabricCanvas.remove(targetRef);
+              }
 
-          fontSelect.addEventListener("change", (e) => {
-            obj.set("fontFamily", e.target.value);
-            if (this.fabricCanvas.requestRenderAll) {
-              this.fabricCanvas.requestRenderAll();
-            } else {
-              this.fabricCanvas.renderAll();
-            }
-          });
+              // Remove previous customer uploaded image if present
+              const prev = this.fabricCanvas.getObjects().find((o) => o.name === "Customer Uploaded Image" && o !== fabricImg);
+              if (prev) this.fabricCanvas.remove(prev);
 
-          // Color Swatches
-          const swatchesContainer = document.createElement("div");
-          swatchesContainer.className = "saitriq-swatches-grid";
-          swatchesContainer.style.marginTop = "6px";
-
-          const colors = ["#111111", "#ffffff", "#d72c0d", "#008060", "#005bd3", "#ffc453", "#9c6ade"];
-          colors.forEach((col) => {
-            const swatch = document.createElement("button");
-            swatch.type = "button";
-            swatch.className = "saitriq-color-swatch";
-            swatch.style.backgroundColor = col;
-            swatch.addEventListener("click", () => {
-              obj.set("fill", col);
+              this.fabricCanvas.add(fabricImg);
+              this.fabricCanvas.setActiveObject(fabricImg);
               if (this.fabricCanvas.requestRenderAll) {
                 this.fabricCanvas.requestRenderAll();
               } else {
                 this.fabricCanvas.renderAll();
               }
-            });
-            swatchesContainer.appendChild(swatch);
-          });
 
-          group.appendChild(label);
-          group.appendChild(input);
-          group.appendChild(fontSelect);
-          group.appendChild(swatchesContainer);
-          container.appendChild(group);
-
-          controlIndex++;
-        }
-
-        // Photo Upload Zone
-        if (
-          obj.customType === "image_upload" ||
-          obj.name?.toLowerCase().includes("upload") ||
-          obj.name?.toLowerCase().includes("photo") ||
-          obj.optionLabel?.toLowerCase().includes("photo") ||
-          (type === "rect" && obj.strokeDashArray)
-        ) {
-          hasUploadControl = true;
-          const group = document.createElement("div");
-          group.className = "saitriq-control-group";
-
-          const label = document.createElement("label");
-          label.className = "saitriq-control-label";
-          label.textContent = obj.optionLabel || "Upload Your Photo / Logo";
-
-          const dropzone = document.createElement("div");
-          dropzone.className = "saitriq-upload-dropzone";
-          dropzone.innerHTML = `
-            <div class="saitriq-upload-icon">📷</div>
-            <p><strong>Click to browse</strong> or drag & drop photo</p>
-            <p style="font-size: 11px; margin-top: 4px;">Supports JPG, PNG, WEBP</p>
-            <input type="file" accept="image/*" style="display: none;" />
-          `;
-
-          const fileInput = dropzone.querySelector("input");
-          dropzone.addEventListener("click", () => fileInput.click());
-
-          fileInput.addEventListener("change", (e) => {
-            const file = e.target.files?.[0];
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = (fEvent) => {
-              const dataUrl = fEvent.target?.result;
-              const imgEl = new Image();
-              imgEl.src = dataUrl;
-              imgEl.onload = () => {
-                const ImageClass = window.fabric.FabricImage || window.fabric.Image;
-                const targetW = (obj.width || 300) * (obj.scaleX || 1);
-                const targetH = (obj.height || 300) * (obj.scaleY || 1);
-                const bestScale = Math.min(targetW / imgEl.width, targetH / imgEl.height);
-
-                const fabricImg = new ImageClass(imgEl, {
-                  left: obj.left,
-                  top: obj.top,
-                  originX: obj.originX || "center",
-                  originY: obj.originY || "center",
-                  scaleX: bestScale,
-                  scaleY: bestScale,
-                  selectable: true,
-                  name: "Customer Uploaded Image",
-                });
-
-                // Remove placeholder rect and add image
-                this.fabricCanvas.remove(obj);
-                this.fabricCanvas.add(fabricImg);
-                this.fabricCanvas.setActiveObject(fabricImg);
-                if (this.fabricCanvas.requestRenderAll) {
-                  this.fabricCanvas.requestRenderAll();
-                } else {
-                  this.fabricCanvas.renderAll();
-                }
-              };
+              // Update dropzone UI with thumbnail
+              dropzone.innerHTML = `
+                <div class="saitriq-upload-preview">
+                  <img src="${dataUrl}" class="saitriq-upload-thumb" alt="Preview" />
+                  <div class="saitriq-upload-info">
+                    <span class="saitriq-upload-name">${file.name}</span>
+                    <span class="saitriq-upload-status">✓ Added to canvas</span>
+                  </div>
+                  <button type="button" class="saitriq-upload-change-btn">Change</button>
+                </div>
+                <input type="file" accept="image/*" style="display: none;" />
+              `;
+              const newFileInput = dropzone.querySelector("input");
+              const changeBtn = dropzone.querySelector(".saitriq-upload-change-btn");
+              changeBtn.addEventListener("click", (evt) => {
+                evt.stopPropagation();
+                newFileInput.click();
+              });
+              newFileInput.addEventListener("change", (evt) => {
+                const f = evt.target.files?.[0];
+                if (f) handleFile(f);
+              });
             };
-            reader.readAsDataURL(file);
-          });
+          };
+          reader.readAsDataURL(file);
+        };
 
-          group.appendChild(label);
-          group.appendChild(dropzone);
-          container.appendChild(group);
+        dropzone.addEventListener("click", () => fileInput.click());
+        fileInput.addEventListener("change", (e) => {
+          const file = e.target.files?.[0];
+          if (file) handleFile(file);
+        });
 
-          controlIndex++;
-        }
+        dropzone.addEventListener("dragover", (e) => {
+          e.preventDefault();
+          dropzone.classList.add("is-dragover");
+        });
+        dropzone.addEventListener("dragleave", () => {
+          dropzone.classList.remove("is-dragover");
+        });
+        dropzone.addEventListener("drop", (e) => {
+          e.preventDefault();
+          dropzone.classList.remove("is-dragover");
+          const file = e.dataTransfer?.files?.[0];
+          if (file) handleFile(file);
+        });
+
+        container.appendChild(photoCard);
+      };
+
+      if (uploadLayer) {
+        renderPhotoControl(uploadLayer);
+      }
+
+      // 3. Customer Editable Text Layers
+      const textLayers = objects.filter((obj) => {
+        const type = (obj.type || "").toLowerCase();
+        return (
+          type === "i-text" ||
+          type === "itext" ||
+          type === "text" ||
+          obj.customType === "text" ||
+          (obj.text !== undefined && !obj.name?.toLowerCase().includes("mockup") && !obj.name?.toLowerCase().includes("base"))
+        );
       });
 
-      // Fallback: If no editable text controls exist, provide Add Custom Text
+      const renderTextControl = (obj, idx) => {
+        hasTextControl = true;
+        const textCard = document.createElement("div");
+        textCard.className = "saitriq-control-card";
+        textCard.innerHTML = `
+          <div class="saitriq-card-header">
+            <span class="saitriq-card-icon">✏️</span>
+            <span class="saitriq-card-title">${obj.optionLabel || `Custom Text ${idx > 1 ? idx : ""}`}</span>
+          </div>
+          <div class="saitriq-card-body">
+            <div>
+              <label class="saitriq-sublabel">Your Message / Text</label>
+              <input type="text" class="saitriq-text-input" value="${obj.text || ""}" placeholder="Enter your custom text..." />
+            </div>
+            
+            <div>
+              <label class="saitriq-sublabel">Font Family</label>
+              <select class="saitriq-select-input">
+                <option value="Roboto">Roboto (Clean Modern)</option>
+                <option value="Montserrat">Montserrat (Geometric Sans)</option>
+                <option value="Playfair Display">Playfair Display (Luxury Serif)</option>
+                <option value="Pacifico">Pacifico (Handwritten Script)</option>
+                <option value="Oswald">Oswald (Bold Headline)</option>
+                <option value="Courier New">Courier New (Vintage Monospace)</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="saitriq-sublabel">Print Ink Color</label>
+              <div class="saitriq-swatches-grid"></div>
+            </div>
+          </div>
+        `;
+
+        const input = textCard.querySelector(".saitriq-text-input");
+        if (obj.maxCharacters) input.maxLength = obj.maxCharacters;
+
+        input.addEventListener("input", (e) => {
+          obj.set("text", e.target.value);
+          if (this.fabricCanvas.requestRenderAll) {
+            this.fabricCanvas.requestRenderAll();
+          } else {
+            this.fabricCanvas.renderAll();
+          }
+        });
+
+        const fontSelect = textCard.querySelector(".saitriq-select-input");
+        if (obj.fontFamily) fontSelect.value = obj.fontFamily;
+
+        fontSelect.addEventListener("change", (e) => {
+          obj.set("fontFamily", e.target.value);
+          if (this.fabricCanvas.requestRenderAll) {
+            this.fabricCanvas.requestRenderAll();
+          } else {
+            this.fabricCanvas.renderAll();
+          }
+        });
+
+        const swatchesContainer = textCard.querySelector(".saitriq-swatches-grid");
+        const colors = ["#111111", "#ffffff", "#dc2626", "#2563eb", "#008060", "#f59e0b", "#9333ea", "#6b7280"];
+        const currentFill = (obj.fill || "#111111").toLowerCase();
+
+        colors.forEach((col) => {
+          const swatch = document.createElement("button");
+          swatch.type = "button";
+          swatch.className = "saitriq-color-swatch";
+          swatch.setAttribute("data-color", col);
+          swatch.style.backgroundColor = col;
+          if (currentFill === col.toLowerCase()) {
+            swatch.classList.add("is-active");
+          }
+
+          swatch.addEventListener("click", () => {
+            obj.set("fill", col);
+            swatchesContainer.querySelectorAll(".saitriq-color-swatch").forEach((s) => s.classList.remove("is-active"));
+            swatch.classList.add("is-active");
+            if (this.fabricCanvas.requestRenderAll) {
+              this.fabricCanvas.requestRenderAll();
+            } else {
+              this.fabricCanvas.renderAll();
+            }
+          });
+          swatchesContainer.appendChild(swatch);
+        });
+
+        // Native custom color picker
+        const customColorPicker = document.createElement("input");
+        customColorPicker.type = "color";
+        customColorPicker.className = "saitriq-custom-color-picker";
+        customColorPicker.title = "Pick custom color";
+        customColorPicker.value = currentFill.startsWith("#") ? currentFill : "#111111";
+        customColorPicker.addEventListener("input", (e) => {
+          const chosen = e.target.value;
+          obj.set("fill", chosen);
+          swatchesContainer.querySelectorAll(".saitriq-color-swatch").forEach((s) => s.classList.remove("is-active"));
+          if (this.fabricCanvas.requestRenderAll) {
+            this.fabricCanvas.requestRenderAll();
+          } else {
+            this.fabricCanvas.renderAll();
+          }
+        });
+        swatchesContainer.appendChild(customColorPicker);
+
+        container.appendChild(textCard);
+      };
+
+      if (textLayers.length > 0) {
+        textLayers.forEach((obj, idx) => renderTextControl(obj, idx + 1));
+      }
+
+      // Fallback: If no editable text controls exist, provide Add Custom Text card
       if (!hasTextControl) {
-        const textGroup = document.createElement("div");
-        textGroup.className = "saitriq-control-group";
+        const textCard = document.createElement("div");
+        textCard.className = "saitriq-control-card";
+        textCard.innerHTML = `
+          <div class="saitriq-card-header">
+            <span class="saitriq-card-icon">✏️</span>
+            <span class="saitriq-card-title">Add Custom Text</span>
+          </div>
+          <div class="saitriq-card-body">
+            <div>
+              <label class="saitriq-sublabel">Your Message / Text</label>
+              <input type="text" class="saitriq-text-input" placeholder="Type your custom text here..." />
+            </div>
+            
+            <div>
+              <label class="saitriq-sublabel">Font Family</label>
+              <select class="saitriq-select-input">
+                <option value="Roboto">Roboto (Clean Modern)</option>
+                <option value="Montserrat">Montserrat (Geometric Sans)</option>
+                <option value="Playfair Display">Playfair Display (Luxury Serif)</option>
+                <option value="Pacifico">Pacifico (Handwritten Script)</option>
+                <option value="Oswald">Oswald (Bold Headline)</option>
+                <option value="Courier New">Courier New (Vintage Monospace)</option>
+              </select>
+            </div>
 
-        const label = document.createElement("label");
-        label.className = "saitriq-control-label";
-        label.textContent = "✏️ Add Custom Text";
+            <div>
+              <label class="saitriq-sublabel">Print Ink Color</label>
+              <div class="saitriq-swatches-grid"></div>
+            </div>
+          </div>
+        `;
 
-        const input = document.createElement("input");
-        input.type = "text";
-        input.className = "saitriq-text-input";
-        input.placeholder = "Type your custom text here...";
+        const input = textCard.querySelector(".saitriq-text-input");
+        const fontSelect = textCard.querySelector(".saitriq-select-input");
+        const swatchesContainer = textCard.querySelector(".saitriq-swatches-grid");
 
         let activeAddedText = null;
 
@@ -880,15 +1130,15 @@
           const val = e.target.value;
           const ITextClass = window.fabric.IText || window.fabric.Text;
           if (!activeAddedText) {
-            const targetLeft = printRect ? printRect.left : 400;
-            const targetTop = printRect ? (printRect.top - 60) : 340;
+            const targetLeft = printRect ? printRect.left : 600;
+            const targetTop = printRect ? (printRect.top - 80) : 480;
             activeAddedText = new ITextClass(val, {
               left: targetLeft,
               top: targetTop,
               originX: "center",
               originY: "center",
-              fontFamily: "Roboto",
-              fontSize: 44,
+              fontFamily: fontSelect.value || "Roboto",
+              fontSize: 48,
               fill: "#111111",
               name: "Customer Text",
               optionLabel: "Custom Text",
@@ -905,111 +1155,87 @@
           }
         });
 
-        // Font selector
-        const fontSelect = document.createElement("select");
-        fontSelect.className = "saitriq-select-input";
-        fontSelect.style.marginTop = "6px";
-        ["Roboto", "Montserrat", "Playfair Display", "Pacifico", "Oswald"].forEach((f) => {
-          const opt = document.createElement("option");
-          opt.value = f;
-          opt.textContent = f;
-          fontSelect.appendChild(opt);
-        });
         fontSelect.addEventListener("change", (e) => {
           if (activeAddedText) {
             activeAddedText.set("fontFamily", e.target.value);
-            this.fabricCanvas.requestRenderAll ? this.fabricCanvas.requestRenderAll() : this.fabricCanvas.renderAll();
+            if (this.fabricCanvas.requestRenderAll) {
+              this.fabricCanvas.requestRenderAll();
+            } else {
+              this.fabricCanvas.renderAll();
+            }
           }
         });
 
-        // Color swatches
-        const swatchesContainer = document.createElement("div");
-        swatchesContainer.className = "saitriq-swatches-grid";
-        swatchesContainer.style.marginTop = "6px";
-        ["#111111", "#ffffff", "#d72c0d", "#008060", "#005bd3", "#ffc453"].forEach((col) => {
+        const colors = ["#111111", "#ffffff", "#dc2626", "#2563eb", "#008060", "#f59e0b", "#9333ea", "#6b7280"];
+        colors.forEach((col) => {
           const swatch = document.createElement("button");
           swatch.type = "button";
           swatch.className = "saitriq-color-swatch";
+          swatch.setAttribute("data-color", col);
           swatch.style.backgroundColor = col;
+          if (col === "#111111") swatch.classList.add("is-active");
+
           swatch.addEventListener("click", () => {
             if (activeAddedText) {
               activeAddedText.set("fill", col);
-              this.fabricCanvas.requestRenderAll ? this.fabricCanvas.requestRenderAll() : this.fabricCanvas.renderAll();
-            }
-          });
-          swatchesContainer.appendChild(swatch);
-        });
-
-        textGroup.appendChild(label);
-        textGroup.appendChild(input);
-        textGroup.appendChild(fontSelect);
-        textGroup.appendChild(swatchesContainer);
-        container.appendChild(textGroup);
-      }
-
-      // Fallback: If no upload controls exist, provide Upload Photo / Logo
-      if (!hasUploadControl) {
-        const uploadGroup = document.createElement("div");
-        uploadGroup.className = "saitriq-control-group";
-
-        const label = document.createElement("label");
-        label.className = "saitriq-control-label";
-        label.textContent = "📷 Upload Photo / Logo";
-
-        const dropzone = document.createElement("div");
-        dropzone.className = "saitriq-upload-dropzone";
-        dropzone.innerHTML = `
-          <div class="saitriq-upload-icon">📷</div>
-          <p><strong>Click to browse</strong> or drag & drop photo</p>
-          <p style="font-size: 11px; margin-top: 4px;">Supports JPG, PNG, WEBP</p>
-          <input type="file" accept="image/*" style="display: none;" />
-        `;
-
-        const fileInput = dropzone.querySelector("input");
-        dropzone.addEventListener("click", () => fileInput.click());
-
-        fileInput.addEventListener("change", (e) => {
-          const file = e.target.files?.[0];
-          if (!file) return;
-
-          const reader = new FileReader();
-          reader.onload = (fEvent) => {
-            const dataUrl = fEvent.target?.result;
-            const imgEl = new Image();
-            imgEl.src = dataUrl;
-            imgEl.onload = () => {
-              const ImageClass = window.fabric.FabricImage || window.fabric.Image;
-              const targetLeft = printRect ? printRect.left : 400;
-              const targetTop = printRect ? printRect.top : 480;
-              const targetW = printRect ? (printRect.width * (printRect.scaleX || 1)) : 260;
-
-              const fabricImg = new ImageClass(imgEl, {
-                left: targetLeft,
-                top: targetTop,
-                originX: "center",
-                originY: "center",
-                scaleX: targetW / imgEl.width,
-                scaleY: targetW / imgEl.width,
-                selectable: true,
-                name: "Customer Uploaded Image",
-              });
-
-              this.fabricCanvas.add(fabricImg);
-              this.fabricCanvas.setActiveObject(fabricImg);
               if (this.fabricCanvas.requestRenderAll) {
                 this.fabricCanvas.requestRenderAll();
               } else {
                 this.fabricCanvas.renderAll();
               }
-            };
-          };
-          reader.readAsDataURL(file);
+            }
+            swatchesContainer.querySelectorAll(".saitriq-color-swatch").forEach((s) => s.classList.remove("is-active"));
+            swatch.classList.add("is-active");
+          });
+          swatchesContainer.appendChild(swatch);
         });
 
-        uploadGroup.appendChild(label);
-        uploadGroup.appendChild(dropzone);
-        container.appendChild(uploadGroup);
+        // Custom color picker
+        const customColorPicker = document.createElement("input");
+        customColorPicker.type = "color";
+        customColorPicker.className = "saitriq-custom-color-picker";
+        customColorPicker.title = "Pick custom color";
+        customColorPicker.value = "#111111";
+        customColorPicker.addEventListener("input", (e) => {
+          const chosen = e.target.value;
+          if (activeAddedText) {
+            activeAddedText.set("fill", chosen);
+            if (this.fabricCanvas.requestRenderAll) {
+              this.fabricCanvas.requestRenderAll();
+            } else {
+              this.fabricCanvas.renderAll();
+            }
+          }
+          swatchesContainer.querySelectorAll(".saitriq-color-swatch").forEach((s) => s.classList.remove("is-active"));
+        });
+        swatchesContainer.appendChild(customColorPicker);
+
+        container.appendChild(textCard);
       }
+
+      // Fallback: If no upload control exists, provide Photo Upload card
+      if (!hasUploadControl) {
+        renderPhotoControl(null);
+      }
+
+      // 4. Live Summary Card (Anchored at bottom with margin-top: auto)
+      const summaryCard = document.createElement("div");
+      summaryCard.className = "saitriq-summary-card";
+      summaryCard.innerHTML = `
+        <div class="saitriq-summary-row">
+          <span class="saitriq-summary-label">Selected Item:</span>
+          <span class="saitriq-summary-val" id="saitriq-summary-variant-title">${activeVariant?.title || this.productTitle || "Standard Product"}</span>
+        </div>
+        <div class="saitriq-summary-row">
+          <span class="saitriq-summary-label">Print Specification:</span>
+          <span class="saitriq-summary-badge">300 DPI Ultra HD</span>
+        </div>
+        <div class="saitriq-summary-guarantee">
+          🛡️ High-precision laser print guarantee • Colors calibrated to fabric
+        </div>
+      `;
+      container.appendChild(summaryCard);
+    }
     }
 
     async handleAddToCart() {
