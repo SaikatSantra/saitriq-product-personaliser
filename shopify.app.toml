@@ -7,7 +7,7 @@ embedded = true
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "read_products,write_products,read_orders"
+scopes = "read_products,write_products,read_orders,write_app_proxy"
 
 [webhooks]
 api_version = "2027-01"
@@ -20,9 +20,11 @@ api_version = "2027-01"
   uri = "/webhooks/app/scopes_update"
   topics = [ "app/scopes_update" ]
 
-  [[webhooks.subscriptions]]
-  uri = "/webhooks/orders/create"
-  topics = [ "orders/create" ]
+  # Note: To declare orders/create in shopify.app.toml, request Protected Customer Data in Partner Dashboard
+  # (Partners Dashboard > Apps > API access > Protected customer data).
+  # [[webhooks.subscriptions]]
+  # uri = "/webhooks/orders/create"
+  # topics = [ "orders/create" ]
 
   [[webhooks.subscriptions]]
   uri = "/webhooks/customers/data_request"
@@ -40,7 +42,7 @@ api_version = "2027-01"
 redirect_urls = [ "https://example.com/api/auth" ]
 
 [app_proxy]
-url = "https://example.com/api/storefront"
+url = "/api/storefront"
 subpath = "personalizer"
 prefix = "apps"
 

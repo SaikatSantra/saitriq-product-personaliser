@@ -67,35 +67,46 @@
       return "";
     }
 
-    handleTriggerClick() {
-      if (this.templateData) {
-        this.openModal();
-      } else if (this.isLoading) {
-        this.pendingOpen = true;
+    async handleTriggerClick() {
+      if (this.isLoading) {
         if (this.btn) this.btn.textContent = "⏳ Loading studio...";
-      } else {
-        // Fallback preview template with product base image
-        this.templateData = this.getDefaultPreviewTemplate();
-        this.openModal();
+        while (this.isLoading) {
+          await new Promise((r) => setTimeout(r, 100));
+        }
+        if (this.btn) this.btn.textContent = this.buttonText;
       }
+
+      if (!this.templateData) {
+        if (this.btn) this.btn.textContent = "⏳ Fetching template...";
+        await this.fetchTemplate();
+        if (this.btn) this.btn.textContent = this.buttonText;
+      }
+
+      if (!this.templateData) {
+        this.templateData = this.getDefaultPreviewTemplate();
+      }
+
+      this.openModal();
     }
 
     getDefaultPreviewTemplate() {
+      const cleanId = (this.productId || "").replace(/\D/g, "");
       return {
-        id: "preview-default-tpl",
-        title: "Product Personalizer Preview",
-        canvasWidth: 800,
-        canvasHeight: 800,
+        id: cleanId ? `tpl-${cleanId}` : "preview-default-tpl",
+        title: this.productTitle ? `${this.productTitle} Customizer` : "Product Personalizer Preview",
+        canvasWidth: 1200,
+        canvasHeight: 1200,
         printDpi: 300,
+        mockupUrl: this.detectPageProductImage(),
         layers: [
           {
             type: "IText",
             text: "Your Custom Text",
-            fontSize: 44,
+            fontSize: 48,
             fontFamily: "Roboto",
             fill: "#111111",
-            left: 400,
-            top: 320,
+            left: 600,
+            top: 480,
             originX: "center",
             originY: "center",
             optionLabel: "Front Custom Text",
@@ -106,12 +117,12 @@
             customType: "image_upload",
             name: "Photo Upload Zone",
             optionLabel: "Upload Photo / Logo",
-            left: 400,
-            top: 480,
+            left: 600,
+            top: 720,
             originX: "center",
             originY: "center",
-            width: 260,
-            height: 180,
+            width: 380,
+            height: 260,
             fill: "rgba(0, 128, 96, 0.08)",
             stroke: "#008060",
             strokeWidth: 2,
@@ -125,38 +136,53 @@
     async fetchTemplate() {
       this.isLoading = true;
       try {
-        let endpoint = "";
+        const cleanShop = (this.shop || window.location.hostname).replace(/^https?:\/\//, "").replace(/\/.*$/, "").trim();
+        const numericId = (this.productId || "").replace(/\D/g, "");
+        const queryParams = new URLSearchParams({
+          shop: cleanShop,
+          productId: numericId || this.productId,
+          rawProductId: this.productId,
+          t: String(Date.now()),
+        }).toString();
+
+        const candidateEndpoints = [];
         if (this.appUrl) {
-          const base = this.appUrl.replace(/\/$/, "");
-          endpoint = `${base}/api/storefront/template?shop=${encodeURIComponent(this.shop)}&productId=${encodeURIComponent(this.productId)}`;
-        } else {
-          // Native Shopify App Proxy path (same-origin, zero config)
-          endpoint = `/apps/personalizer/template?shop=${encodeURIComponent(this.shop)}&productId=${encodeURIComponent(this.productId)}`;
+          candidateEndpoints.push(`${this.appUrl.replace(/\/$/, "")}/api/storefront/template?${queryParams}`);
+          candidateEndpoints.push(`${this.appUrl.replace(/\/$/, "")}/api/storefront?${queryParams}`);
         }
+        // Native Shopify App Proxy paths (same-origin, zero config)
+        candidateEndpoints.push(`/apps/personalizer/template?${queryParams}`);
+        candidateEndpoints.push(`/apps/personalizer?${queryParams}`);
+        candidateEndpoints.push(`/api/storefront/template?${queryParams}`);
 
-        let response = await fetch(endpoint, {
-          headers: { Accept: "application/json" },
-        }).catch(() => null);
-
-        // Fallback to direct relative path if proxy not resolved
-        if ((!response || !response.ok) && !this.appUrl) {
-          endpoint = `/api/storefront/template?shop=${encodeURIComponent(this.shop)}&productId=${encodeURIComponent(this.productId)}`;
-          response = await fetch(endpoint, { headers: { Accept: "application/json" } }).catch(() => null);
-        }
-
-        if (response && response.ok) {
-          const data = await response.json().catch(() => null);
-          if (data && data.hasCustomizer && data.template) {
-            this.templateData = data.template;
+        let data = null;
+        for (const ep of candidateEndpoints) {
+          try {
+            const resp = await fetch(ep, {
+              headers: { Accept: "application/json" },
+              cache: "no-store",
+            });
+            if (resp && resp.ok) {
+              const json = await resp.json().catch(() => null);
+              if (json && json.hasCustomizer && json.template) {
+                data = json;
+                break;
+              }
+            }
+          } catch (fetchErr) {
+            // try next candidate
           }
+        }
+
+        if (data && data.template) {
+          this.templateData = data.template;
+          window.__saitriq_template = data.template;
+          console.log("[Saitriq] Successfully loaded template from backend:", data.template.id, data.template.title);
         }
       } catch (err) {
         console.warn("[Saitriq] Storefront endpoint fetch exception:", err);
       } finally {
         this.isLoading = false;
-        if (!this.templateData && (this.isDesignMode || this.pendingOpen)) {
-          this.templateData = this.getDefaultPreviewTemplate();
-        }
 
         if (this.btn) {
           this.btn.textContent = this.buttonText;
@@ -164,6 +190,9 @@
 
         if (this.pendingOpen || this.autoOpen) {
           this.pendingOpen = false;
+          if (!this.templateData) {
+            this.templateData = this.getDefaultPreviewTemplate();
+          }
           this.openModal();
         }
       }
@@ -292,19 +321,48 @@
     async addBaseProductImage(imageUrl, canvasW, canvasH) {
       if (!imageUrl || !this.fabricCanvas) return;
       const ImageClass = window.fabric.FabricImage || window.fabric.Image;
-      const imgEl = new Image();
-      imgEl.crossOrigin = "anonymous";
-      imgEl.src = imageUrl;
 
-      await new Promise((resolve) => {
-        imgEl.onload = resolve;
-        imgEl.onerror = () => {
-          console.warn("[Saitriq] Could not load base image from:", imageUrl);
-          resolve();
-        };
-      });
+      let cleanUrl = String(imageUrl).trim();
+      if (cleanUrl.startsWith("//")) {
+        cleanUrl = window.location.protocol + cleanUrl;
+      }
 
-      if (!imgEl.width || !imgEl.height) return;
+      // Add cache-busting parameter to bypass browser's non-CORS image cache
+      const corsUrl = cleanUrl + (cleanUrl.includes("?") ? "&" : "?") + "saitriq_cors=" + Date.now();
+
+      const tryLoadImage = (src, withCors) => {
+        return new Promise((resolve) => {
+          const img = new Image();
+          if (withCors) {
+            img.crossOrigin = "anonymous";
+          }
+          img.onload = () => {
+            if (img.width > 0 && img.height > 0) resolve(img);
+            else resolve(null);
+          };
+          img.onerror = () => resolve(null);
+          img.src = src;
+        });
+      };
+
+      // 1. Attempt load with CORS and cache buster
+      let loadedImg = await tryLoadImage(corsUrl, true);
+
+      // 2. Attempt load with direct URL with CORS
+      if (!loadedImg) {
+        loadedImg = await tryLoadImage(cleanUrl, true);
+      }
+
+      // 3. Fallback without CORS to ensure the product mockup is ALWAYS rendered on the canvas
+      if (!loadedImg) {
+        console.warn("[Saitriq] CORS load failed for base image, loading non-CORS display:", cleanUrl);
+        loadedImg = await tryLoadImage(cleanUrl, false);
+      }
+
+      if (!loadedImg || !loadedImg.width || !loadedImg.height) {
+        console.error("[Saitriq] Could not load base image from:", cleanUrl);
+        return;
+      }
 
       // Remove any previously added base image
       const existing = this.fabricCanvas.getObjects().filter(
@@ -315,9 +373,9 @@
       // Calculate scale to nicely contain product image on canvas
       const maxW = canvasW * 0.94;
       const maxH = canvasH * 0.94;
-      const scale = Math.min(maxW / imgEl.width, maxH / imgEl.height);
+      const scale = Math.min(maxW / loadedImg.width, maxH / loadedImg.height);
 
-      const baseImg = new ImageClass(imgEl, {
+      const baseImg = new ImageClass(loadedImg, {
         left: canvasW / 2,
         top: canvasH / 2,
         originX: "center",
@@ -780,36 +838,77 @@
       }
 
       try {
-        // 1. Generate snapshot preview PNG
-        const previewDataUrl = this.fabricCanvas.toDataURL({
-          format: "png",
-          multiplier: 1,
-        });
+        // 1. Remove active selection so control handles don't get baked into snapshot
+        this.fabricCanvas.discardActiveObject();
+        if (this.fabricCanvas.requestRenderAll) {
+          this.fabricCanvas.requestRenderAll();
+        } else {
+          this.fabricCanvas.renderAll();
+        }
+
+        // Brief delay for render cycle to settle
+        await new Promise((r) => setTimeout(r, 60));
+
+        // 2. Generate snapshot preview JPEG (compressed to ~40-60KB to fit easily in Shopify line item limits)
+        let previewDataUrl = "";
+        try {
+          const exportMultiplier = Math.max(1, 600 / (this.fabricCanvas.width || 460));
+          previewDataUrl = this.fabricCanvas.toDataURL({
+            format: "jpeg",
+            quality: 0.88,
+            multiplier: exportMultiplier,
+          });
+        } catch (exportErr) {
+          console.warn("[Saitriq] Direct toDataURL error (tainted canvas?), trying safe fallback:", exportErr);
+          try {
+            const bg = this.fabricCanvas.getObjects().find(
+              (o) => o.customType === "background_mockup" || o.name === "Product Base Image"
+            );
+            if (bg) bg.visible = false;
+            previewDataUrl = this.fabricCanvas.toDataURL({
+              format: "jpeg",
+              quality: 0.85,
+            });
+            if (bg) bg.visible = true;
+          } catch (err2) {
+            console.error("[Saitriq] Fallback export also failed:", err2);
+            previewDataUrl = "";
+          }
+        }
 
         const customizationId = "cust_" + Date.now() + "_" + Math.random().toString(36).substring(2, 8);
+        const resolvedTemplateId =
+          this.templateData?.id || (this.productId ? `tpl-${this.productId}` : "custom-template");
 
-        // 2. Gather customer inputs for line item properties
+        // 3. Gather customer inputs for line item properties
         const properties = {
           _customization_id: customizationId,
-          _template_id: this.templateData?.id || "default",
+          _template_id: resolvedTemplateId,
           _customization_preview: previewDataUrl,
+          "Custom Design": "Personalized ✨",
         };
 
         const objects = this.fabricCanvas.getObjects();
         objects.forEach((obj, idx) => {
           const type = (obj.type || "").toLowerCase();
-          if (type.includes("text") || obj.text) {
-            properties[obj.optionLabel || `Custom Text ${idx + 1}`] = obj.text;
+          if (
+            (type.includes("text") || obj.text !== undefined) &&
+            !obj.name?.toLowerCase().includes("mockup") &&
+            !obj.name?.toLowerCase().includes("base")
+          ) {
+            const label = obj.optionLabel || `Custom Text ${idx + 1}`;
+            if (obj.text && obj.text.trim()) {
+              properties[label] = obj.text;
+            }
           }
         });
 
-        // 3. Find variant ID from the active Shopify product form
+        // 4. Find variant ID from the active Shopify product form
         let variantId = null;
         const formInput = document.querySelector('form[action*="/cart/add"] input[name="id"]');
         if (formInput && formInput.value) {
           variantId = formInput.value;
         } else {
-          // Look for any select or input name="id"
           const anyIdInput = document.querySelector('input[name="id"], select[name="id"]');
           if (anyIdInput && anyIdInput.value) {
             variantId = anyIdInput.value;
@@ -825,7 +924,15 @@
           return;
         }
 
-        // 4. Submit to Shopify Cart API (/cart/add.js)
+        // 5. Store preview in sessionStorage for instant cart page display
+        try {
+          if (previewDataUrl) {
+            sessionStorage.setItem("saitriq_latest_preview", previewDataUrl);
+            sessionStorage.setItem("saitriq_preview_" + variantId, previewDataUrl);
+          }
+        } catch (storageErr) {}
+
+        // 6. Submit to Shopify Cart API (/cart/add.js)
         const cartResponse = await fetch("/cart/add.js", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -842,7 +949,6 @@
 
         if (cartResponse.ok) {
           this.closeModal();
-          // Redirect to cart or trigger cart drawer
           window.location.href = "/cart";
         } else {
           const errData = await cartResponse.json().catch(() => ({}));
@@ -864,4 +970,85 @@
   }
 
   customElements.define("saitriq-personalizer", SaitriqPersonalizer);
+
+  // Cart page preview enhancer
+  function initCartPreviewEnhancer() {
+    if (!window.location.pathname.includes("/cart")) return;
+    async function enhanceCart() {
+      try {
+        const res = await fetch("/cart.js", { headers: { Accept: "application/json" } });
+        if (!res.ok) return;
+        const cart = await res.json();
+        if (!cart || !cart.items || cart.items.length === 0) return;
+
+        const customizedMap = new Map();
+        cart.items.forEach((item, index) => {
+          const preview =
+            item.properties?._customization_preview ||
+            sessionStorage.getItem("saitriq_preview_" + item.variant_id) ||
+            sessionStorage.getItem("saitriq_latest_preview");
+
+          if (preview && typeof preview === "string" && preview.startsWith("data:image")) {
+            customizedMap.set(String(item.variant_id), { preview, title: item.title, key: item.key });
+          }
+        });
+
+        if (customizedMap.size === 0) return;
+
+        const cartItemEls = document.querySelectorAll(
+          "tr.cart-item, .cart-item, [id^='CartItem-'], .cart__item, .line-item"
+        );
+
+        cartItemEls.forEach((el) => {
+          const img = el.querySelector(
+            ".cart-item__image-container img, .cart-item__media img, .cart__image img, .cart-item img, img"
+          );
+          if (!img) return;
+
+          let matched = null;
+          for (const [vId, custom] of customizedMap.entries()) {
+            if (
+              el.innerHTML.includes(vId) ||
+              (custom.title && el.textContent.includes(custom.title)) ||
+              (custom.key && el.innerHTML.includes(custom.key)) ||
+              cartItemEls.length === 1
+            ) {
+              matched = custom;
+              break;
+            }
+          }
+
+          if (matched && matched.preview) {
+            img.src = matched.preview;
+            img.srcset = "";
+            img.style.objectFit = "contain";
+            img.style.borderRadius = "6px";
+            img.style.border = "1px solid #d4d6d8";
+            img.style.background = "#ffffff";
+
+            if (!el.querySelector(".saitriq-cart-badge")) {
+              const badge = document.createElement("span");
+              badge.className = "saitriq-cart-badge";
+              badge.textContent = "✨ Custom Design Applied";
+              badge.style.cssText =
+                "display:inline-block; font-size:11px; background:#e3f1df; color:#108043; padding:2px 8px; border-radius:10px; font-weight:600; margin-top:4px;";
+              const titleEl = el.querySelector(".cart-item__name, .product-title, .cart__item-title, h3, a");
+              if (titleEl && titleEl.parentNode) {
+                titleEl.parentNode.appendChild(badge);
+              }
+            }
+          }
+        });
+      } catch (e) {}
+    }
+
+    enhanceCart();
+    setTimeout(enhanceCart, 500);
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initCartPreviewEnhancer);
+  } else {
+    initCartPreviewEnhancer();
+  }
 })();

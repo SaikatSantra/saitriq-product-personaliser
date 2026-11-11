@@ -7,11 +7,15 @@
 {% assign base_image_url = '' %}
 {% if base_image %}
   {% assign base_image_url = base_image | image_url: width: 1200 %}
+  {% unless base_image_url contains 'http' %}
+    {% assign base_image_url = 'https:' | append: base_image_url %}
+  {% endunless %}
 {% endif %}
 
 <div class="saitriq-personalizer-root" id="saitriq-personalizer-{{ block.id }}" {{ block.shopify_attributes }}>
   <saitriq-personalizer
     data-product-id="{{ current_product.id }}"
+    data-product-handle="{{ current_product.handle }}"
     data-product-title="{{ current_product.title | escape }}"
     data-product-image="{{ base_image_url }}"
     data-shop="{{ shop.permanent_domain }}"
@@ -33,12 +37,15 @@
   </saitriq-personalizer>
 </div>
 
+{% # theme-check-disable AssetSizeAppBlockJavaScript %}
+<script src="{{ 'personalizer.js' | asset_url }}" defer></script>
+{% # theme-check-enable AssetSizeAppBlockJavaScript %}
+
 {% schema %}
 {
   "name": "Product Personalizer",
   "target": "section",
   "stylesheet": "personalizer.css",
-  "javascript": "personalizer.js",
   "templates": ["product"],
   "settings": [
     {

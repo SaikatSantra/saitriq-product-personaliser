@@ -1,0 +1,15 @@
+{% comment %}
+  Saitriq Cart Customizer Preview App Embed
+  Enables live preview replacement for customized items in the cart and cart drawer
+{% endcomment %}
+
+<script src="{{ 'cart_preview.js' | asset_url }}" defer></script>
+
+{% schema %}
+{
+  "name": "Cart Design Preview",
+  "target": "body",
+  "javascript": "cart_preview.js",
+  "settings": []
+}
+{% endschema %}

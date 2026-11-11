@@ -3,22 +3,24 @@ import { getTemplateForProduct } from "../models/product.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const url = new URL(request.url);
-  const shop = url.searchParams.get("shop");
-  const productId = url.searchParams.get("productId");
+  const rawShop = url.searchParams.get("shop") || request.headers.get("x-shopify-shop-domain") || "";
+  const shop = rawShop.replace(/^https?:\/\//, "").replace(/\/.*$/, "").trim();
+  const productId = url.searchParams.get("productId") || url.searchParams.get("rawProductId") || "";
 
   const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    "Cache-Control": "no-store, no-cache, must-revalidate",
   };
 
   if (request.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: corsHeaders });
   }
 
-  if (!shop || !productId) {
+  if (!shop) {
     return Response.json(
-      { hasCustomizer: false, error: "Missing shop or productId parameter" },
+      { hasCustomizer: false, error: "Missing shop parameter" },
       { headers: corsHeaders },
     );
   }
@@ -32,7 +34,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     );
   }
 
-  let parsedLayers = [];
+  let parsedLayers: any = [];
   try {
     parsedLayers = JSON.parse(template.layersJson || "[]");
   } catch {
@@ -45,11 +47,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       template: {
         id: template.id,
         title: template.title,
-        canvasWidth: template.canvasWidth,
-        canvasHeight: template.canvasHeight,
-        printDpi: template.printDpi,
+        canvasWidth: template.canvasWidth || 1200,
+        canvasHeight: template.canvasHeight || 1200,
+        printDpi: template.printDpi || 300,
         layers: parsedLayers,
-        optionGroups: template.optionGroups,
+        optionGroups: template.optionGroups || [],
       },
     },
     { headers: corsHeaders },
