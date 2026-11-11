@@ -877,6 +877,8 @@
           const reader = new FileReader();
           reader.onload = (fEvent) => {
             const dataUrl = fEvent.target?.result;
+            this.customerUploadedImageDataUrl = dataUrl;
+            this.customerUploadedImageFileName = file.name;
             const imgEl = new Image();
             imgEl.src = dataUrl;
             imgEl.onload = () => {
@@ -1318,6 +1320,33 @@
           }
         }
 
+        // Upload customer's raw uploaded image (if customer uploaded one)
+        let finalUploadedImageUrl = "";
+        if (this.customerUploadedImageDataUrl) {
+          try {
+            if (submitBtn) submitBtn.textContent = "Uploading Photo...";
+            const uploadCustRes = await fetch("/apps/personalizer/upload", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                customizationId: customizationId + "_upload",
+                image: this.customerUploadedImageDataUrl,
+                shop: this.shopDomain || window.Shopify?.shop || "",
+              }),
+            });
+            if (uploadCustRes.ok) {
+              const uploadCustJson = await uploadCustRes.json();
+              if (uploadCustJson.previewUrl || uploadCustJson.directUrl) {
+                finalUploadedImageUrl = uploadCustJson.previewUrl || uploadCustJson.directUrl;
+                console.log("[Saitriq] Raw customer image uploaded:", finalUploadedImageUrl);
+              }
+            }
+          } catch (uploadCustErr) {
+            console.warn("[Saitriq] Raw customer image upload notice (using fallback):", uploadCustErr);
+            finalUploadedImageUrl = this.customerUploadedImageDataUrl;
+          }
+        }
+
         if (submitBtn) submitBtn.textContent = "Adding to Cart...";
 
         // 3. Gather customer inputs for line item properties
@@ -1328,6 +1357,11 @@
           "Custom Design Preview": finalPreviewUrl,
           "Custom Design": "Personalized ✨",
         };
+
+        if (finalUploadedImageUrl) {
+          properties["_uploaded_image"] = finalUploadedImageUrl;
+          properties["Uploaded Image"] = finalUploadedImageUrl;
+        }
 
         const objects = this.fabricCanvas.getObjects();
         objects.forEach((obj, idx) => {

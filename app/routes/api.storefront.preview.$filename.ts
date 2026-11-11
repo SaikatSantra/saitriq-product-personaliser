@@ -12,7 +12,11 @@ export const loader = async ({ params }: LoaderFunctionArgs) => {
 
   try {
     const fileBuffer = await fs.readFile(filePath);
-    const contentType = filename.endsWith(".png") ? "image/png" : "image/jpeg";
+    const contentType = filename.endsWith(".png")
+      ? "image/png"
+      : filename.endsWith(".webp")
+      ? "image/webp"
+      : "image/jpeg";
 
     return new Response(fileBuffer, {
       status: 200,

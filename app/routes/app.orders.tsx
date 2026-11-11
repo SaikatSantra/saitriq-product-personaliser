@@ -75,6 +75,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             item.image?.url ||
             "";
 
+          const uploadedImage =
+            attrMap["_uploaded_image"] ||
+            attrMap["Uploaded Image"] ||
+            attrMap["Custom Photo"] ||
+            "";
+
           shopifyCustomizedOrders.push({
             orderGid: order.id,
             shopifyOrderId: order.name,
@@ -83,6 +89,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             productTitle: item.title,
             quantity: item.quantity,
             previewImageUrl: preview,
+            uploadedImageUrl: uploadedImage,
             customerSelections: attrMap,
             createdAt: order.createdAt,
             financialStatus: order.displayFinancialStatus,
@@ -131,6 +138,43 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       };
     }),
   );
+
+  // Add any DB orders that were not returned by Shopify GraphQL
+  const processedKeys = new Set(shopifyCustomizedOrders.map((so) => `${so.numericOrderId}_${so.lineItemId}`));
+  for (const dbo of dbOrders) {
+    const key = `${dbo.shopifyOrderId}_${dbo.shopifyLineItemId}`;
+    if (!processedKeys.has(key)) {
+      let selections: Record<string, string> = {};
+      try {
+        selections = JSON.parse(dbo.customerSelections || "{}");
+      } catch (e) {}
+
+      const uploadedImage =
+        selections["_uploaded_image"] ||
+        selections["Uploaded Image"] ||
+        selections["Custom Photo"] ||
+        "";
+
+      combinedOrders.push({
+        orderGid: `gid://shopify/Order/${dbo.shopifyOrderId}`,
+        shopifyOrderId: `#${dbo.shopifyOrderId}`,
+        numericOrderId: dbo.shopifyOrderId,
+        lineItemId: dbo.shopifyLineItemId,
+        productTitle: selections["_product_title"] || "Personalized Product",
+        quantity: 1,
+        previewImageUrl: dbo.previewImageUrl,
+        uploadedImageUrl: uploadedImage,
+        customerSelections: selections,
+        createdAt: dbo.createdAt.toISOString(),
+        financialStatus: "PAID",
+        fulfillmentStatus: dbo.fulfillmentStatus,
+        adminOrderUrl: `https://admin.shopify.com/store/${shop.replace(".myshopify.com", "")}/orders/${dbo.shopifyOrderId}`,
+        dbId: dbo.id,
+        printFileUrl: dbo.printFileUrl || null,
+        renderStatus: dbo.fulfillmentStatus,
+      });
+    }
+  }
 
   return { orders: combinedOrders, shop };
 };
@@ -317,63 +361,109 @@ export default function CustomizedOrdersPage() {
                     style={{ borderBottom: "1px solid #f1f2f3" }}
                   >
                     {/* 1. Preview Image Thumbnail */}
-                    <td style={{ padding: "12px 16px", width: "90px" }}>
-                      {o.previewImageUrl ? (
-                        <div
-                          style={{
-                            position: "relative",
-                            cursor: "pointer",
-                            width: "64px",
-                            height: "64px",
-                            borderRadius: "6px",
-                            overflow: "hidden",
-                            border: "1px solid #d4d6d8",
-                            background: "#fafafa",
-                          }}
-                          onClick={() => setActiveModalImage(o.previewImageUrl)}
-                          title="Click to enlarge design"
-                        >
-                          <img
-                            src={o.previewImageUrl}
-                            alt="Custom Preview"
-                            style={{
-                              width: "100%",
-                              height: "100%",
-                              objectFit: "contain",
-                            }}
-                          />
+                    <td style={{ padding: "12px 16px" }}>
+                      <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                        {o.previewImageUrl ? (
                           <div
                             style={{
-                              position: "absolute",
-                              bottom: "2px",
-                              right: "2px",
-                              background: "rgba(0,0,0,0.6)",
-                              color: "#fff",
-                              fontSize: "10px",
-                              padding: "1px 4px",
-                              borderRadius: "3px",
+                              position: "relative",
+                              cursor: "pointer",
+                              width: "56px",
+                              height: "56px",
+                              borderRadius: "6px",
+                              overflow: "hidden",
+                              border: "1px solid #d4d6d8",
+                              background: "#fafafa",
+                            }}
+                            onClick={() => setActiveModalImage(o.previewImageUrl)}
+                            title="Click to view Mockup Preview"
+                          >
+                            <img
+                              src={o.previewImageUrl}
+                              alt="Mockup Preview"
+                              style={{
+                                width: "100%",
+                                height: "100%",
+                                objectFit: "contain",
+                              }}
+                            />
+                            <div
+                              style={{
+                                position: "absolute",
+                                bottom: "2px",
+                                right: "2px",
+                                background: "rgba(0,0,0,0.6)",
+                                color: "#fff",
+                                fontSize: "9px",
+                                padding: "1px 3px",
+                                borderRadius: "2px",
+                              }}
+                            >
+                              🔍
+                            </div>
+                          </div>
+                        ) : null}
+
+                        {o.uploadedImageUrl ? (
+                          <div
+                            style={{
+                              position: "relative",
+                              cursor: "pointer",
+                              width: "56px",
+                              height: "56px",
+                              borderRadius: "6px",
+                              overflow: "hidden",
+                              border: "2px solid #008060",
+                              background: "#f0fdf4",
+                            }}
+                            onClick={() => setActiveModalImage(o.uploadedImageUrl)}
+                            title="Click to view Customer's Original Uploaded Photo"
+                          >
+                            <img
+                              src={o.uploadedImageUrl}
+                              alt="Uploaded Logo / Photo"
+                              style={{
+                                width: "100%",
+                                height: "100%",
+                                objectFit: "contain",
+                              }}
+                            />
+                            <div
+                              style={{
+                                position: "absolute",
+                                top: "2px",
+                                left: "2px",
+                                background: "#008060",
+                                color: "#fff",
+                                fontSize: "8px",
+                                padding: "1px 3px",
+                                borderRadius: "2px",
+                                fontWeight: "bold",
+                              }}
+                            >
+                              RAW
+                            </div>
+                          </div>
+                        ) : null}
+
+                        {!o.previewImageUrl && !o.uploadedImageUrl && (
+                          <div
+                            style={{
+                              width: "56px",
+                              height: "56px",
+                              background: "#f0f2f5",
+                              borderRadius: "6px",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              fontSize: "11px",
+                              color: "#8c9196",
                             }}
                           >
-                            🔍
+                            No Image
                           </div>
-                        </div>
-                      ) : (
-                        <div
-                          style={{
-                            width: "64px",
-                            height: "64px",
-                            background: "#f0f2f5",
-                            borderRadius: "6px",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            fontSize: "11px",
-                            color: "#8c9196",
-                          }}
-                        >
-                          No Image
-                        </div>
-                      )}
+                        )}
+                      </div>
                     </td>
 
                     {/* 2. Order Name & Admin Link */}
@@ -404,9 +494,58 @@ export default function CustomizedOrdersPage() {
 
                     {/* 4. Customer Customizations */}
                     <td style={{ padding: "12px 16px", verticalAlign: "middle" }}>
-                      <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                         {Object.entries(o.customerSelections).map(([key, val]) => {
                           if (key.startsWith("_") || key === "Custom Design Preview") return null;
+
+                          const strVal = String(val || "");
+                          const isImage =
+                            key.toLowerCase().includes("upload") ||
+                            key.toLowerCase().includes("photo") ||
+                            key.toLowerCase().includes("image") ||
+                            strVal.startsWith("http") ||
+                            strVal.startsWith("data:image");
+
+                          if (isImage) {
+                            return (
+                              <div key={key} style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                <span
+                                  style={{
+                                    fontWeight: 600,
+                                    color: "#4a4f54",
+                                    background: "#f0f2f5",
+                                    padding: "2px 6px",
+                                    borderRadius: "4px",
+                                    fontSize: "12px",
+                                  }}
+                                >
+                                  {key}:
+                                </span>
+                                <a
+                                  href={strVal}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  download="customer_uploaded_image"
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "4px",
+                                    color: "#008060",
+                                    fontWeight: 600,
+                                    fontSize: "12px",
+                                    background: "#f0fdf4",
+                                    border: "1px solid #bbf7d0",
+                                    padding: "2px 8px",
+                                    borderRadius: "6px",
+                                    textDecoration: "none",
+                                  }}
+                                >
+                                  📥 View / Download Raw Image
+                                </a>
+                              </div>
+                            );
+                          }
+
                           return (
                             <div
                               key={key}
@@ -429,7 +568,7 @@ export default function CustomizedOrdersPage() {
                                 {key}:
                               </span>
                               <span style={{ color: "#202223", fontWeight: 500 }}>
-                                {String(val)}
+                                {strVal}
                               </span>
                             </div>
                           );

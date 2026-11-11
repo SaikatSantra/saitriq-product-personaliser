@@ -44,7 +44,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     const cleanId = (customizationId || `cust_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`)
       .replace(/[^a-zA-Z0-9_-]/g, "");
-    const filename = `${cleanId}.jpg`;
+
+    let ext = "jpg";
+    if (image.startsWith("data:image/png")) {
+      ext = "png";
+    } else if (image.startsWith("data:image/webp")) {
+      ext = "webp";
+    }
+    const filename = `${cleanId}.${ext}`;
 
     // Extract raw base64 buffer
     const base64Data = image.replace(/^data:image\/\w+;base64,/, "");
