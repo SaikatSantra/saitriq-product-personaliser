@@ -12,6 +12,11 @@
   "recent_modifications": [
     {
       "date": "2026-11-11",
+      "component": "Phase 2: Merchant Template Studio",
+      "change": "Implemented Merchant Template Studio with Fabric.js canvas editor, multi-layer text/upload/mockup tools, templates list, customized orders audit, and app settings."
+    },
+    {
+      "date": "2026-11-11",
       "component": "App Initialization",
       "change": "Scaffolded official Shopify App template (React Router + Polaris + Prisma), configured package.json and shopify.app.toml, installed npm dependencies, and generated Prisma client."
     },

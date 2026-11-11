@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { useLoaderData, useFetcher, useNavigate } from "react-router";
+import { useAppBridge } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import {
   getTemplate,
@@ -92,6 +93,57 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
     return { success: true, message: "Template saved successfully" };
   }
 
+  if (intent === "create_sample_products") {
+    const { admin } = await authenticate.admin(request);
+    const sampleProducts = [
+      { title: "Custom Classic T-Shirt" },
+      { title: "Custom Ceramic Coffee Mug" },
+      { title: "Custom Canvas Wall Art" },
+    ];
+
+    const createdIds: string[] = [];
+
+    for (const p of sampleProducts) {
+      try {
+        const res = await admin.graphql(
+          `#graphql
+          mutation createSampleProduct($product: ProductCreateInput!) {
+            productCreate(product: $product) {
+              product {
+                id
+                title
+              }
+              userErrors {
+                field
+                message
+              }
+            }
+          }`,
+          {
+            variables: {
+              product: {
+                title: p.title,
+                status: "ACTIVE",
+              },
+            },
+          },
+        );
+        const json = await res.json();
+        if (json.data?.productCreate?.product?.id) {
+          createdIds.push(json.data.productCreate.product.id);
+        }
+      } catch (err) {
+        console.error("Error creating sample product", err);
+      }
+    }
+
+    if (createdIds.length > 0) {
+      await assignProductsToTemplate(templateId, session.shop, createdIds);
+    }
+
+    return { success: true, message: "Sample customizable products created & linked!" };
+  }
+
   return { success: false };
 };
 
@@ -99,6 +151,7 @@ export default function TemplateStudio() {
   const { template, shopProducts } = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
   const navigate = useNavigate();
+  const shopify = useAppBridge();
 
   // Template state
   const [title, setTitle] = useState(template.title);
@@ -361,6 +414,25 @@ export default function TemplateStudio() {
     );
   };
 
+  const handleOpenNativePicker = async () => {
+    try {
+      if (shopify && (shopify as any).resourcePicker) {
+        const selected = await (shopify as any).resourcePicker({
+          type: "product",
+          multiple: true,
+          selectionIds: assignedProductIds.map((id) => ({ id })),
+        });
+        if (selected && Array.isArray(selected)) {
+          setAssignedProductIds(selected.map((p: any) => p.id));
+          return;
+        }
+      }
+    } catch (e) {
+      console.warn("Native picker fallback", e);
+    }
+    setShowProductModal(true);
+  };
+
   const isSaving = fetcher.state === "submitting";
 
   return (
@@ -379,7 +451,7 @@ export default function TemplateStudio() {
 
       <s-button
         slot="secondary-actions"
-        onClick={() => setShowProductModal(true)}
+        onClick={handleOpenNativePicker}
       >
         Assign Products ({assignedProductIds.length})
       </s-button>
@@ -729,7 +801,32 @@ export default function TemplateStudio() {
 
             <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "20px" }}>
               {shopProducts.length === 0 ? (
-                <p style={{ color: "#6d7175", fontSize: "13px" }}>No products found on store.</p>
+                <div style={{ textAlign: "center", padding: "24px 16px", background: "#f6f6f7", borderRadius: "8px" }}>
+                  <div style={{ fontSize: "36px", marginBottom: "8px" }}>👕</div>
+                  <h4 style={{ margin: "0 0 6px", fontSize: "15px" }}>No products found on your store</h4>
+                  <p style={{ color: "#6d7175", fontSize: "13px", margin: "0 auto 16px", maxWidth: "380px" }}>
+                    Your development store doesn't have any products yet. Click below to automatically create 3 sample customizable products (T-Shirt, Mug, Canvas Art) on your store.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      fetcher.submit({ intent: "create_sample_products" }, { method: "POST" });
+                    }}
+                    disabled={fetcher.state === "submitting"}
+                    style={{
+                      padding: "10px 18px",
+                      background: "#008060",
+                      color: "#fff",
+                      border: "none",
+                      borderRadius: "6px",
+                      cursor: "pointer",
+                      fontWeight: 600,
+                      fontSize: "13px",
+                    }}
+                  >
+                    {fetcher.state === "submitting" ? "Creating Products..." : "✨ Generate 3 Sample Products"}
+                  </button>
+                </div>
               ) : (
                 shopProducts.map((prod: any) => {
                   const isChecked = assignedProductIds.includes(prod.id);

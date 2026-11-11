@@ -1,5 +1,5 @@
-import type { LoaderFunctionArgs } from "react-router";
-import { useLoaderData, Link } from "react-router";
+import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
+import { useLoaderData, useFetcher, Link } from "react-router";
 import { authenticate } from "../shopify.server";
 import { listTemplates } from "../models/template.server";
 import { listCustomizedOrders } from "../models/order.server";
@@ -10,7 +10,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const orders = await listCustomizedOrders(session.shop);
 
   const totalProductsLinked = templates.reduce(
-    (acc, t) => acc + (t.products?.length || 0),
+    (acc: number, t: any) => acc + (t.products?.length || 0),
     0,
   );
 
@@ -24,6 +24,50 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   };
 };
 
+export const action = async ({ request }: ActionFunctionArgs) => {
+  const { admin } = await authenticate.admin(request);
+  const formData = await request.formData();
+  const intent = formData.get("intent");
+
+  if (intent === "create_sample_products") {
+    const sampleProducts = [
+      { title: "Custom Classic T-Shirt" },
+      { title: "Custom Ceramic Coffee Mug" },
+      { title: "Custom Canvas Wall Art" },
+    ];
+
+    for (const p of sampleProducts) {
+      try {
+        await admin.graphql(
+          `#graphql
+          mutation createProduct($product: ProductCreateInput!) {
+            productCreate(product: $product) {
+              product {
+                id
+                title
+              }
+            }
+          }`,
+          {
+            variables: {
+              product: {
+                title: p.title,
+                status: "ACTIVE",
+              },
+            },
+          },
+        );
+      } catch (e) {
+        console.error("Error creating sample product", e);
+      }
+    }
+
+    return { success: true, message: "Sample customizable products created on your store!" };
+  }
+
+  return { success: false };
+};
+
 export default function PersonalizerDashboard() {
   const {
     shop,
@@ -33,12 +77,19 @@ export default function PersonalizerDashboard() {
     orders,
     totalOrders,
   } = useLoaderData<typeof loader>();
+  const fetcher = useFetcher<typeof action>();
 
   return (
     <s-page heading="Product Personalizer & Print Studio">
       <s-button slot="primary-action" variant="primary" href="/app/templates">
         Manage Templates
       </s-button>
+
+      {fetcher.data?.message && (
+        <div style={{ marginBottom: "16px" }}>
+          <s-banner tone="success">{fetcher.data.message}</s-banner>
+        </div>
+      )}
 
       {/* Banner */}
       <div
@@ -95,7 +146,27 @@ export default function PersonalizerDashboard() {
         <div style={{ background: "#fff", border: "1px solid #e1e3e5", borderRadius: "8px", padding: "18px" }}>
           <div style={{ color: "#6d7175", fontSize: "13px", fontWeight: 500 }}>Customized Products</div>
           <div style={{ fontSize: "26px", fontWeight: 700, margin: "6px 0", color: "#202223" }}>{totalProductsLinked}</div>
-          <span style={{ color: "#108043", fontSize: "12px" }}>Linked to store products</span>
+          {totalProductsLinked === 0 ? (
+            <button
+              type="button"
+              onClick={() => fetcher.submit({ intent: "create_sample_products" }, { method: "POST" })}
+              disabled={fetcher.state === "submitting"}
+              style={{
+                marginTop: "4px",
+                background: "none",
+                border: "none",
+                color: "#005bd3",
+                fontSize: "12px",
+                padding: 0,
+                cursor: "pointer",
+                fontWeight: 500,
+              }}
+            >
+              {fetcher.state === "submitting" ? "Creating..." : "+ Add Sample Products"}
+            </button>
+          ) : (
+            <span style={{ color: "#108043", fontSize: "12px" }}>Linked to store products</span>
+          )}
         </div>
 
         <div style={{ background: "#fff", border: "1px solid #e1e3e5", borderRadius: "8px", padding: "18px" }}>
