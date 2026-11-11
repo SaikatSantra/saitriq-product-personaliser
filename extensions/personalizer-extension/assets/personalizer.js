@@ -15,6 +15,7 @@
       this.pendingOpen = false;
       this.activeSide = "front";
       this.sidesData = { front: null, back: null };
+      this.sideUnderlays = { front: null, back: null };
       this.customerUploadedImageDataUrls = { front: null, back: null };
       this.customerUploadedImageDataUrl = null;
     }
@@ -162,27 +163,106 @@
       return "";
     }
 
-    getSideBaseImage(side) {
+    getImageUrl(img) {
+      if (!img) return "";
+      let url = typeof img === "object" ? (img.url || img.src || "") : String(img);
+      if (url.startsWith("//")) url = window.location.protocol + url;
+      return url.trim();
+    }
+
+    getImageAlt(img) {
+      if (!img || typeof img !== "object") return "";
+      return String(img.alt || "").toLowerCase();
+    }
+
+    resolveSideImage(side, variant) {
+      const activeVariant = variant || this.getSelectedVariant();
+      const colorOption = activeVariant?.options ? String(activeVariant.options[0] || "").toLowerCase() : "";
+      const images = (this.variantsData && Array.isArray(this.variantsData.images)) ? this.variantsData.images : [];
+
+      // 1. Check if template explicitly defined an underlay for this side
+      const sideData = this.sidesData?.[side];
+      if (sideData && Array.isArray(sideData.objects)) {
+        const templateUnderlay = sideData.objects.find((o) => {
+          const type = (o.type || "").toLowerCase();
+          const name = (o.name || "").toLowerCase();
+          const customType = (o.customType || "").toLowerCase();
+          return (
+            type === "image" &&
+            (customType === "background_mockup" || name.includes("mockup") || name.includes("underlay")) &&
+            name !== "Product Base Image"
+          );
+        });
+        if (templateUnderlay && templateUnderlay.src) {
+          return this.getImageUrl(templateUnderlay.src);
+        }
+      }
+
+      // 2. Front Side Resolution
       if (side === "front") {
-        const variantImg = this.getSelectedVariantImage();
-        if (variantImg) return variantImg;
+        if (activeVariant && activeVariant.image) {
+          return this.getImageUrl(activeVariant.image);
+        }
+        if (images.length > 0) {
+          if (colorOption) {
+            const match = images.find((img) => {
+              const url = this.getImageUrl(img).toLowerCase();
+              const alt = this.getImageAlt(img);
+              return (url.includes(colorOption) || alt.includes(colorOption)) && !alt.includes("back") && !url.includes("back");
+            });
+            if (match) return this.getImageUrl(match);
+          }
+          return this.getImageUrl(images[0]);
+        }
+        return this.detectPageProductImage() || "";
       }
 
-      if (this.variantsData && Array.isArray(this.variantsData.images) && this.variantsData.images.length > 0) {
-        if (side === "back" && this.variantsData.images.length > 1) {
-          let backImg = this.variantsData.images[1];
-          if (backImg.startsWith("//")) backImg = "https:" + backImg;
-          return backImg;
+      // 3. Back Side Resolution
+      if (images.length > 0) {
+        // A. Search image matching variant color AND "back" or "rear"
+        if (colorOption) {
+          const matchBack = images.find((img) => {
+            const url = this.getImageUrl(img).toLowerCase();
+            const alt = this.getImageAlt(img);
+            return (
+              (url.includes(colorOption) || alt.includes(colorOption)) &&
+              (alt.includes("back") || url.includes("back") || alt.includes("rear") || url.includes("rear"))
+            );
+          });
+          if (matchBack) return this.getImageUrl(matchBack);
         }
-        if (side === "front") {
-          let frontImg = this.variantsData.images[0];
-          if (frontImg.startsWith("//")) frontImg = "https:" + frontImg;
-          return frontImg;
+
+        // B. Search any image with "back" or "rear" in alt or filename
+        const anyBack = images.find((img) => {
+          const url = this.getImageUrl(img).toLowerCase();
+          const alt = this.getImageAlt(img);
+          return alt.includes("back") || url.includes("back") || alt.includes("rear") || url.includes("rear");
+        });
+        if (anyBack) return this.getImageUrl(anyBack);
+
+        // C. Standard apparel pairing: If variant's front image is at index k, check if k+1 is back image
+        if (activeVariant && activeVariant.image) {
+          const vUrl = this.getImageUrl(activeVariant.image);
+          const vIdx = images.findIndex((img) => this.getImageUrl(img) === vUrl);
+          if (vIdx !== -1 && vIdx + 1 < images.length) {
+            return this.getImageUrl(images[vIdx + 1]);
+          }
         }
+
+        // D. Fallback: If gallery has at least 2 images, image 1 is back view
+        if (images.length > 1) {
+          return this.getImageUrl(images[1]);
+        }
+
+        // E. Fallback to image 0
+        return this.getImageUrl(images[0]);
       }
 
-      const pageImg = this.detectPageProductImage();
-      return pageImg || "";
+      return this.detectPageProductImage() || "";
+    }
+
+    getSideBaseImage(side) {
+      return this.resolveSideImage(side, this.getSelectedVariant());
     }
 
     async handleTriggerClick() {
@@ -627,7 +707,7 @@
 
     serializeCanvasObjects() {
       if (!this.fabricCanvas) return { objects: [] };
-      return this.fabricCanvas.toObject([
+      const raw = this.fabricCanvas.toObject([
         "name",
         "customType",
         "isCustomerEditable",
@@ -637,6 +717,16 @@
         "selectable",
         "evented",
       ]);
+      // Exclude dynamic product base image from serialized customer design objects so it never pollutes design layers
+      if (raw && Array.isArray(raw.objects)) {
+        raw.objects = raw.objects.filter(
+          (o) =>
+            o.name !== "Product Base Image" &&
+            o.customType !== "background_mockup" &&
+            !o.name?.toLowerCase().includes("mockup")
+        );
+      }
+      return raw;
     }
 
     async loadSideIntoCanvas(side) {
@@ -645,21 +735,6 @@
       let sideData = this.sidesData[side];
       if (!sideData || !Array.isArray(sideData.objects)) {
         sideData = { objects: [] };
-      }
-
-      // Check if sideData explicitly contains an underlay object
-      let hasUnderlay = false;
-      for (const obj of sideData.objects) {
-        const type = (obj.type || "").toLowerCase();
-        const objName = (obj.name || "").toLowerCase();
-        const customType = (obj.customType || "").toLowerCase();
-        if (
-          type === "image" &&
-          (objName.includes("mockup") || objName.includes("underlay") || objName.includes("base") || customType === "background_mockup")
-        ) {
-          hasUnderlay = true;
-          break;
-        }
       }
 
       // Normalise object types for Fabric 7
@@ -677,24 +752,30 @@
       this.fabricCanvas.clear();
       this.fabricCanvas.backgroundColor = "#ffffff";
 
-      // Load side objects
+      // 1. Resolve and load the base underlay image for this side FIRST
+      const activeVariant = this.getSelectedVariant();
+      const sideUnderlay = this.sideUnderlays?.[side] || this.resolveSideImage(side, activeVariant);
+      if (sideUnderlay) {
+        await this.addBaseProductImage(sideUnderlay, this.canvasW, this.canvasH);
+      }
+
+      // 2. Load customer design layers (text, custom photos) on top of underlay
       try {
         if (sideData.objects.length > 0) {
           const res = this.fabricCanvas.loadFromJSON(sideData);
           if (res && typeof res.then === "function") {
             await res;
           }
+          // Ensure base underlay stays at bottom (index 0)
+          const baseImg = this.fabricCanvas.getObjects().find(
+            (o) => o.name === "Product Base Image" || o.customType === "background_mockup"
+          );
+          if (baseImg) {
+            this.fabricCanvas.sendObjectToBack(baseImg);
+          }
         }
       } catch (err) {
         console.error("[Saitriq] Error loading side layers:", err);
-      }
-
-      // Check if variant image or product image should be loaded as underlay
-      if (!hasUnderlay) {
-        const sideImg = this.getSideBaseImage(side);
-        if (sideImg) {
-          await this.addBaseProductImage(sideImg, this.canvasW, this.canvasH);
-        }
       }
 
       if (this.fabricCanvas.requestRenderAll) {
@@ -915,10 +996,19 @@
                 const sumVariantEl = document.getElementById("saitriq-summary-variant-title");
                 if (sumVariantEl) sumVariantEl.textContent = matched.title;
 
-                // Update mockup underlay image on canvas
-                if (matched.image) {
-                  let imgUrl = matched.image.startsWith("//") ? "https:" + matched.image : matched.image;
-                  await this.addBaseProductImage(imgUrl, this.canvasW || 1200, this.canvasH || 1200);
+                // Update Front and Back underlays for the newly selected variant
+                const frontImg = this.resolveSideImage("front", matched);
+                const backImg = this.resolveSideImage("back", matched);
+
+                this.sideUnderlays = {
+                  front: frontImg,
+                  back: backImg,
+                };
+
+                // Update canvas underlay for whichever side is currently visible!
+                const activeUnderlay = this.activeSide === "front" ? frontImg : backImg;
+                if (activeUnderlay) {
+                  await this.addBaseProductImage(activeUnderlay, this.canvasW || 1200, this.canvasH || 1200);
                 }
               }
             });
