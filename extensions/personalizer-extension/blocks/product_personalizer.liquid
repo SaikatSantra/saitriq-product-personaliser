@@ -25,6 +25,24 @@
     data-auto-open="{{ block.settings.auto_open | default: false }}"
     data-design-mode="{% if request.design_mode %}true{% else %}false{% endif %}"
   >
+    {% if current_product and current_product.variants.size > 0 %}
+      <script type="application/json" class="saitriq-variants-json">
+        {
+          "options": {{ current_product.options_with_values | json }},
+          "variants": [
+            {% for variant in current_product.variants %}
+              {
+                "id": {{ variant.id | json }},
+                "title": {{ variant.title | json }},
+                "available": {{ variant.available | json }},
+                "options": {{ variant.options | json }},
+                "image": {% if variant.featured_image %}{{ variant.featured_image | image_url: width: 1200 | json }}{% elsif variant.featured_media %}{{ variant.featured_media | image_url: width: 1200 | json }}{% else %}null{% endif %}
+              }{% unless forloop.last %},{% endunless %}
+            {% endfor %}
+          ]
+        }
+      </script>
+    {% endif %}
     <div class="saitriq-trigger-wrapper">
       <button
         type="button"

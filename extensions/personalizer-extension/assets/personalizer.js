@@ -27,6 +27,38 @@
       this.autoOpen = this.getAttribute("data-auto-open") === "true";
       this.isDesignMode = this.getAttribute("data-design-mode") === "true" || window.Shopify?.designMode === true;
 
+      this.variantsData = null;
+      this.activeSelectedVariantId = null;
+      const variantsScript = this.querySelector(".saitriq-variants-json");
+      if (variantsScript) {
+        try {
+          this.variantsData = JSON.parse(variantsScript.textContent || "{}");
+        } catch (e) {
+          this.variantsData = null;
+        }
+      }
+
+      // Track active variant changes from the product page (Dawn color swatches, dropdowns, etc.)
+      const onVariantChange = () => {
+        const newId = this.getSelectedVariantId();
+        if (newId && newId !== this.activeSelectedVariantId) {
+          this.activeSelectedVariantId = newId;
+        }
+      };
+
+      document.addEventListener("change", (e) => {
+        if (
+          e.target &&
+          (e.target.name === "id" ||
+            e.target.closest("variant-radios") ||
+            e.target.closest("variant-selects") ||
+            e.target.closest('form[action*="/cart/add"]'))
+        ) {
+          onVariantChange();
+        }
+      });
+      window.addEventListener("popstate", onVariantChange);
+
       this.style.setProperty("--saitriq-primary", this.primaryColor);
 
       // Bind to existing SSR button or create if missing
@@ -41,6 +73,65 @@
       }
 
       await this.fetchTemplate();
+    }
+
+    getSelectedVariantId() {
+      if (this.activeSelectedVariantId) return this.activeSelectedVariantId;
+
+      // 1. Check form inputs
+      const formInput = document.querySelector('form[action*="/cart/add"] input[name="id"]');
+      if (formInput && formInput.value) return String(formInput.value);
+
+      const anyId = document.querySelector('input[name="id"], select[name="id"]');
+      if (anyId && anyId.value) return String(anyId.value);
+
+      // 2. Check URL search param (?variant=...)
+      const params = new URLSearchParams(window.location.search);
+      const urlVariant = params.get("variant");
+      if (urlVariant) return String(urlVariant);
+
+      // 3. Check Shopify global analytics
+      if (window.ShopifyAnalytics?.meta?.selectedVariantId) {
+        return String(window.ShopifyAnalytics.meta.selectedVariantId);
+      }
+
+      return null;
+    }
+
+    getSelectedVariant() {
+      if (!this.variantsData || !Array.isArray(this.variantsData.variants) || this.variantsData.variants.length === 0) {
+        return null;
+      }
+
+      const variantId = this.getSelectedVariantId();
+      if (variantId) {
+        const match = this.variantsData.variants.find((v) => String(v.id) === String(variantId));
+        if (match) return match;
+      }
+
+      return this.variantsData.variants[0] || null;
+    }
+
+    getSelectedVariantImage() {
+      const selected = this.getSelectedVariant();
+      if (selected && selected.image) {
+        let img = selected.image;
+        if (img.startsWith("//")) img = "https:" + img;
+        return img;
+      }
+
+      // Check active gallery image from theme DOM (Dawn, Sense, etc.)
+      const activeGalleryImg = document.querySelector(
+        ".product__media-item.is-active img, .product__media-list .is-active img, .product-single__media.is-active img, .product__media img, [data-media-id] img"
+      );
+      if (activeGalleryImg) {
+        const src = activeGalleryImg.currentSrc || activeGalleryImg.src;
+        if (src && !src.includes("icon") && !src.includes("badge") && !src.includes("logo")) {
+          return src;
+        }
+      }
+
+      return this.detectPageProductImage();
     }
 
     detectPageProductImage() {
@@ -493,10 +584,21 @@
         console.error("[Saitriq] Error loading template layers:", err);
       }
 
-      // If template has NO uploaded mockup underlay, load the current product's real catalog image!
-      const baseImgUrl = this.detectPageProductImage();
-      if (!templateHasUnderlay && baseImgUrl) {
-        await this.addBaseProductImage(baseImgUrl, canvasW, canvasH);
+      this.canvasW = canvasW;
+      this.canvasH = canvasH;
+
+      // Check if user selected a variant with a specific image (e.g. Blue T-Shirt)
+      const selectedVariantImg = this.getSelectedVariantImage();
+
+      // If the customer selected a variant that has its own image (like Blue T-shirt):
+      // The selected variant image MUST take precedence so the user customizes what they chose!
+      if (selectedVariantImg) {
+        await this.addBaseProductImage(selectedVariantImg, canvasW, canvasH);
+      } else if (!templateHasUnderlay) {
+        const baseImgUrl = this.detectPageProductImage();
+        if (baseImgUrl) {
+          await this.addBaseProductImage(baseImgUrl, canvasW, canvasH);
+        }
       }
 
       if (this.fabricCanvas.requestRenderAll) {
@@ -513,6 +615,75 @@
       if (!container || !this.fabricCanvas) return;
 
       container.innerHTML = "";
+
+      // 1. Check if product has variants with images (e.g. Color: Black, Blue, etc.)
+      if (this.variantsData && Array.isArray(this.variantsData.variants) && this.variantsData.variants.length > 1) {
+        const activeVariant = this.getSelectedVariant();
+        const variantsWithImages = this.variantsData.variants.filter((v) => v.image);
+
+        if (variantsWithImages.length > 1) {
+          const variantGroup = document.createElement("div");
+          variantGroup.className = "saitriq-control-group";
+
+          const label = document.createElement("label");
+          label.className = "saitriq-control-label";
+          label.textContent = `🎨 Product Color / Variant: ${activeVariant?.title || ""}`;
+
+          const swatchesContainer = document.createElement("div");
+          swatchesContainer.className = "saitriq-swatches-grid";
+          swatchesContainer.style.cssText = "display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px;";
+
+          variantsWithImages.forEach((v) => {
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "saitriq-variant-switch-btn";
+            const isActive = activeVariant && String(activeVariant.id) === String(v.id);
+            btn.style.cssText = `
+              padding: 6px 14px;
+              border-radius: 6px;
+              border: ${isActive ? "2px solid #008060" : "1px solid #d4d6d8"};
+              background: ${isActive ? "#f0fdf4" : "#ffffff"};
+              color: ${isActive ? "#008060" : "#202223"};
+              font-weight: ${isActive ? "600" : "400"};
+              font-size: 13px;
+              cursor: pointer;
+              transition: all 0.15s ease;
+            `;
+            btn.textContent = v.title;
+
+            btn.addEventListener("click", async () => {
+              this.activeSelectedVariantId = String(v.id);
+              const formInput = document.querySelector('form[action*="/cart/add"] input[name="id"]');
+              if (formInput) formInput.value = v.id;
+
+              label.textContent = `🎨 Product Color / Variant: ${v.title}`;
+
+              swatchesContainer.querySelectorAll(".saitriq-variant-switch-btn").forEach((b) => {
+                b.style.border = "1px solid #d4d6d8";
+                b.style.background = "#ffffff";
+                b.style.color = "#202223";
+                b.style.fontWeight = "400";
+              });
+              btn.style.border = "2px solid #008060";
+              btn.style.background = "#f0fdf4";
+              btn.style.color = "#008060";
+              btn.style.fontWeight = "600";
+
+              if (v.image) {
+                let imgUrl = v.image.startsWith("//") ? "https:" + v.image : v.image;
+                await this.addBaseProductImage(imgUrl, this.canvasW || 800, this.canvasH || 800);
+              }
+            });
+
+            swatchesContainer.appendChild(btn);
+          });
+
+          variantGroup.appendChild(label);
+          variantGroup.appendChild(swatchesContainer);
+          container.appendChild(variantGroup);
+        }
+      }
+
       const objects = this.fabricCanvas.getObjects();
 
       let controlIndex = 1;
@@ -945,15 +1116,17 @@
           }
         });
 
-        // 4. Find variant ID from the active Shopify product form
-        let variantId = null;
-        const formInput = document.querySelector('form[action*="/cart/add"] input[name="id"]');
-        if (formInput && formInput.value) {
-          variantId = formInput.value;
-        } else {
-          const anyIdInput = document.querySelector('input[name="id"], select[name="id"]');
-          if (anyIdInput && anyIdInput.value) {
-            variantId = anyIdInput.value;
+        // 4. Find variant ID from the active Shopify product form or personalizer selection
+        let variantId = this.activeSelectedVariantId || null;
+        if (!variantId) {
+          const formInput = document.querySelector('form[action*="/cart/add"] input[name="id"]');
+          if (formInput && formInput.value) {
+            variantId = formInput.value;
+          } else {
+            const anyIdInput = document.querySelector('input[name="id"], select[name="id"]');
+            if (anyIdInput && anyIdInput.value) {
+              variantId = anyIdInput.value;
+            }
           }
         }
 
