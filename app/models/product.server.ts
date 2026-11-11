@@ -42,23 +42,6 @@ export async function getTemplateForProduct(shopifyDomain: string, rawProductId:
     if (template) return template;
   }
 
-  // Fallback: If no explicit assignment, use the shop's most recent template so customization always works
-  const defaultTemplate = await prisma.template.findFirst({
-    where: {
-      shopId: shop.id,
-    },
-    include: {
-      optionGroups: {
-        orderBy: { position: "asc" },
-        include: {
-          options: true,
-        },
-      },
-    },
-    orderBy: {
-      updatedAt: "desc",
-    },
-  });
-
-  return defaultTemplate || null;
+  // If this product does not have a linked template, return null so it remains an uncustomized default product
+  return null;
 }

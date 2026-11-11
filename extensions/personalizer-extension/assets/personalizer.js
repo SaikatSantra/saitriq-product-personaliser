@@ -468,22 +468,41 @@
         console.error("[Saitriq] Error loading template layers:", err);
       }
 
-      // 2. Ensure product base image (mockup) is present
-      const baseImgUrl = this.detectPageProductImage();
-      const objects = this.fabricCanvas.getObjects();
-      const hasMockupImage = objects.some(
-        (o) => (o.type === "Image" || o.type === "image") && (o.name?.includes("Mockup") || o.customType === "background_mockup" || o.src)
-      );
+      // 2. Check if the template already has an uploaded mockup underlay image
+      let templateHasUnderlay = false;
+      const rawObjects = Array.isArray(layersToLoad?.objects)
+        ? layersToLoad.objects
+        : Array.isArray(layersToLoad)
+        ? layersToLoad
+        : [];
 
-      // If no mockup image or if using default preview template or if on a product page with its own base image
-      if (baseImgUrl && (!hasMockupImage || this.templateData?.id === "preview-default-tpl")) {
-        await this.addBaseProductImage(baseImgUrl, canvasW, canvasH);
-      } else if (baseImgUrl && hasMockupImage) {
-        // If the template has a generic mockup (e.g. t-shirt) but this product has its own image (e.g. Cap, Mug)
-        const isGenericMockup = objects.some((o) => o.name === "Mockup Underlay" || o.customType === "background_mockup");
-        if (isGenericMockup && this.productTitle && !this.productTitle.toLowerCase().includes("t-shirt")) {
-          await this.addBaseProductImage(baseImgUrl, canvasW, canvasH);
+      for (const obj of rawObjects) {
+        const type = (obj.type || "").toLowerCase();
+        if (
+          type === "image" &&
+          (obj.src || obj.name?.includes("Mockup") || obj.customType === "background_mockup")
+        ) {
+          templateHasUnderlay = true;
+          break;
         }
+      }
+
+      const canvasObjects = this.fabricCanvas.getObjects();
+      const liveMockup = canvasObjects.find((o) => {
+        const type = (o.type || "").toLowerCase();
+        return (
+          type === "image" &&
+          (o.name === "Mockup Underlay" || o.customType === "background_mockup" || o.name === "Product Base Image")
+        );
+      });
+      if (liveMockup) {
+        templateHasUnderlay = true;
+      }
+
+      // If template has NO uploaded mockup underlay, load the current product's real catalog image!
+      const baseImgUrl = this.detectPageProductImage();
+      if (!templateHasUnderlay && baseImgUrl) {
+        await this.addBaseProductImage(baseImgUrl, canvasW, canvasH);
       }
 
       if (this.fabricCanvas.requestRenderAll) {
@@ -953,10 +972,9 @@
           return;
         }
 
-        // 5. Store preview in sessionStorage for instant cart page display
+        // 5. Store preview in sessionStorage specifically for this customized variant
         try {
           if (previewDataUrl) {
-            sessionStorage.setItem("saitriq_latest_preview", previewDataUrl);
             sessionStorage.setItem("saitriq_preview_" + variantId, previewDataUrl);
             sessionStorage.setItem("saitriq_preview_" + customizationId, previewDataUrl);
           }

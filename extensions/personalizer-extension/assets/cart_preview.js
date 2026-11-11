@@ -1,49 +1,66 @@
 /**
  * Saitriq Cart Preview Enhancer
  * Automatically swaps default catalog product images with the customer's personalized preview on /cart and cart drawers
+ * Strictly preserves default catalog images for uncustomized items!
  */
 (function () {
   let isEnhancing = false;
-  let lastProcessedCartHash = "";
 
-  function getPreviewUrl(item) {
+  function getCustomPreviewUrl(item) {
     if (!item) return null;
 
-    // 1. Check properties object or array
-    if (item.properties) {
-      if (Array.isArray(item.properties)) {
-        for (const p of item.properties) {
-          const k = p.name || p.key || "";
-          if (
-            (k === "_customization_preview" || k === "Custom Design Preview" || k.includes("preview")) &&
-            p.value &&
-            typeof p.value === "string" &&
-            (p.value.startsWith("http") || p.value.startsWith("/") || p.value.startsWith("data:image"))
-          ) {
-            return p.value;
-          }
+    const props = item.properties;
+    if (!props) return null;
+
+    // Check if this line item has customization markers
+    let isCustomized = false;
+    let previewUrl = null;
+
+    if (Array.isArray(props)) {
+      for (const p of props) {
+        const k = p.name || p.key || "";
+        const v = p.value;
+        if (k === "_customization_id" || k === "_template_id" || k === "Custom Design") {
+          isCustomized = true;
         }
-      } else if (typeof item.properties === "object") {
-        const val =
-          item.properties["Custom Design Preview"] ||
-          item.properties._customization_preview ||
-          item.properties["preview"];
         if (
-          val &&
-          typeof val === "string" &&
-          (val.startsWith("http") || val.startsWith("/") || val.startsWith("data:image"))
+          (k === "Custom Design Preview" || k === "_customization_preview" || k.includes("preview")) &&
+          v &&
+          typeof v === "string" &&
+          (v.startsWith("http") || v.startsWith("/") || v.startsWith("data:image"))
         ) {
-          return val;
+          previewUrl = v;
+          isCustomized = true;
         }
+      }
+    } else if (typeof props === "object") {
+      if (props._customization_id || props._template_id || props["Custom Design"]) {
+        isCustomized = true;
+      }
+      const v = props["Custom Design Preview"] || props._customization_preview || props["preview"];
+      if (
+        v &&
+        typeof v === "string" &&
+        (v.startsWith("http") || v.startsWith("/") || v.startsWith("data:image"))
+      ) {
+        previewUrl = v;
+        isCustomized = true;
       }
     }
 
-    // 2. Check client-side session storage fallback
-    const storedPreview =
-      sessionStorage.getItem("saitriq_preview_" + item.variant_id) ||
-      sessionStorage.getItem("saitriq_preview_" + item.id) ||
-      sessionStorage.getItem("saitriq_latest_preview");
+    // STRICT GUARD: If this item was NOT customized, NEVER touch it!
+    if (!isCustomized) {
+      return null;
+    }
 
+    // If previewUrl found in properties, use it
+    if (previewUrl) {
+      return previewUrl;
+    }
+
+    // Fallback: only check variant-specific sessionStorage if item was proven to be customized
+    const variantId = String(item.variant_id || item.id || "");
+    const storedPreview = sessionStorage.getItem("saitriq_preview_" + variantId);
     if (
       storedPreview &&
       (storedPreview.startsWith("http") ||
@@ -72,15 +89,16 @@
         return;
       }
 
-      // Build a map of line items with custom previews
-      const customItems = [];
+      // Collect ONLY items that were actually customized
+      const customItemsMap = new Map();
       cart.items.forEach((item, idx) => {
-        const previewUrl = getPreviewUrl(item);
+        const previewUrl = getCustomPreviewUrl(item);
         if (previewUrl) {
-          customItems.push({
+          const vId = String(item.variant_id || item.id);
+          customItemsMap.set(vId, {
             index: idx,
             lineIndex: idx + 1,
-            variantId: String(item.variant_id || item.id),
+            variantId: vId,
             key: String(item.key || ""),
             handle: item.handle || "",
             title: item.title || "",
@@ -89,12 +107,13 @@
         }
       });
 
-      if (customItems.length === 0) {
+      // If no items in cart are customized, do not touch any cart images
+      if (customItemsMap.size === 0) {
         isEnhancing = false;
         return;
       }
 
-      // Find all cart item containers across Dawn, Spotlight, Sense, Refresh, Craft, and classic themes
+      // Find cart item containers across Dawn, Spotlight, Sense, Refresh, Craft, and classic themes
       const rowSelectors = [
         "tr.cart-item",
         ".cart-item",
@@ -106,24 +125,21 @@
         ".cart-drawer .cart-item",
       ];
       const cartItemEls = Array.from(document.querySelectorAll(rowSelectors.join(", ")));
-
-      // If no explicit row elements found, attempt table row search
       const elementsToProcess =
         cartItemEls.length > 0
           ? cartItemEls
           : Array.from(document.querySelectorAll("table.cart-items tr, .cart__items > *"));
 
       elementsToProcess.forEach((el, elIdx) => {
-        // Find matching customized item
+        // STRICT MATCH: Must match this specific customized variant
         let matched = null;
-        for (const cItem of customItems) {
+        for (const [vId, cItem] of customItemsMap.entries()) {
+          const elHtml = el.innerHTML || "";
           if (
-            el.id.includes(cItem.variantId) ||
-            el.innerHTML.includes(cItem.variantId) ||
-            (cItem.key && el.innerHTML.includes(cItem.key)) ||
-            (cItem.handle && el.querySelector(`a[href*="${cItem.handle}"]`)) ||
-            elementsToProcess.length === 1 ||
-            cItem.index === elIdx
+            el.id.includes(vId) ||
+            elHtml.includes(vId) ||
+            (cItem.key && elHtml.includes(cItem.key)) ||
+            (cItem.handle && el.querySelector(`a[href*="${cItem.handle}"]`))
           ) {
             matched = cItem;
             break;
@@ -132,13 +148,13 @@
 
         if (!matched || !matched.previewUrl) return;
 
-        // Locate image element
+        // Locate image element within the matched cart row
         const img = el.querySelector(
           ".cart-item__image-container img, .cart-item__media img, .cart__image img, .cart-item img, img"
         );
         if (!img) return;
 
-        // Check if already replaced
+        // Prevent repeated swap if already applied
         if (img.getAttribute("data-saitriq-replaced") === matched.previewUrl) {
           return;
         }
@@ -206,7 +222,7 @@
   cartEvents.forEach((ev) => {
     document.addEventListener(ev, () => {
       setTimeout(enhanceCart, 50);
-      setTimeout(enhanceCart, 350);
+      setTimeout(enhanceCart, 300);
     });
     window.addEventListener(ev, () => {
       setTimeout(enhanceCart, 50);
@@ -237,7 +253,6 @@
     });
   }
 
-  // Backup check after 500ms and 1500ms
   setTimeout(enhanceCart, 500);
   setTimeout(enhanceCart, 1500);
 })();
