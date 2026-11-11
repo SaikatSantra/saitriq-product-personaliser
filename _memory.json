@@ -12,6 +12,16 @@
   "recent_modifications": [
     {
       "date": "2026-11-11",
+      "component": "Theme App Extension Strict Conformance",
+      "change": "Updated product_personalizer.liquid to strictly conform to Shopify Theme App Extension specs (schema-driven stylesheet/javascript asset loading, product autofill setting, block.shopify_attributes, dynamic Fabric.js on-demand loader)."
+    },
+    {
+      "date": "2026-11-11",
+      "component": "Phase 6 & Shopify Standards Compliance",
+      "change": "Implemented POD fulfillment routing (Printful & Printify), AI background removal endpoint, and mandatory GDPR privacy compliance webhooks."
+    },
+    {
+      "date": "2026-11-11",
       "component": "Phase 4 & 5: Orders Webhook & 300 DPI Render Engine",
       "change": "Implemented orders/create webhook listener, high-resolution 300 DPI PDF render engine using pdfkit, and automatic order print file generation."
     },
@@ -37,8 +47,8 @@
     }
   ],
   "pending_tasks": [
-    "Implement conditional logic rules engine for option groups",
-    "Build Node.js / Fabric.js server-side 300 DPI PDF rendering worker",
-    "Connect Printful/Printify fulfillment API webhooks"
+    "Test live customer customization checkout on dev store",
+    "Configure production AWS S3 / Cloudflare R2 bucket credentials (optional)",
+    "Run pre-submission Shopify App Store compliance audit"
   ]
 }
