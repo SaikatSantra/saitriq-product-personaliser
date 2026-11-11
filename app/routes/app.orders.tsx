@@ -92,8 +92,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         }
       }
     }
-  } catch (apiErr) {
-    console.error("[Orders Loader] Error querying Shopify Admin orders:", apiErr);
+  } catch (apiErr: any) {
+    const errorDetails = apiErr?.graphQLErrors || apiErr?.message || apiErr;
+    console.error("[Orders Loader] Error querying Shopify Admin orders:", JSON.stringify(errorDetails, null, 2));
   }
 
   // 2. Fetch existing DB records
