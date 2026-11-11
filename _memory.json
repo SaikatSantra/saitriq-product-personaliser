@@ -12,6 +12,16 @@
   "recent_modifications": [
     {
       "date": "2026-11-11",
+      "component": "Phase 4 & 5: Orders Webhook & 300 DPI Render Engine",
+      "change": "Implemented orders/create webhook listener, high-resolution 300 DPI PDF render engine using pdfkit, and automatic order print file generation."
+    },
+    {
+      "date": "2026-11-11",
+      "component": "Phase 3: Storefront Theme App Extension",
+      "change": "Built Online Store 2.0 theme extension with product_personalizer app block, saitriq-personalizer web component, Fabric.js live preview, and cart line-item metadata serialization."
+    },
+    {
+      "date": "2026-11-11",
       "component": "Phase 2: Merchant Template Studio",
       "change": "Implemented Merchant Template Studio with Fabric.js canvas editor, multi-layer text/upload/mockup tools, templates list, customized orders audit, and app settings."
     },
