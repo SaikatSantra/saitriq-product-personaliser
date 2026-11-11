@@ -32,3 +32,94 @@ model Session {
   refreshToken        String?
   refreshTokenExpires DateTime?
 }
+
+model Shop {
+  id            String    @id @default(uuid())
+  shopifyDomain String    @unique
+  accessToken   String
+  planName      String    @default("trial")
+  settings      String    @default("{}")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  products         Product[]
+  templates        Template[]
+  customizedOrders CustomizedOrder[]
+}
+
+model Product {
+  id               String    @id @default(uuid())
+  shopId           String
+  shopifyProductId String
+  shopifyVariantId String?
+  templateId       String?
+  isActive         Boolean   @default(true)
+  createdAt        DateTime  @default(now())
+
+  shop     Shop      @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  template Template? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+
+  @@index([shopId])
+  @@index([shopifyProductId])
+}
+
+model Template {
+  id           String   @id @default(uuid())
+  shopId       String
+  title        String
+  canvasWidth  Int      @default(1000)
+  canvasHeight Int      @default(1000)
+  printDpi     Int      @default(300)
+  layersJson   String   @default("[]")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  shop         Shop          @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  products     Product[]
+  optionGroups OptionGroup[]
+
+  @@index([shopId])
+}
+
+model OptionGroup {
+  id               String   @id @default(uuid())
+  templateId       String
+  name             String
+  displayType      String   // 'text_input', 'image_upload', 'swatch', 'dropdown', 'clipart'
+  position         Int      @default(0)
+  conditionalRules String   @default("{}")
+
+  template Template @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  options  Option[]
+
+  @@index([templateId])
+}
+
+model Option {
+  id         String @id @default(uuid())
+  groupId    String
+  label      String
+  priceExtra Float  @default(0.0)
+  metadata   String @default("{}")
+
+  group OptionGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@index([groupId])
+}
+
+model CustomizedOrder {
+  id                 String   @id @default(uuid())
+  shopId             String
+  shopifyOrderId     String
+  shopifyLineItemId  String
+  customerSelections String
+  previewImageUrl    String
+  printFileUrl       String?
+  fulfillmentStatus  String   @default("pending") // 'pending', 'processing', 'completed', 'failed'
+  createdAt          DateTime @default(now())
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@index([shopId])
+  @@index([shopifyOrderId])
+}
