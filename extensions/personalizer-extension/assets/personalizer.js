@@ -11,24 +11,89 @@
       this.fabricCanvas = null;
       this.activeTextLayer = null;
       this.activePhotoLayer = null;
+      this.isLoading = false;
+      this.pendingOpen = false;
     }
 
     async connectedCallback() {
-      this.productId = this.getAttribute("data-product-id");
+      this.productId = this.getAttribute("data-product-id") || "";
       this.shop = this.getAttribute("data-shop") || window.location.hostname;
       this.appUrl = this.getAttribute("data-app-url") || "";
       this.buttonText = this.getAttribute("data-button-text") || "🎨 Customize This Product";
       this.primaryColor = this.getAttribute("data-primary-color") || "#008060";
       this.autoOpen = this.getAttribute("data-auto-open") === "true";
+      this.isDesignMode = this.getAttribute("data-design-mode") === "true" || window.Shopify?.designMode === true;
 
       this.style.setProperty("--saitriq-primary", this.primaryColor);
+
+      // Bind to existing SSR button or create if missing
+      this.btn = this.querySelector(".saitriq-customize-btn");
+      if (!this.btn) {
+        this.renderTriggerButton();
+        this.btn = this.querySelector(".saitriq-customize-btn");
+      }
+
+      if (this.btn) {
+        this.btn.addEventListener("click", () => this.handleTriggerClick());
+      }
 
       await this.fetchTemplate();
     }
 
+    handleTriggerClick() {
+      if (this.templateData) {
+        this.openModal();
+      } else if (this.isLoading) {
+        this.pendingOpen = true;
+        if (this.btn) this.btn.textContent = "⏳ Loading studio...";
+      } else {
+        // Fallback demo template if offline or no template assigned yet
+        this.templateData = this.getDefaultPreviewTemplate();
+        this.openModal();
+      }
+    }
+
+    getDefaultPreviewTemplate() {
+      return {
+        id: "preview-default-tpl",
+        title: "Product Personalizer Preview",
+        canvasWidth: 800,
+        canvasHeight: 800,
+        printDpi: 300,
+        layers: [
+          {
+            type: "i-text",
+            text: "Your Custom Text",
+            fontSize: 40,
+            fontFamily: "Roboto",
+            fill: "#111111",
+            left: 240,
+            top: 240,
+            optionLabel: "Front Custom Text",
+            maxCharacters: 30,
+          },
+          {
+            type: "rect",
+            customType: "image_upload",
+            name: "Photo Upload Zone",
+            optionLabel: "Upload Photo / Logo",
+            left: 250,
+            top: 360,
+            width: 300,
+            height: 220,
+            fill: "rgba(0, 128, 96, 0.08)",
+            stroke: "#008060",
+            strokeWidth: 2,
+            strokeDashArray: [6, 6],
+          },
+        ],
+        optionGroups: [],
+      };
+    }
+
     async fetchTemplate() {
+      this.isLoading = true;
       try {
-        // Construct API URL: Support explicit URL, native Shopify App Proxy, or direct fallback
         let endpoint = "";
         if (this.appUrl) {
           const base = this.appUrl.replace(/\/$/, "");
@@ -48,41 +113,46 @@
           response = await fetch(endpoint, { headers: { Accept: "application/json" } }).catch(() => null);
         }
 
-        if (!response || !response.ok) {
-          console.warn("[Saitriq] Storefront endpoint returned status", response ? response.status : "network error");
-          return;
-        }
-
-        const data = await response.json();
-        if (data.hasCustomizer && data.template) {
-          this.templateData = data.template;
-          this.renderTriggerButton();
-          if (this.autoOpen) {
-            this.openModal();
+        if (response && response.ok) {
+          const data = await response.json().catch(() => null);
+          if (data && data.hasCustomizer && data.template) {
+            this.templateData = data.template;
           }
-        } else {
-          // No personalization configured for this product, remain hidden
-          this.innerHTML = "";
         }
       } catch (err) {
-        console.error("[Saitriq] Failed to fetch customization template:", err);
+        console.warn("[Saitriq] Storefront endpoint fetch exception:", err);
+      } finally {
+        this.isLoading = false;
+        if (!this.templateData && (this.isDesignMode || this.pendingOpen)) {
+          this.templateData = this.getDefaultPreviewTemplate();
+        }
+
+        if (this.btn) {
+          this.btn.textContent = this.buttonText;
+        }
+
+        if (this.pendingOpen || this.autoOpen) {
+          this.pendingOpen = false;
+          this.openModal();
+        }
       }
     }
 
     renderTriggerButton() {
       this.innerHTML = `
         <div class="saitriq-trigger-wrapper">
-          <button type="button" class="saitriq-customize-btn">
+          <button type="button" class="saitriq-customize-btn" style="background-color: ${this.primaryColor};">
             ${this.buttonText}
           </button>
         </div>
       `;
-
-      const btn = this.querySelector(".saitriq-customize-btn");
-      btn.addEventListener("click", () => this.openModal());
     }
 
     openModal() {
+      if (!this.templateData) {
+        this.templateData = this.getDefaultPreviewTemplate();
+      }
+
       let modal = document.getElementById("saitriq-personalizer-modal");
       if (!modal) {
         modal = this.createModalElement();
@@ -174,13 +244,13 @@
         this.fabricCanvas.dispose();
       }
 
-      const tpl = this.templateData;
+      const tpl = this.templateData || this.getDefaultPreviewTemplate();
       const targetWidth = Math.min(460, window.innerWidth - 60);
-      const scale = targetWidth / (tpl.canvasWidth || 1200);
+      const scale = targetWidth / (tpl.canvasWidth || 800);
 
       this.fabricCanvas = new window.fabric.Canvas(canvasEl, {
-        width: tpl.canvasWidth * scale,
-        height: tpl.canvasHeight * scale,
+        width: (tpl.canvasWidth || 800) * scale,
+        height: (tpl.canvasHeight || 800) * scale,
         backgroundColor: "#ffffff",
         selection: false,
       });
@@ -280,7 +350,7 @@
         }
 
         // Photo Upload Zone
-        if (obj.customType === "image_upload" || obj.name?.includes("Photo Upload")) {
+        if (obj.customType === "image_upload" || obj.name?.includes("Photo Upload") || obj.optionLabel?.includes("Photo")) {
           const group = document.createElement("div");
           group.className = "saitriq-control-group";
 
@@ -313,8 +383,8 @@
                 const fabricImg = new window.fabric.Image(imgEl, {
                   left: obj.left,
                   top: obj.top,
-                  scaleX: obj.width / imgEl.width,
-                  scaleY: obj.height / imgEl.height,
+                  scaleX: (obj.width || 300) / imgEl.width,
+                  scaleY: (obj.height || 200) / imgEl.height,
                   selectable: true,
                   name: "Customer Uploaded Image",
                 });
@@ -358,7 +428,7 @@
         // 2. Gather customer inputs for line item properties
         const properties = {
           _customization_id: customizationId,
-          _template_id: this.templateData.id,
+          _template_id: this.templateData?.id || "default",
           _customization_preview: previewDataUrl,
         };
 
@@ -411,7 +481,7 @@
           // Redirect to cart or trigger cart drawer
           window.location.href = "/cart";
         } else {
-          const errData = await cartResponse.json();
+          const errData = await cartResponse.json().catch(() => ({}));
           alert("Failed to add to cart: " + (errData.description || "Please try again."));
           if (submitBtn) {
             submitBtn.disabled = false;

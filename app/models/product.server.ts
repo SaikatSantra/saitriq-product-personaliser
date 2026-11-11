@@ -20,19 +20,45 @@ export async function getTemplateForProduct(shopifyDomain: string, rawProductId:
         { shopifyProductId: numericId },
       ],
     },
-    include: {
-      template: {
-        include: {
-          optionGroups: {
-            orderBy: { position: "asc" },
-            include: {
-              options: true,
-            },
-          },
-        },
-      },
+    select: {
+      templateId: true,
     },
   });
 
-  return product?.template || null;
+  const templateId = product?.templateId;
+
+  if (templateId) {
+    const template = await prisma.template.findUnique({
+      where: { id: templateId },
+      include: {
+        optionGroups: {
+          orderBy: { position: "asc" },
+          include: {
+            options: true,
+          },
+        },
+      },
+    });
+    if (template) return template;
+  }
+
+  // Fallback: If no explicit assignment, use the shop's most recent template so customization always works
+  const defaultTemplate = await prisma.template.findFirst({
+    where: {
+      shopId: shop.id,
+    },
+    include: {
+      optionGroups: {
+        orderBy: { position: "asc" },
+        include: {
+          options: true,
+        },
+      },
+    },
+    orderBy: {
+      updatedAt: "desc",
+    },
+  });
+
+  return defaultTemplate || null;
 }

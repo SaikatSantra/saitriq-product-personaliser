@@ -2,17 +2,23 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js" defer></script>
 <script src="{{ 'personalizer.js' | asset_url }}" defer></script>
 
-<div class="saitriq-personalizer-root" id="saitriq-personalizer-{{ block.id }}">
+<div class="saitriq-personalizer-root" id="saitriq-personalizer-{{ block.id }}" {{ block.shopify_attributes }}>
   <saitriq-personalizer
     data-product-id="{{ product.id }}"
     data-shop="{{ shop.permanent_domain }}"
-    data-button-text="{{ block.settings.button_text | default: 'Customize This Product' | escape }}"
+    data-button-text="{{ block.settings.button_text | default: '🎨 Customize This Product' | escape }}"
     data-primary-color="{{ block.settings.primary_color | default: '#008060' }}"
     data-auto-open="{{ block.settings.auto_open | default: false }}"
+    data-design-mode="{% if request.design_mode %}true{% else %}false{% endif %}"
   >
-    <!-- Placeholder while customizer script loads -->
-    <div class="saitriq-personalizer-loading" style="display: none;">
-      <span>Loading customizer...</span>
+    <div class="saitriq-trigger-wrapper">
+      <button
+        type="button"
+        class="saitriq-customize-btn"
+        style="background-color: {{ block.settings.primary_color | default: '#008060' }};"
+      >
+        {{ block.settings.button_text | default: '🎨 Customize This Product' | escape }}
+      </button>
     </div>
   </saitriq-personalizer>
 </div>
