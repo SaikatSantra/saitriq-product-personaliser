@@ -369,7 +369,7 @@ export default function TemplateStudio() {
   const handleSave = () => {
     if (!fabricCanvasRef.current) return;
 
-    const canvasJson = JSON.stringify(fabricCanvasRef.current.toJSON([
+    const canvasJson = JSON.stringify(fabricCanvasRef.current.toObject([
       "name",
       "customType",
       "isCustomerEditable",

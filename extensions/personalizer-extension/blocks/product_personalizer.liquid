@@ -4,6 +4,7 @@
   <saitriq-personalizer
     data-product-id="{{ target_product.id }}"
     data-shop="{{ shop.permanent_domain }}"
+    data-fabric-url="{{ 'fabric.min.js' | asset_url }}"
     data-button-text="{{ block.settings.button_text | default: '🎨 Customize This Product' | escape }}"
     data-primary-color="{{ block.settings.primary_color | default: '#008060' }}"
     data-auto-open="{{ block.settings.auto_open | default: false }}"

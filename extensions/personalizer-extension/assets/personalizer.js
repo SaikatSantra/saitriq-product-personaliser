@@ -19,6 +19,7 @@
       this.productId = this.getAttribute("data-product-id") || "";
       this.shop = this.getAttribute("data-shop") || window.location.hostname;
       this.appUrl = this.getAttribute("data-app-url") || "";
+      this.fabricUrl = this.getAttribute("data-fabric-url") || "";
       this.buttonText = this.getAttribute("data-button-text") || "🎨 Customize This Product";
       this.primaryColor = this.getAttribute("data-primary-color") || "#008060";
       this.autoOpen = this.getAttribute("data-auto-open") === "true";
@@ -62,7 +63,7 @@
         printDpi: 300,
         layers: [
           {
-            type: "i-text",
+            type: "IText",
             text: "Your Custom Text",
             fontSize: 40,
             fontFamily: "Roboto",
@@ -73,7 +74,7 @@
             maxCharacters: 30,
           },
           {
-            type: "rect",
+            type: "Rect",
             customType: "image_upload",
             name: "Photo Upload Zone",
             optionLabel: "Upload Photo / Logo",
@@ -231,18 +232,29 @@
     }
 
     async ensureFabric() {
-      if (window.fabric) return;
+      if (window.fabric && typeof window.fabric.Canvas === "function" && (window.fabric.FabricImage || window.fabric.Image)) {
+        return Promise.resolve();
+      }
+
+      const fabricUrl = this.fabricUrl || this.getAttribute("data-fabric-url") || "https://cdn.jsdelivr.net/npm/fabric@7.4.0/dist/index.min.js";
+
       return new Promise((resolve) => {
-        const existing = document.querySelector('script[src*="fabric"]');
-        if (existing) {
-          if (window.fabric) return resolve();
-          existing.addEventListener("load", resolve, { once: true });
-          return;
-        }
         const script = document.createElement("script");
-        script.src = "https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js";
+        script.src = fabricUrl;
         script.async = true;
-        script.onload = () => resolve();
+        script.onload = () => {
+          console.log("[Saitriq] Fabric 7 loaded successfully, version:", window.fabric?.version);
+          resolve();
+        };
+        script.onerror = () => {
+          console.warn("[Saitriq] Primary fabric script failed, falling back to jsdelivr CDN...");
+          const cdnScript = document.createElement("script");
+          cdnScript.src = "https://cdn.jsdelivr.net/npm/fabric@7.4.0/dist/index.min.js";
+          cdnScript.async = true;
+          cdnScript.onload = () => resolve();
+          cdnScript.onerror = () => resolve();
+          document.head.appendChild(cdnScript);
+        };
         document.head.appendChild(script);
       });
     }
@@ -250,7 +262,7 @@
     async initFabricCanvas() {
       await this.ensureFabric();
       if (!window.fabric) {
-        console.warn("[Saitriq] Waiting for Fabric.js to load from CDN...");
+        console.warn("[Saitriq] Waiting for Fabric.js to load...");
         setTimeout(() => this.initFabricCanvas(), 100);
         return;
       }
@@ -264,11 +276,13 @@
 
       const tpl = this.templateData || this.getDefaultPreviewTemplate();
       const targetWidth = Math.min(460, window.innerWidth - 60);
-      const scale = targetWidth / (tpl.canvasWidth || 800);
+      const canvasW = tpl.canvasWidth || 1200;
+      const canvasH = tpl.canvasHeight || 1200;
+      const scale = targetWidth / canvasW;
 
       this.fabricCanvas = new window.fabric.Canvas(canvasEl, {
-        width: (tpl.canvasWidth || 800) * scale,
-        height: (tpl.canvasHeight || 800) * scale,
+        width: canvasW * scale,
+        height: canvasH * scale,
         backgroundColor: "#ffffff",
         selection: false,
       });
@@ -276,19 +290,46 @@
       this.fabricCanvas.setZoom(scale);
 
       // Load layers
-      if (tpl.layers && tpl.layers.objects) {
-        this.fabricCanvas.loadFromJSON(tpl.layers, () => {
-          this.fabricCanvas.renderAll();
-          this.buildDynamicControls();
-        });
-      } else if (Array.isArray(tpl.layers) && tpl.layers.length > 0) {
-        this.fabricCanvas.loadFromJSON({ objects: tpl.layers }, () => {
-          this.fabricCanvas.renderAll();
-          this.buildDynamicControls();
-        });
-      } else {
-        this.buildDynamicControls();
+      try {
+        let layersToLoad = tpl.layers;
+        if (typeof layersToLoad === "string") {
+          try { layersToLoad = JSON.parse(layersToLoad); } catch(e) {}
+        }
+        if (Array.isArray(layersToLoad)) {
+          layersToLoad = { objects: layersToLoad };
+        }
+
+        if (layersToLoad && (layersToLoad.objects || Array.isArray(layersToLoad))) {
+          // Normalize object types for Fabric 7 compatibility (e.g. image -> Image, rect -> Rect)
+          if (Array.isArray(layersToLoad.objects)) {
+            layersToLoad.objects.forEach((o) => {
+              if (o && o.type) {
+                const lower = o.type.toLowerCase();
+                if (lower === "image") o.type = "Image";
+                else if (lower === "rect") o.type = "Rect";
+                else if (lower === "i-text" || lower === "itext") o.type = "IText";
+                else if (lower === "text") o.type = "Text";
+              }
+            });
+          }
+
+          // In Fabric 7 loadFromJSON returns a Promise
+          const res = this.fabricCanvas.loadFromJSON(layersToLoad);
+          if (res && typeof res.then === "function") {
+            await res;
+          }
+        }
+      } catch (err) {
+        console.error("[Saitriq] Error loading template layers:", err);
       }
+
+      if (this.fabricCanvas.requestRenderAll) {
+        this.fabricCanvas.requestRenderAll();
+      } else {
+        this.fabricCanvas.renderAll();
+      }
+
+      this.buildDynamicControls();
     }
 
     buildDynamicControls() {
@@ -299,10 +340,27 @@
       const objects = this.fabricCanvas.getObjects();
 
       let controlIndex = 1;
+      let hasTextControl = false;
+      let hasUploadControl = false;
+
+      // Find any dashed print area rect if present
+      const printRect = objects.find((o) => {
+        const type = (o.type || "").toLowerCase();
+        return type === "rect" && (o.strokeDashArray || o.customType === "image_upload" || o.name?.includes("Upload"));
+      });
 
       objects.forEach((obj) => {
+        const type = (obj.type || "").toLowerCase();
+
         // Customer Editable Text Layer
-        if (obj.type === "i-text" || obj.type === "text") {
+        if (
+          type === "i-text" ||
+          type === "itext" ||
+          type === "text" ||
+          obj.customType === "text" ||
+          (obj.text !== undefined && !obj.name?.toLowerCase().includes("mockup"))
+        ) {
+          hasTextControl = true;
           const group = document.createElement("div");
           group.className = "saitriq-control-group";
 
@@ -319,7 +377,11 @@
 
           input.addEventListener("input", (e) => {
             obj.set("text", e.target.value);
-            this.fabricCanvas.renderAll();
+            if (this.fabricCanvas.requestRenderAll) {
+              this.fabricCanvas.requestRenderAll();
+            } else {
+              this.fabricCanvas.renderAll();
+            }
           });
 
           // Font Selector
@@ -337,7 +399,11 @@
 
           fontSelect.addEventListener("change", (e) => {
             obj.set("fontFamily", e.target.value);
-            this.fabricCanvas.renderAll();
+            if (this.fabricCanvas.requestRenderAll) {
+              this.fabricCanvas.requestRenderAll();
+            } else {
+              this.fabricCanvas.renderAll();
+            }
           });
 
           // Color Swatches
@@ -353,7 +419,11 @@
             swatch.style.backgroundColor = col;
             swatch.addEventListener("click", () => {
               obj.set("fill", col);
-              this.fabricCanvas.renderAll();
+              if (this.fabricCanvas.requestRenderAll) {
+                this.fabricCanvas.requestRenderAll();
+              } else {
+                this.fabricCanvas.renderAll();
+              }
             });
             swatchesContainer.appendChild(swatch);
           });
@@ -368,13 +438,20 @@
         }
 
         // Photo Upload Zone
-        if (obj.customType === "image_upload" || obj.name?.includes("Photo Upload") || obj.optionLabel?.includes("Photo")) {
+        if (
+          obj.customType === "image_upload" ||
+          obj.name?.toLowerCase().includes("upload") ||
+          obj.name?.toLowerCase().includes("photo") ||
+          obj.optionLabel?.toLowerCase().includes("photo") ||
+          (type === "rect" && obj.strokeDashArray)
+        ) {
+          hasUploadControl = true;
           const group = document.createElement("div");
           group.className = "saitriq-control-group";
 
           const label = document.createElement("label");
           label.className = "saitriq-control-label";
-          label.textContent = obj.optionLabel || "Upload Your Photo";
+          label.textContent = obj.optionLabel || "Upload Your Photo / Logo";
 
           const dropzone = document.createElement("div");
           dropzone.className = "saitriq-upload-dropzone";
@@ -398,11 +475,18 @@
               const imgEl = new Image();
               imgEl.src = dataUrl;
               imgEl.onload = () => {
-                const fabricImg = new window.fabric.Image(imgEl, {
+                const ImageClass = window.fabric.FabricImage || window.fabric.Image;
+                const targetW = (obj.width || 300) * (obj.scaleX || 1);
+                const targetH = (obj.height || 300) * (obj.scaleY || 1);
+                const bestScale = Math.min(targetW / imgEl.width, targetH / imgEl.height);
+
+                const fabricImg = new ImageClass(imgEl, {
                   left: obj.left,
                   top: obj.top,
-                  scaleX: (obj.width || 300) / imgEl.width,
-                  scaleY: (obj.height || 200) / imgEl.height,
+                  originX: obj.originX || "center",
+                  originY: obj.originY || "center",
+                  scaleX: bestScale,
+                  scaleY: bestScale,
                   selectable: true,
                   name: "Customer Uploaded Image",
                 });
@@ -410,7 +494,12 @@
                 // Remove placeholder rect and add image
                 this.fabricCanvas.remove(obj);
                 this.fabricCanvas.add(fabricImg);
-                this.fabricCanvas.renderAll();
+                this.fabricCanvas.setActiveObject(fabricImg);
+                if (this.fabricCanvas.requestRenderAll) {
+                  this.fabricCanvas.requestRenderAll();
+                } else {
+                  this.fabricCanvas.renderAll();
+                }
               };
             };
             reader.readAsDataURL(file);
@@ -423,6 +512,157 @@
           controlIndex++;
         }
       });
+
+      // Fallback: If no editable text controls exist, provide Add Custom Text
+      if (!hasTextControl) {
+        const textGroup = document.createElement("div");
+        textGroup.className = "saitriq-control-group";
+
+        const label = document.createElement("label");
+        label.className = "saitriq-control-label";
+        label.textContent = "✏️ Add Custom Text";
+
+        const input = document.createElement("input");
+        input.type = "text";
+        input.className = "saitriq-text-input";
+        input.placeholder = "Type your custom text here...";
+
+        let activeAddedText = null;
+
+        input.addEventListener("input", (e) => {
+          const val = e.target.value;
+          const ITextClass = window.fabric.IText || window.fabric.Text;
+          if (!activeAddedText) {
+            const targetLeft = printRect ? printRect.left : 600;
+            const targetTop = printRect ? (printRect.top - 80) : 400;
+            activeAddedText = new ITextClass(val, {
+              left: targetLeft,
+              top: targetTop,
+              originX: "center",
+              originY: "center",
+              fontFamily: "Roboto",
+              fontSize: 48,
+              fill: "#111111",
+              name: "Customer Text",
+              optionLabel: "Custom Text",
+            });
+            this.fabricCanvas.add(activeAddedText);
+            this.fabricCanvas.setActiveObject(activeAddedText);
+          } else {
+            activeAddedText.set("text", val);
+          }
+          if (this.fabricCanvas.requestRenderAll) {
+            this.fabricCanvas.requestRenderAll();
+          } else {
+            this.fabricCanvas.renderAll();
+          }
+        });
+
+        // Font selector
+        const fontSelect = document.createElement("select");
+        fontSelect.className = "saitriq-select-input";
+        fontSelect.style.marginTop = "6px";
+        ["Roboto", "Montserrat", "Playfair Display", "Pacifico", "Oswald"].forEach((f) => {
+          const opt = document.createElement("option");
+          opt.value = f;
+          opt.textContent = f;
+          fontSelect.appendChild(opt);
+        });
+        fontSelect.addEventListener("change", (e) => {
+          if (activeAddedText) {
+            activeAddedText.set("fontFamily", e.target.value);
+            this.fabricCanvas.requestRenderAll ? this.fabricCanvas.requestRenderAll() : this.fabricCanvas.renderAll();
+          }
+        });
+
+        // Color swatches
+        const swatchesContainer = document.createElement("div");
+        swatchesContainer.className = "saitriq-swatches-grid";
+        swatchesContainer.style.marginTop = "6px";
+        ["#111111", "#ffffff", "#d72c0d", "#008060", "#005bd3", "#ffc453"].forEach((col) => {
+          const swatch = document.createElement("button");
+          swatch.type = "button";
+          swatch.className = "saitriq-color-swatch";
+          swatch.style.backgroundColor = col;
+          swatch.addEventListener("click", () => {
+            if (activeAddedText) {
+              activeAddedText.set("fill", col);
+              this.fabricCanvas.requestRenderAll ? this.fabricCanvas.requestRenderAll() : this.fabricCanvas.renderAll();
+            }
+          });
+          swatchesContainer.appendChild(swatch);
+        });
+
+        textGroup.appendChild(label);
+        textGroup.appendChild(input);
+        textGroup.appendChild(fontSelect);
+        textGroup.appendChild(swatchesContainer);
+        container.appendChild(textGroup);
+      }
+
+      // Fallback: If no upload controls exist, provide Upload Photo / Logo
+      if (!hasUploadControl) {
+        const uploadGroup = document.createElement("div");
+        uploadGroup.className = "saitriq-control-group";
+
+        const label = document.createElement("label");
+        label.className = "saitriq-control-label";
+        label.textContent = "📷 Upload Photo / Logo";
+
+        const dropzone = document.createElement("div");
+        dropzone.className = "saitriq-upload-dropzone";
+        dropzone.innerHTML = `
+          <div class="saitriq-upload-icon">📷</div>
+          <p><strong>Click to browse</strong> or drag & drop photo</p>
+          <p style="font-size: 11px; margin-top: 4px;">Supports JPG, PNG, WEBP</p>
+          <input type="file" accept="image/*" style="display: none;" />
+        `;
+
+        const fileInput = dropzone.querySelector("input");
+        dropzone.addEventListener("click", () => fileInput.click());
+
+        fileInput.addEventListener("change", (e) => {
+          const file = e.target.files?.[0];
+          if (!file) return;
+
+          const reader = new FileReader();
+          reader.onload = (fEvent) => {
+            const dataUrl = fEvent.target?.result;
+            const imgEl = new Image();
+            imgEl.src = dataUrl;
+            imgEl.onload = () => {
+              const ImageClass = window.fabric.FabricImage || window.fabric.Image;
+              const targetLeft = printRect ? printRect.left : 600;
+              const targetTop = printRect ? printRect.top : 600;
+              const targetW = printRect ? (printRect.width * (printRect.scaleX || 1)) : 300;
+
+              const fabricImg = new ImageClass(imgEl, {
+                left: targetLeft,
+                top: targetTop,
+                originX: "center",
+                originY: "center",
+                scaleX: targetW / imgEl.width,
+                scaleY: targetW / imgEl.width,
+                selectable: true,
+                name: "Customer Uploaded Image",
+              });
+
+              this.fabricCanvas.add(fabricImg);
+              this.fabricCanvas.setActiveObject(fabricImg);
+              if (this.fabricCanvas.requestRenderAll) {
+                this.fabricCanvas.requestRenderAll();
+              } else {
+                this.fabricCanvas.renderAll();
+              }
+            };
+          };
+          reader.readAsDataURL(file);
+        });
+
+        uploadGroup.appendChild(label);
+        uploadGroup.appendChild(dropzone);
+        container.appendChild(uploadGroup);
+      }
     }
 
     async handleAddToCart() {
@@ -452,7 +692,8 @@
 
         const objects = this.fabricCanvas.getObjects();
         objects.forEach((obj, idx) => {
-          if (obj.type === "i-text" || obj.type === "text") {
+          const type = (obj.type || "").toLowerCase();
+          if (type.includes("text") || obj.text) {
             properties[obj.optionLabel || `Custom Text ${idx + 1}`] = obj.text;
           }
         });
