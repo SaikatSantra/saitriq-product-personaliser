@@ -28,16 +28,28 @@
 
     async fetchTemplate() {
       try {
-        // Construct API URL
-        const base = this.appUrl ? this.appUrl.replace(/\/$/, "") : "";
-        const endpoint = `${base}/api/storefront/template?shop=${encodeURIComponent(this.shop)}&productId=${encodeURIComponent(this.productId)}`;
+        // Construct API URL: Support explicit URL, native Shopify App Proxy, or direct fallback
+        let endpoint = "";
+        if (this.appUrl) {
+          const base = this.appUrl.replace(/\/$/, "");
+          endpoint = `${base}/api/storefront/template?shop=${encodeURIComponent(this.shop)}&productId=${encodeURIComponent(this.productId)}`;
+        } else {
+          // Native Shopify App Proxy path (same-origin, zero config)
+          endpoint = `/apps/personalizer/template?shop=${encodeURIComponent(this.shop)}&productId=${encodeURIComponent(this.productId)}`;
+        }
 
-        const response = await fetch(endpoint, {
+        let response = await fetch(endpoint, {
           headers: { Accept: "application/json" },
-        });
+        }).catch(() => null);
 
-        if (!response.ok) {
-          console.warn("[Saitriq] Storefront endpoint returned", response.status);
+        // Fallback to direct relative path if proxy not resolved
+        if ((!response || !response.ok) && !this.appUrl) {
+          endpoint = `/api/storefront/template?shop=${encodeURIComponent(this.shop)}&productId=${encodeURIComponent(this.productId)}`;
+          response = await fetch(endpoint, { headers: { Accept: "application/json" } }).catch(() => null);
+        }
+
+        if (!response || !response.ok) {
+          console.warn("[Saitriq] Storefront endpoint returned status", response ? response.status : "network error");
           return;
         }
 
