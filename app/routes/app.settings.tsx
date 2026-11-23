@@ -177,15 +177,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
   } catch {}
 
-  const defaultDpi = parseInt(formData.get("defaultDpi") as string) || 300;
-  const primaryColor = (formData.get("primaryColor") as string)?.trim() || "#008060";
-
   // Preserve existing settings while cleaning out obsolete keys
   const shop = await ensureShop(session.shop);
   let currentSettings: any = {};
   try {
     currentSettings = JSON.parse(shop.settings || "{}");
   } catch {}
+
+  const defaultDpi = parseInt(formData.get("defaultDpi") as string) || currentSettings.defaultDpi || 300;
+  const primaryColor = (formData.get("primaryColor") as string)?.trim() || currentSettings.primaryColor || "#008060";
 
   const newSettings = {
     ...currentSettings,
@@ -214,11 +214,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 };
 
 export default function SettingsPage() {
-  const { settings } = useLoaderData<typeof loader>();
+  const { shop, settings } = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
 
   const [defaultDpi, setDefaultDpi] = useState(settings.defaultDpi || 300);
-  const [primaryColor, setPrimaryColor] = useState(settings.primaryColor || "#008060");
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -308,7 +307,6 @@ export default function SettingsPage() {
     fetcher.submit(
       {
         defaultDpi: defaultDpi.toString(),
-        primaryColor,
         languages: JSON.stringify(languages),
       },
       { method: "POST" },
@@ -357,15 +355,6 @@ export default function SettingsPage() {
         (activeLang.strings[s.key] || "").toLowerCase().includes(q),
     );
   }, [searchFilter, activeLang.strings]);
-
-  const presetColors = [
-    { label: "Shopify Emerald", hex: "#008060" },
-    { label: "Royal Blue", hex: "#2563eb" },
-    { label: "Modern Black", hex: "#111111" },
-    { label: "Crimson Red", hex: "#dc2626" },
-    { label: "Elegant Purple", hex: "#9333ea" },
-    { label: "Sunset Amber", hex: "#d97706" },
-  ];
 
   return (
     <s-page heading="Settings">
@@ -658,7 +647,7 @@ export default function SettingsPage() {
 
         {/* RIGHT COLUMN: Button Styling & Production Specs */}
         <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-          {/* Storefront Button Appearance Card */}
+          {/* Storefront Button Design Card */}
           <div
             style={{
               background: "#ffffff",
@@ -668,111 +657,59 @@ export default function SettingsPage() {
               boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
             }}
           >
-            <h3 style={{ margin: "0 0 4px", fontSize: "16px", fontWeight: 700, color: "#0f172a" }}>
-              🎨 Storefront Button Styling
-            </h3>
-            <p style={{ margin: "0 0 16px", fontSize: "13px", color: "#64748b" }}>
-              Control the primary accent color and preview how the trigger button renders on your product pages.
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
+              <span style={{ fontSize: "20px" }}>🎨</span>
+              <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: "#0f172a" }}>
+                Storefront Button Design
+              </h3>
+            </div>
+            <p style={{ margin: "0 0 16px", fontSize: "13px", color: "#64748b", lineHeight: 1.5 }}>
+              Button typography, colors, borders, corner radius, padding, margins, and width are configured natively in your <strong>Shopify Theme Editor</strong> under the <strong>Product Personalizer App Block</strong>.
             </p>
 
-            {/* Live Button Preview Mockup */}
             <div
               style={{
-                background: "#f8fafc",
+                background: "#f0fdf4",
                 borderRadius: "10px",
-                border: "1px solid #e2e8f0",
-                padding: "20px",
+                border: "1px solid #bbf7d0",
+                padding: "16px",
                 marginBottom: "16px",
-                textAlign: "center",
               }}
             >
-              <div style={{ fontSize: "11px", color: "#64748b", fontWeight: 700, textTransform: "uppercase", marginBottom: "10px" }}>
-                Live Button Preview
+              <div style={{ fontSize: "12px", color: "#166534", fontWeight: 600, marginBottom: "4px" }}>
+                ✓ Native Theme Editor Integration
               </div>
-              <button
-                type="button"
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: "8px",
-                  width: "100%",
-                  padding: "14px 20px",
-                  fontSize: "14px",
-                  fontWeight: 700,
-                  color: "#ffffff",
-                  backgroundColor: primaryColor,
-                  border: "none",
-                  borderRadius: "8px",
-                  cursor: "default",
-                  boxShadow: "0 3px 8px rgba(0,0,0,0.12)",
-                }}
-              >
-                {activeLang.strings["button_text"] || "🎨 Customize This Product"}
-              </button>
+              <p style={{ margin: 0, fontSize: "12px", color: "#15803d", lineHeight: 1.4 }}>
+                Edit button appearance with live theme previews. Changes instantly adapt to your active storefront theme and mobile viewports.
+              </p>
             </div>
 
-            {/* Accent Color Picker & Swatches */}
-            <div style={{ marginBottom: "14px" }}>
-              <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: "#475569", marginBottom: "6px" }}>
-                Primary Accent Color
-              </label>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "10px" }}>
-                <input
-                  type="color"
-                  value={primaryColor}
-                  onChange={(e) => setPrimaryColor(e.target.value)}
-                  style={{ width: "42px", height: "36px", border: "none", borderRadius: "6px", cursor: "pointer" }}
-                />
-                <input
-                  type="text"
-                  value={primaryColor}
-                  onChange={(e) => setPrimaryColor(e.target.value)}
-                  style={{
-                    flex: 1,
-                    padding: "8px 10px",
-                    borderRadius: "6px",
-                    border: "1px solid #cbd5e1",
-                    fontSize: "13px",
-                    fontFamily: "monospace",
-                  }}
-                />
-              </div>
-
-              {/* Preset Swatches */}
-              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                {presetColors.map((col) => (
-                  <button
-                    key={col.hex}
-                    type="button"
-                    onClick={() => setPrimaryColor(col.hex)}
-                    title={col.label}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "6px",
-                      padding: "4px 8px",
-                      borderRadius: "6px",
-                      border: primaryColor.toLowerCase() === col.hex.toLowerCase() ? "2px solid #0f172a" : "1px solid #cbd5e1",
-                      background: "#fff",
-                      fontSize: "11px",
-                      fontWeight: 600,
-                      cursor: "pointer",
-                    }}
-                  >
-                    <span
-                      style={{
-                        width: "12px",
-                        height: "12px",
-                        borderRadius: "50%",
-                        backgroundColor: col.hex,
-                      }}
-                    />
-                    <span>{col.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
+            <a
+              href={`https://${shop}/admin/themes/current/editor`}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "8px",
+                padding: "10px 16px",
+                borderRadius: "8px",
+                background: "#0f172a",
+                color: "#ffffff",
+                fontSize: "13px",
+                fontWeight: 600,
+                textDecoration: "none",
+                transition: "background 0.15s ease",
+              }}
+            >
+              <span>Customize in Theme Editor</span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                <polyline points="15 3 21 3 21 9"/>
+                <line x1="10" y1="14" x2="21" y2="3"/>
+              </svg>
+            </a>
           </div>
 
           {/* Production Print Specifications Card */}

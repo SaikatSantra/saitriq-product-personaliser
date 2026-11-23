@@ -17,9 +17,50 @@
   {% assign default_btn_text = '🎨 Customize This Product' %}
 {% endif %}
 {% assign btn_text = block.settings.button_text | default: default_btn_text %}
-{% assign btn_color = block.settings.primary_color | default: '#008060' %}
 
 <div class="saitriq-personalizer-root" id="saitriq-personalizer-{{ block.id }}" {{ block.shopify_attributes }}{% unless request.design_mode %} style="display: none;"{% endunless %}>
+  <style>
+    #saitriq-personalizer-{{ block.id }} .saitriq-customize-btn {
+      background-color: {{ block.settings.button_bg_color | default: '#008060' }};
+      color: {{ block.settings.button_text_color | default: '#ffffff' }};
+      border: {{ block.settings.button_border_width | default: 0 }}px solid {{ block.settings.button_border_color | default: '#008060' }};
+      border-radius: {{ block.settings.button_border_radius | default: 8 }}px;
+      font-size: {{ block.settings.button_font_size | default: 15 }}px;
+      font-weight: {{ block.settings.button_font_weight | default: '600' }};
+      padding: {{ block.settings.button_padding_vertical | default: 14 }}px {{ block.settings.button_padding_horizontal | default: 24 }}px;
+      margin-top: {{ block.settings.button_margin_top | default: 8 }}px;
+      margin-bottom: {{ block.settings.button_margin_bottom | default: 12 }}px;
+      {% if block.settings.button_full_width %}
+        width: 100%;
+        display: flex;
+      {% else %}
+        width: auto;
+        display: inline-flex;
+      {% endif %}
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      text-align: center;
+      text-decoration: none;
+      line-height: 1.2;
+      letter-spacing: 0.2px;
+      {% if block.settings.button_shadow %}
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+      {% else %}
+        box-shadow: none;
+      {% endif %}
+      transition: all 0.2s ease-in-out;
+    }
+    #saitriq-personalizer-{{ block.id }} .saitriq-customize-btn:hover {
+      background-color: {{ block.settings.button_hover_bg_color | default: '#006e52' }};
+      color: {{ block.settings.button_hover_text_color | default: '#ffffff' }};
+      {% if block.settings.button_shadow %}
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+        transform: translateY(-1px);
+      {% endif %}
+    }
+  </style>
+
   <saitriq-personalizer
     data-product-id="{{ current_product.id }}"
     data-product-handle="{{ current_product.handle }}"
@@ -29,7 +70,7 @@
     data-app-url="{{ block.settings.app_url | default: '' }}"
     data-fabric-url="{{ 'fabric.min.js' | asset_url }}"
     data-button-text="{{ btn_text | escape }}"
-    data-primary-color="{{ btn_color | escape }}"
+    data-primary-color="{{ block.settings.button_bg_color | default: '#008060' | escape }}"
     data-auto-open="{{ block.settings.auto_open | default: false }}"
     data-design-mode="{% if request.design_mode %}true{% else %}false{% endif %}"
     data-locale="{{ request.locale.iso_code | downcase }}"
@@ -100,14 +141,79 @@
         }
       </script>
     {% endif %}
+
+    <!-- Trigger Button -->
     <div class="saitriq-trigger-wrapper">
       <button
         type="button"
-        class="saitriq-customize-btn"
-        style="background-color: {{ btn_color | escape }};"
+        class="saitriq-customize-btn button"
       >
         {{ btn_text | escape }}
       </button>
+    </div>
+
+    <!-- Product Personalizer Modal (Rendered in Liquid) -->
+    <div id="saitriq-personalizer-modal" class="saitriq-modal-backdrop" aria-hidden="true" role="dialog" aria-modal="true">
+      <div class="saitriq-modal-window">
+        <!-- Modal Header -->
+        <div class="saitriq-modal-header">
+          <div class="saitriq-header-titles">
+            <h3>{{ 'personalizer.modal_title' | t | default: 'Customize Your Design' }}</h3>
+            <p class="saitriq-modal-subtitle">
+              {% if current_product.title %}{{ current_product.title | escape }} &bull; {% endif %}{{ 'personalizer.modal_subtitle' | t | default: 'Personalize text, upload photos & preview live' }}
+            </p>
+          </div>
+          <button type="button" class="saitriq-close-btn" aria-label="{{ 'personalizer.cancel' | t | default: 'Close' }}">&times;</button>
+        </div>
+
+        <!-- Modal Body: Split Canvas & Dynamic Controls -->
+        <div class="saitriq-modal-body">
+          <!-- Canvas Viewport -->
+          <div class="saitriq-canvas-viewport">
+            <!-- Front / Back Multi-Side Switcher -->
+            <div class="saitriq-side-switcher">
+              <button type="button" class="saitriq-side-tab is-active" data-side="front">
+                <span class="saitriq-side-tab-icon">👕</span>
+                <span>{{ 'personalizer.front_side' | t | default: 'Front Side' }}</span>
+              </button>
+              <button type="button" class="saitriq-side-tab" data-side="back">
+                <span class="saitriq-side-tab-icon">🔄</span>
+                <span>{{ 'personalizer.back_side' | t | default: 'Back Side' }}</span>
+              </button>
+            </div>
+
+            <!-- Canvas Stage -->
+            <div class="saitriq-canvas-stage">
+              <canvas id="saitriq-storefront-canvas"></canvas>
+            </div>
+          </div>
+
+          <!-- Controls Panel -->
+          <div class="saitriq-controls-panel">
+            <div id="saitriq-dynamic-controls" style="display: flex; flex-direction: column; gap: 14px; flex: 1;">
+              <!-- Dynamic template layer inputs (text, photo uploaders) mounted here by JS -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Modal Footer Actions -->
+        <div class="saitriq-modal-footer">
+          <div class="saitriq-preview-info">
+            <span class="saitriq-footer-dpi-badge" style="display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: #166534; background: #dcfce7; padding: 3px 8px; border-radius: 6px; font-weight: 600;">
+              ✓ 300 DPI High-Res Output
+            </span>
+          </div>
+          <div style="display: flex; gap: 10px; align-items: center;">
+            <button type="button" class="saitriq-close-btn-secondary">
+              {{ 'personalizer.cancel' | t | default: 'Cancel' }}
+            </button>
+            <button type="button" class="saitriq-submit-cart-btn" style="background-color: {{ block.settings.button_bg_color | default: '#008060' }};">
+              <span>{{ 'personalizer.add_to_cart' | t | default: 'Add to Cart with Design' }}</span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   </saitriq-personalizer>
 </div>
@@ -125,16 +231,155 @@
       "autofill": true
     },
     {
+      "type": "header",
+      "content": "Button Content & Typography"
+    },
+    {
       "type": "text",
       "id": "button_text",
-      "label": "Customize Button Text",
+      "label": "Button Text",
       "default": "🎨 Customize This Product"
     },
     {
+      "type": "range",
+      "id": "button_font_size",
+      "label": "Font Size",
+      "min": 12,
+      "max": 24,
+      "step": 1,
+      "unit": "px",
+      "default": 15
+    },
+    {
+      "type": "select",
+      "id": "button_font_weight",
+      "label": "Font Weight",
+      "options": [
+        { "value": "400", "label": "Normal (400)" },
+        { "value": "500", "label": "Medium (500)" },
+        { "value": "600", "label": "Semi-Bold (600)" },
+        { "value": "700", "label": "Bold (700)" },
+        { "value": "800", "label": "Extra Bold (800)" }
+      ],
+      "default": "600"
+    },
+    {
+      "type": "header",
+      "content": "Button Colors"
+    },
+    {
       "type": "color",
-      "id": "primary_color",
-      "label": "Primary Accent Color",
+      "id": "button_bg_color",
+      "label": "Background Color",
       "default": "#008060"
+    },
+    {
+      "type": "color",
+      "id": "button_text_color",
+      "label": "Text Color",
+      "default": "#ffffff"
+    },
+    {
+      "type": "color",
+      "id": "button_hover_bg_color",
+      "label": "Hover Background Color",
+      "default": "#006e52"
+    },
+    {
+      "type": "color",
+      "id": "button_hover_text_color",
+      "label": "Hover Text Color",
+      "default": "#ffffff"
+    },
+    {
+      "type": "header",
+      "content": "Button Border & Shape"
+    },
+    {
+      "type": "color",
+      "id": "button_border_color",
+      "label": "Border Color",
+      "default": "#008060"
+    },
+    {
+      "type": "range",
+      "id": "button_border_width",
+      "label": "Border Width",
+      "min": 0,
+      "max": 6,
+      "step": 1,
+      "unit": "px",
+      "default": 0
+    },
+    {
+      "type": "range",
+      "id": "button_border_radius",
+      "label": "Corner Radius",
+      "min": 0,
+      "max": 40,
+      "step": 1,
+      "unit": "px",
+      "default": 8
+    },
+    {
+      "type": "header",
+      "content": "Button Spacing & Size"
+    },
+    {
+      "type": "range",
+      "id": "button_padding_vertical",
+      "label": "Vertical Padding",
+      "min": 6,
+      "max": 26,
+      "step": 1,
+      "unit": "px",
+      "default": 14
+    },
+    {
+      "type": "range",
+      "id": "button_padding_horizontal",
+      "label": "Horizontal Padding",
+      "min": 10,
+      "max": 50,
+      "step": 2,
+      "unit": "px",
+      "default": 24
+    },
+    {
+      "type": "checkbox",
+      "id": "button_full_width",
+      "label": "Make button full width",
+      "default": true
+    },
+    {
+      "type": "checkbox",
+      "id": "button_shadow",
+      "label": "Enable button drop shadow",
+      "default": true
+    },
+    {
+      "type": "range",
+      "id": "button_margin_top",
+      "label": "Margin Top",
+      "min": 0,
+      "max": 40,
+      "step": 2,
+      "unit": "px",
+      "default": 8
+    },
+    {
+      "type": "range",
+      "id": "button_margin_bottom",
+      "label": "Margin Bottom",
+      "min": 0,
+      "max": 40,
+      "step": 2,
+      "unit": "px",
+      "default": 12
+    },
+    {
+      "type": "header",
+      "content": "Behavior & Configuration"
     },
     {
       "type": "checkbox",
