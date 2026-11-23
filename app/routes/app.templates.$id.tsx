@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useMemo } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { useLoaderData, useFetcher, useNavigate, Link } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
@@ -18,15 +18,16 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     throw new Response("Template not found", { status: 404 });
   }
 
-  // Fetch shop products with images and variants for assignment & mockup sync
+  // Fetch shop products with images, variants, and handle for assignment & live preview
   const response = await admin.graphql(
     `#graphql
       query getProducts {
-        products(first: 50) {
+        products(first: 60) {
           edges {
             node {
               id
               title
+              handle
               featuredImage {
                 url
               }
@@ -37,7 +38,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
                   }
                 }
               }
-              variants(first: 10) {
+              variants(first: 20) {
                 edges {
                   node {
                     id
@@ -58,7 +59,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     variants: e.node.variants?.edges?.map((vEdge: any) => vEdge.node) || [],
   })) || [];
 
-  return { template, shopProducts };
+  return { template, shopProducts, shop: session.shop };
 };
 
 export const action = async ({ request, params }: ActionFunctionArgs) => {
@@ -68,20 +69,12 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
   const intent = formData.get("intent");
 
   if (intent === "save_template") {
-    const title = formData.get("title") as string;
+    const title = (formData.get("title") as string)?.trim() || "Untitled Template";
     const canvasWidth = parseInt(formData.get("canvasWidth") as string) || 1200;
     const canvasHeight = parseInt(formData.get("canvasHeight") as string) || 1200;
     const printDpi = parseInt(formData.get("printDpi") as string) || 300;
     const layersJson = formData.get("layersJson") as string;
-    const optionGroupsRaw = formData.get("optionGroups") as string;
     const productIdsRaw = formData.get("assignedProductIds") as string;
-
-    let optionGroups = [];
-    try {
-      optionGroups = JSON.parse(optionGroupsRaw || "[]");
-    } catch {
-      optionGroups = [];
-    }
 
     let assignedProductIds: string[] = [];
     try {
@@ -96,20 +89,19 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
       canvasHeight,
       printDpi,
       layersJson,
-      optionGroups,
     });
 
     await assignProductsToTemplate(templateId, session.shop, assignedProductIds);
 
-    return { success: true, message: "Template saved successfully!" };
+    return { success: true, message: "Template and product assignments saved successfully!" };
   }
 
   if (intent === "create_sample_products") {
     const { admin } = await authenticate.admin(request);
     const sampleProducts = [
-      { title: "Custom Classic T-Shirt" },
-      { title: "Custom Ceramic Coffee Mug" },
-      { title: "Custom Canvas Wall Art" },
+      { title: "Custom Classic Unisex T-Shirt" },
+      { title: "Personalized Ceramic Coffee Mug" },
+      { title: "Custom Printed Canvas Wall Art" },
     ];
 
     const createdIds: string[] = [];
@@ -152,1048 +144,1046 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
       await assignProductsToTemplate(templateId, session.shop, createdIds);
     }
 
-    return { success: true, message: "Sample customizable products created & linked!" };
+    return { success: true, message: "Sample customizable products created & assigned!" };
   }
 
   return { success: false };
 };
 
-export default function TemplateStudio() {
-  const { template, shopProducts } = useLoaderData<typeof loader>();
+export default function TemplateSetup() {
+  const { template, shopProducts, shop } = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
+  const navigate = useNavigate();
   const shopify = useAppBridge();
 
-  // Template state
+  // Parse existing template configuration from layersJson
+  const initialConfig = useMemo(() => {
+    let parsed: any = {};
+    try {
+      parsed = JSON.parse(template.layersJson || "{}");
+    } catch {
+      parsed = {};
+    }
+
+    const s = parsed.settings || {};
+    return {
+      enableText: s.enableText !== undefined ? Boolean(s.enableText) : true,
+      defaultText: s.defaultText || "Your Custom Text",
+      defaultFont: s.defaultFont || "Roboto",
+      defaultColor: s.defaultColor || "#111111",
+      maxCharacters: s.maxCharacters || 30,
+      enableUpload: s.enableUpload !== undefined ? Boolean(s.enableUpload) : true,
+      enableFront: s.enableFront !== undefined ? Boolean(s.enableFront) : true,
+      enableBack: s.enableBack !== undefined ? Boolean(s.enableBack) : true,
+      customFrontMockup: s.customFrontMockup || "",
+      customBackMockup: s.customBackMockup || "",
+    };
+  }, [template.layersJson]);
+
+  // Form states
   const [title, setTitle] = useState(template.title);
   const [canvasWidth, setCanvasWidth] = useState(template.canvasWidth || 1200);
   const [canvasHeight, setCanvasHeight] = useState(template.canvasHeight || 1200);
   const [printDpi, setPrintDpi] = useState(template.printDpi || 300);
+
+  // Personalization settings
+  const [enableText, setEnableText] = useState(initialConfig.enableText);
+  const [defaultText, setDefaultText] = useState(initialConfig.defaultText);
+  const [defaultFont, setDefaultFont] = useState(initialConfig.defaultFont);
+  const [defaultColor, setDefaultColor] = useState(initialConfig.defaultColor);
+  const [maxCharacters, setMaxCharacters] = useState(initialConfig.maxCharacters);
+
+  const [enableUpload, setEnableUpload] = useState(initialConfig.enableUpload);
+  const [enableFront, setEnableFront] = useState(initialConfig.enableFront);
+  const [enableBack, setEnableBack] = useState(initialConfig.enableBack);
+  const [customFrontMockup, setCustomFrontMockup] = useState(initialConfig.customFrontMockup);
+  const [customBackMockup, setCustomBackMockup] = useState(initialConfig.customBackMockup);
+
+  // Assigned product IDs
   const [assignedProductIds, setAssignedProductIds] = useState<string[]>(
     template.products.map((p: any) => p.shopifyProductId),
   );
 
-  // Layers & Canvas state
-  const canvasContainerRef = useRef<HTMLDivElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const fabricCanvasRef = useRef<any>(null);
-  const [activeSide, setActiveSide] = useState<"front" | "back">("front");
-  const sidesDataRef = useRef<{ front: any; back: any }>({
-    front: null,
-    back: null,
-  });
-  const [activeLayer, setActiveLayer] = useState<any>(null);
-  const [layersList, setLayersList] = useState<any[]>([]);
+  // Product Selection Modal state
   const [showProductModal, setShowProductModal] = useState(false);
   const [productSearch, setProductSearch] = useState("");
-  const [zoomLevel, setZoomLevel] = useState(0.45);
+  const [tempSelectedIds, setTempSelectedIds] = useState<string[]>(assignedProductIds);
 
-  // Matched assigned products
-  const assignedProductsList = shopProducts.filter((p: any) => assignedProductIds.includes(p.id));
+  // Filtered assigned products list
+  const assignedProductsList = useMemo(() => {
+    return shopProducts.filter((p: any) => assignedProductIds.includes(p.id));
+  }, [shopProducts, assignedProductIds]);
 
-  // Initialize Fabric Canvas on Client
-  useEffect(() => {
-    let isMounted = true;
+  // Filtered modal products
+  const modalFilteredProducts = useMemo(() => {
+    if (!productSearch.trim()) return shopProducts;
+    const q = productSearch.toLowerCase().trim();
+    return shopProducts.filter((p: any) => p.title.toLowerCase().includes(q));
+  }, [shopProducts, productSearch]);
 
-    async function initFabric() {
-      if (typeof window === "undefined" || !canvasRef.current) return;
+  const isSaving = fetcher.state === "submitting" || fetcher.state === "loading";
 
-      const fabricModule = await import("fabric");
-      const { Canvas } = fabricModule;
-
-      if (!isMounted) return;
-
-      if (fabricCanvasRef.current) {
-        fabricCanvasRef.current.dispose();
-      }
-
-      const canvas = new Canvas(canvasRef.current, {
-        width: canvasWidth * zoomLevel,
-        height: canvasHeight * zoomLevel,
-        backgroundColor: "#ffffff",
-        preserveObjectStacking: true,
-      });
-
-      // Scale context according to zoom
-      canvas.setZoom(zoomLevel);
-
-      // Parse sides data if not already cached in ref
-      if (!sidesDataRef.current.front && !sidesDataRef.current.back) {
-        if (template.layersJson && template.layersJson !== "[]") {
-          try {
-            const parsed = JSON.parse(template.layersJson);
-            if (parsed.sides) {
-              sidesDataRef.current = {
-                front: parsed.sides.front || { objects: [] },
-                back: parsed.sides.back || { objects: [] },
-              };
-            } else {
-              sidesDataRef.current = {
-                front: parsed.objects ? parsed : { objects: Array.isArray(parsed) ? parsed : [] },
-                back: { objects: [] },
-              };
-            }
-          } catch (e) {
-            console.error("Failed to parse layers JSON", e);
-            sidesDataRef.current = { front: { objects: [] }, back: { objects: [] } };
-          }
-        } else {
-          sidesDataRef.current = { front: { objects: [] }, back: { objects: [] } };
-        }
-      }
-
-      // Load active side layers if present
-      const currentSideLayers = sidesDataRef.current[activeSide] || { objects: [] };
-      if (currentSideLayers.objects && currentSideLayers.objects.length > 0) {
-        canvas.loadFromJSON(currentSideLayers, () => {
-          canvas.renderAll();
-          updateLayersState(canvas);
-        });
-      }
-
-      canvas.on("selection:created", (e: any) => {
-        if (e.selected && e.selected[0]) {
-          setActiveLayer(e.selected[0]);
-        }
-      });
-
-      canvas.on("selection:updated", (e: any) => {
-        if (e.selected && e.selected[0]) {
-          setActiveLayer(e.selected[0]);
-        }
-      });
-
-      canvas.on("selection:cleared", () => {
-        setActiveLayer(null);
-      });
-
-      canvas.on("object:modified", () => {
-        updateLayersState(canvas);
-      });
-
-      canvas.on("object:added", () => {
-        updateLayersState(canvas);
-      });
-
-      canvas.on("object:removed", () => {
-        updateLayersState(canvas);
-      });
-
-      fabricCanvasRef.current = canvas;
-      updateLayersState(canvas);
-    }
-
-    initFabric();
-
-    return () => {
-      isMounted = false;
-      if (fabricCanvasRef.current) {
-        fabricCanvasRef.current.dispose();
-      }
-    };
-  }, [canvasWidth, canvasHeight, zoomLevel]);
-
-  const updateLayersState = (canvas: any) => {
-    if (!canvas) return;
-    const objects = canvas.getObjects();
-    setLayersList([...objects]);
-  };
-
-  const handleSwitchSide = (targetSide: "front" | "back") => {
-    if (targetSide === activeSide || !fabricCanvasRef.current) return;
-
-    // 1. Serialize current canvas to sidesDataRef
-    sidesDataRef.current[activeSide] = fabricCanvasRef.current.toObject([
-      "name",
-      "customType",
-      "isCustomerEditable",
-      "optionLabel",
-      "maxCharacters",
-      "enableAiBackgroundRemoval",
-    ]);
-
-    setActiveSide(targetSide);
-    setActiveLayer(null);
-
-    // 2. Load target side JSON
-    const targetLayers = sidesDataRef.current[targetSide] || { objects: [] };
-    fabricCanvasRef.current.loadFromJSON(targetLayers, () => {
-      fabricCanvasRef.current.renderAll();
-      updateLayersState(fabricCanvasRef.current);
-    });
-  };
-
-  // Add Layer actions
-  const addTextLayer = async () => {
-    if (!fabricCanvasRef.current) return;
-    const { IText } = await import("fabric");
-
-    const text = new IText("Enter Custom Text", {
-      left: 100,
-      top: 100,
-      fontFamily: "Roboto",
-      fontSize: 48,
-      fill: "#111111",
-      name: `Text Layer ${layersList.length + 1}`,
-      customType: "text",
-      isCustomerEditable: true,
-      maxCharacters: 25,
-      optionLabel: "Your Text",
-    });
-
-    fabricCanvasRef.current.add(text);
-    fabricCanvasRef.current.setActiveObject(text);
-    fabricCanvasRef.current.renderAll();
-    setActiveLayer(text);
-  };
-
-  const addPhotoUploadArea = async () => {
-    if (!fabricCanvasRef.current) return;
-    const { Rect } = await import("fabric");
-
-    const uploadArea = new Rect({
-      left: 150,
-      top: 150,
-      width: 400,
-      height: 400,
-      fill: "rgba(0, 128, 96, 0.12)",
-      stroke: "#008060",
-      strokeDashArray: [10, 10],
-      strokeWidth: 4,
-      name: `Photo Upload ${layersList.length + 1}`,
-      customType: "image_upload",
-      isCustomerEditable: true,
-      optionLabel: "Upload Photo or Logo",
-      enableAiBackgroundRemoval: true,
-    });
-
-    fabricCanvasRef.current.add(uploadArea);
-    fabricCanvasRef.current.setActiveObject(uploadArea);
-    fabricCanvasRef.current.renderAll();
-    setActiveLayer(uploadArea);
-  };
-
-  const addMockupBackground = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !fabricCanvasRef.current) return;
-
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      const dataUrl = event.target?.result as string;
-      const { FabricImage } = await import("fabric");
-
-      const imgElement = new Image();
-      imgElement.src = dataUrl;
-      imgElement.onload = () => {
-        // Remove old mockup underlay if present
-        const existing = fabricCanvasRef.current.getObjects().filter((o: any) => o.name === "Mockup Underlay" || o.customType === "background_mockup");
-        existing.forEach((o: any) => fabricCanvasRef.current.remove(o));
-
-        const fabricImg = new FabricImage(imgElement, {
-          left: 0,
-          top: 0,
-          scaleX: (canvasWidth / imgElement.width),
-          scaleY: (canvasHeight / imgElement.height),
-          selectable: false,
-          evented: false,
-          name: "Mockup Underlay",
-          customType: "background_mockup",
-        });
-
-        fabricCanvasRef.current.add(fabricImg);
-        fabricCanvasRef.current.sendObjectToBack(fabricImg);
-        fabricCanvasRef.current.renderAll();
-        updateLayersState(fabricCanvasRef.current);
-      };
-    };
-    reader.readAsDataURL(file);
-  };
-
-  // Sync Mockup image automatically from assigned product
-  const syncMockupFromProduct = async () => {
-    if (!assignedProductIds || assignedProductIds.length === 0) {
-      alert("Please assign a product to this template first.");
-      return;
-    }
-    const matched = shopProducts.find((p: any) => assignedProductIds.includes(p.id));
-    if (!matched) {
-      alert("Could not find product data to sync.");
-      return;
-    }
-
-    // Front uses featured image; Back uses second image if present
-    const targetUrl = (activeSide === "back" && matched.images && matched.images.length > 1)
-      ? matched.images[1].url
-      : matched.featuredImage?.url;
-
-    if (!targetUrl) {
-      alert(`No image found on ${matched.title} for the ${activeSide} side.`);
-      return;
-    }
-
-    if (!fabricCanvasRef.current) return;
-    const { FabricImage } = await import("fabric");
-    const imgElement = new Image();
-    imgElement.crossOrigin = "anonymous";
-    imgElement.src = targetUrl;
-    imgElement.onload = () => {
-      const existing = fabricCanvasRef.current.getObjects().filter((o: any) => o.name === "Mockup Underlay" || o.customType === "background_mockup");
-      existing.forEach((o: any) => fabricCanvasRef.current.remove(o));
-
-      const fabricImg = new FabricImage(imgElement, {
-        left: 0,
-        top: 0,
-        scaleX: (canvasWidth / imgElement.width),
-        scaleY: (canvasHeight / imgElement.height),
-        selectable: false,
-        evented: false,
-        name: "Mockup Underlay",
-        customType: "background_mockup",
-      });
-
-      fabricCanvasRef.current.add(fabricImg);
-      fabricCanvasRef.current.sendObjectToBack(fabricImg);
-      fabricCanvasRef.current.renderAll();
-      updateLayersState(fabricCanvasRef.current);
-    };
-  };
-
-  const removeSelectedLayer = () => {
-    if (!fabricCanvasRef.current || !activeLayer) return;
-    fabricCanvasRef.current.remove(activeLayer);
-    fabricCanvasRef.current.renderAll();
-    setActiveLayer(null);
-  };
-
-  const bringLayerForward = () => {
-    if (!fabricCanvasRef.current || !activeLayer) return;
-    fabricCanvasRef.current.bringObjectForward(activeLayer);
-    fabricCanvasRef.current.renderAll();
-    updateLayersState(fabricCanvasRef.current);
-  };
-
-  const sendLayerBackward = () => {
-    if (!fabricCanvasRef.current || !activeLayer) return;
-    fabricCanvasRef.current.sendObjectBackwards(activeLayer);
-    fabricCanvasRef.current.renderAll();
-    updateLayersState(fabricCanvasRef.current);
-  };
-
+  // Handle Save
   const handleSave = () => {
-    if (!fabricCanvasRef.current) return;
-
-    // Serialize current active side to cache
-    sidesDataRef.current[activeSide] = fabricCanvasRef.current.toObject([
-      "name",
-      "customType",
-      "isCustomerEditable",
-      "optionLabel",
-      "maxCharacters",
-      "enableAiBackgroundRemoval",
-    ]);
-
-    const fullLayers = {
-      sides: {
-        front: sidesDataRef.current.front || { objects: [] },
-        back: sidesDataRef.current.back || { objects: [] },
+    // Generate clean template layers structure for storefront rendering
+    const layersPayload = {
+      settings: {
+        enableText,
+        defaultText,
+        defaultFont,
+        defaultColor,
+        maxCharacters,
+        enableUpload,
+        enableFront,
+        enableBack,
+        customFrontMockup,
+        customBackMockup,
       },
-      objects: sidesDataRef.current.front?.objects || [],
+      sides: {
+        front: {
+          objects: [
+            ...(customFrontMockup
+              ? [
+                  {
+                    type: "Image",
+                    src: customFrontMockup,
+                    name: "Mockup Underlay",
+                    customType: "background_mockup",
+                  },
+                ]
+              : []),
+            ...(enableText
+              ? [
+                  {
+                    type: "IText",
+                    text: defaultText || "Your Custom Text",
+                    fontSize: 48,
+                    fontFamily: defaultFont || "Roboto",
+                    fill: defaultColor || "#111111",
+                    left: Math.round(canvasWidth / 2),
+                    top: Math.round(canvasHeight * 0.4),
+                    originX: "center",
+                    originY: "center",
+                    optionLabel: "Front Custom Text",
+                    maxCharacters: maxCharacters || 30,
+                    isCustomerEditable: true,
+                  },
+                ]
+              : []),
+            ...(enableUpload
+              ? [
+                  {
+                    type: "Rect",
+                    customType: "image_upload",
+                    name: "Photo Upload Zone",
+                    optionLabel: "Upload Photo / Logo",
+                    left: Math.round(canvasWidth / 2),
+                    top: Math.round(canvasHeight * 0.65),
+                    originX: "center",
+                    originY: "center",
+                    width: Math.round(canvasWidth * 0.35),
+                    height: Math.round(canvasHeight * 0.25),
+                    fill: "rgba(0, 128, 96, 0.08)",
+                    stroke: "#008060",
+                    strokeWidth: 2,
+                    strokeDashArray: [6, 6],
+                    isCustomerEditable: true,
+                  },
+                ]
+              : []),
+          ],
+        },
+        back: {
+          objects: [
+            ...(customBackMockup
+              ? [
+                  {
+                    type: "Image",
+                    src: customBackMockup,
+                    name: "Mockup Underlay",
+                    customType: "background_mockup",
+                  },
+                ]
+              : []),
+            ...(enableBack && enableText
+              ? [
+                  {
+                    type: "IText",
+                    text: defaultText || "Back Custom Text",
+                    fontSize: 48,
+                    fontFamily: defaultFont || "Roboto",
+                    fill: defaultColor || "#111111",
+                    left: Math.round(canvasWidth / 2),
+                    top: Math.round(canvasHeight * 0.45),
+                    originX: "center",
+                    originY: "center",
+                    optionLabel: "Back Custom Text",
+                    maxCharacters: maxCharacters || 30,
+                    isCustomerEditable: true,
+                  },
+                ]
+              : []),
+          ],
+        },
+      },
     };
-
-    const canvasJson = JSON.stringify(fullLayers);
-
-    // Generate option groups automatically from customer-editable layers across BOTH sides
-    const frontEditable = (sidesDataRef.current.front?.objects || [])
-      .filter((obj: any) => obj.isCustomerEditable)
-      .map((obj: any, idx: number) => ({
-        name: `Front: ${obj.optionLabel || `Option ${idx + 1}`}`,
-        displayType: obj.customType === "image_upload" ? "image_upload" : "text_input",
-        position: idx,
-        conditionalRules: "{}",
-        options: [
-          {
-            label: `Front: ${obj.optionLabel || `Option ${idx + 1}`}`,
-            priceExtra: 0.0,
-            metadata: JSON.stringify({
-              side: "front",
-              layerName: obj.name,
-              maxCharacters: obj.maxCharacters || 50,
-            }),
-          },
-        ],
-      }));
-
-    const backEditable = (sidesDataRef.current.back?.objects || [])
-      .filter((obj: any) => obj.isCustomerEditable)
-      .map((obj: any, idx: number) => ({
-        name: `Back: ${obj.optionLabel || `Option ${idx + 1}`}`,
-        displayType: obj.customType === "image_upload" ? "image_upload" : "text_input",
-        position: frontEditable.length + idx,
-        conditionalRules: "{}",
-        options: [
-          {
-            label: `Back: ${obj.optionLabel || `Option ${idx + 1}`}`,
-            priceExtra: 0.0,
-            metadata: JSON.stringify({
-              side: "back",
-              layerName: obj.name,
-              maxCharacters: obj.maxCharacters || 50,
-            }),
-          },
-        ],
-      }));
-
-    const generatedOptionGroups = [...frontEditable, ...backEditable];
 
     fetcher.submit(
       {
         intent: "save_template",
-        title,
-        canvasWidth: canvasWidth.toString(),
-        canvasHeight: canvasHeight.toString(),
-        printDpi: printDpi.toString(),
-        layersJson: canvasJson,
-        optionGroups: JSON.stringify(generatedOptionGroups),
+        title: title.trim() || "Personalization Template",
+        canvasWidth: String(canvasWidth),
+        canvasHeight: String(canvasHeight),
+        printDpi: String(printDpi),
+        layersJson: JSON.stringify(layersPayload),
         assignedProductIds: JSON.stringify(assignedProductIds),
       },
       { method: "POST" },
     );
   };
 
-  const handleOpenNativePicker = async () => {
-    try {
-      if (shopify && (shopify as any).resourcePicker) {
-        const selected = await (shopify as any).resourcePicker({
-          type: "product",
-          multiple: true,
-          selectionIds: assignedProductIds.map((id) => ({ id })),
-        });
-        if (selected && Array.isArray(selected)) {
-          setAssignedProductIds(selected.map((p: any) => p.id));
-          return;
-        }
-      }
-    } catch (e) {
-      console.warn("Native picker fallback", e);
-    }
+  const handleRemoveProduct = (productId: string) => {
+    setAssignedProductIds((prev) => prev.filter((id) => id !== productId));
+  };
+
+  const handleOpenProductModal = () => {
+    setTempSelectedIds([...assignedProductIds]);
+    setProductSearch("");
     setShowProductModal(true);
   };
 
-  const toggleProductAssignment = (id: string) => {
-    setAssignedProductIds((prev) =>
-      prev.includes(id) ? prev.filter((pId) => pId !== id) : [...prev, id],
+  const handleToggleProductInModal = (productId: string) => {
+    setTempSelectedIds((prev) =>
+      prev.includes(productId) ? prev.filter((id) => id !== productId) : [...prev, productId],
     );
   };
 
-  const isSaving = fetcher.state === "submitting";
+  const handleSelectAllModal = () => {
+    const allIds = shopProducts.map((p: any) => p.id);
+    setTempSelectedIds(allIds);
+  };
+
+  const handleDeselectAllModal = () => {
+    setTempSelectedIds([]);
+  };
+
+  const handleConfirmProductModal = () => {
+    setAssignedProductIds([...tempSelectedIds]);
+    setShowProductModal(false);
+  };
+
+  const cleanShopDomain = shop.replace(/^https?:\/\//, "").replace(/\/.*$/, "").trim();
 
   return (
-    <s-page heading="Template Studio">
-      {/* Primary Action in Page Header */}
-      <div slot="primary-action" style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-        <Link
-          to="/app/templates"
-          style={{
-            color: "#6d7175",
-            fontSize: "13px",
-            fontWeight: 600,
-            textDecoration: "none",
-            padding: "8px 12px",
-          }}
-        >
-          &larr; Back to Templates
-        </Link>
-        <s-button
-          variant="primary"
-          onClick={handleSave}
-          disabled={isSaving}
-        >
-          {isSaving ? "Saving..." : "Save Template"}
-        </s-button>
-      </div>
-
-      {fetcher.data?.message && (
-        <div style={{ marginBottom: "16px" }}>
-          <s-banner tone="success">
-            {fetcher.data.message}
-          </s-banner>
-        </div>
-      )}
-
-      {/* Top Header Bar: Editable Template Title & Linked Products Status */}
+    <div style={{ maxWidth: "1140px", margin: "0 auto", padding: "20px 24px 60px" }}>
+      {/* Top Navigation & Action Header */}
       <div
         style={{
-          background: "#ffffff",
-          borderRadius: "12px",
-          border: "1px solid #e1e3e5",
-          padding: "16px 20px",
-          marginBottom: "20px",
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
+          marginBottom: "20px",
           flexWrap: "wrap",
-          gap: "16px",
-          boxShadow: "0 2px 6px rgba(0,0,0,0.02)",
+          gap: "12px",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: "12px", flex: 1, minWidth: "320px" }}>
-          <div style={{ width: "38px", height: "38px", borderRadius: "8px", background: "#f0fdf4", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "18px" }}>
-            🎨
-          </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: "11px", fontWeight: 700, color: "#6d7175", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-              Template Title
-            </div>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Custom Cap Front Studio, T-Shirt Print Template..."
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <Link
+            to="/app/templates"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              padding: "7px 12px",
+              borderRadius: "8px",
+              background: "#fff",
+              border: "1px solid #cbd5e1",
+              color: "#334155",
+              fontSize: "13px",
+              fontWeight: 600,
+              textDecoration: "none",
+            }}
+          >
+            ← Back to Templates
+          </Link>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <span
               style={{
-                width: "100%",
-                maxWidth: "520px",
-                border: "none",
-                borderBottom: "2px solid #008060",
-                fontSize: "16px",
-                fontWeight: 700,
-                color: "#1a1a1a",
-                padding: "4px 0",
-                outline: "none",
-                background: "transparent",
+                display: "inline-block",
+                width: "8px",
+                height: "8px",
+                borderRadius: "50%",
+                background: assignedProductIds.length > 0 ? "#10b981" : "#f59e0b",
               }}
             />
+            <span style={{ fontSize: "13px", color: "#64748b", fontWeight: 500 }}>
+              {assignedProductIds.length > 0
+                ? `Active on ${assignedProductIds.length} Product${assignedProductIds.length > 1 ? "s" : ""}`
+                : "No products linked yet"}
+            </span>
           </div>
         </div>
 
-        {/* Status badges */}
-        <div style={{ display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
-          <span
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          {assignedProductsList.length > 0 && assignedProductsList[0].handle && (
+            <a
+              href={`https://${cleanShopDomain}/products/${assignedProductsList[0].handle}`}
+              target="_blank"
+              rel="noreferrer"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                padding: "8px 14px",
+                borderRadius: "8px",
+                background: "#f1f5f9",
+                color: "#0f172a",
+                border: "1px solid #cbd5e1",
+                fontSize: "13px",
+                fontWeight: 600,
+                textDecoration: "none",
+              }}
+            >
+              👁️ View Live on Store ↗
+            </a>
+          )}
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={isSaving}
             style={{
-              background: assignedProductIds.length > 0 ? "#ecfdf5" : "#fef3c7",
-              color: assignedProductIds.length > 0 ? "#059669" : "#d97706",
-              padding: "5px 12px",
-              borderRadius: "20px",
-              fontSize: "12px",
-              fontWeight: 700,
               display: "inline-flex",
               alignItems: "center",
               gap: "6px",
-            }}
-          >
-            <span>{assignedProductIds.length > 0 ? "✓" : "!"}</span>
-            <span>{assignedProductIds.length} Products Assigned</span>
-          </span>
-
-          <span style={{ fontSize: "12px", color: "#6d7175", background: "#f1f5f9", padding: "5px 10px", borderRadius: "6px", fontWeight: 600 }}>
-            {canvasWidth} × {canvasHeight} px @ {printDpi} DPI
-          </span>
-
-          <button
-            type="button"
-            onClick={handleOpenNativePicker}
-            style={{
+              padding: "9px 20px",
+              borderRadius: "8px",
               background: "#008060",
               color: "#ffffff",
               border: "none",
-              borderRadius: "6px",
-              padding: "7px 14px",
-              fontSize: "12px",
+              fontSize: "14px",
               fontWeight: 700,
-              cursor: "pointer",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "6px",
+              cursor: isSaving ? "not-allowed" : "pointer",
+              boxShadow: "0 2px 5px rgba(0, 128, 96, 0.25)",
+              opacity: isSaving ? 0.7 : 1,
             }}
           >
-            <span>🛍️</span> Assign Products
+            {isSaving ? "Saving Changes..." : "💾 Save Template"}
           </button>
         </div>
       </div>
 
-      {/* =========================================================================
-          2-COLUMN PROFESSIONAL STUDIO LAYOUT
-      ========================================================================= */}
-      <div style={{ display: "grid", gridTemplateColumns: "360px 1fr", gap: "20px", alignItems: "start" }}>
-        
-        {/* =====================================================================
-            LEFT COLUMN: SETUP, PRODUCTS & LAYERS CONFIGURATION
-        ===================================================================== */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-          
-          {/* 1. Assigned Product Card */}
-          <div style={{ background: "#ffffff", border: "1px solid #e1e3e5", borderRadius: "10px", padding: "18px", boxShadow: "0 2px 6px rgba(0,0,0,0.02)" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-              <div style={{ fontSize: "13px", fontWeight: 700, color: "#202223" }}>
-                🛍️ Assigned Products ({assignedProductIds.length})
-              </div>
-              <button
-                type="button"
-                onClick={handleOpenNativePicker}
-                style={{ background: "none", border: "none", color: "#008060", fontSize: "12px", fontWeight: 600, cursor: "pointer", padding: 0 }}
+      {/* Success Notification Banner */}
+      {fetcher.data?.message && (
+        <div
+          style={{
+            marginBottom: "20px",
+            padding: "12px 18px",
+            borderRadius: "8px",
+            background: "#ecfdf5",
+            border: "1px solid #a7f3d0",
+            color: "#065f46",
+            fontSize: "14px",
+            fontWeight: 600,
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+          }}
+        >
+          <span>✓</span>
+          <span>{fetcher.data.message}</span>
+        </div>
+      )}
+
+      {/* Main Grid: 2 Columns */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1.4fr 1fr",
+          gap: "24px",
+          alignItems: "start",
+        }}
+      >
+        {/* LEFT COLUMN: Template Identity & Product Assignment */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+          {/* Template Details Card */}
+          <div
+            style={{
+              background: "#ffffff",
+              borderRadius: "12px",
+              border: "1px solid #e2e8f0",
+              padding: "20px",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
+            }}
+          >
+            <div style={{ marginBottom: "14px" }}>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: "12px",
+                  fontWeight: 700,
+                  textTransform: "uppercase",
+                  color: "#64748b",
+                  marginBottom: "6px",
+                  letterSpacing: "0.5px",
+                }}
               >
-                Change
-              </button>
+                Template Name
+              </label>
+              <input
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="e.g., Custom Unisex T-Shirt Template"
+                style={{
+                  width: "100%",
+                  fontSize: "16px",
+                  fontWeight: 700,
+                  color: "#0f172a",
+                  padding: "10px 14px",
+                  borderRadius: "8px",
+                  border: "1px solid #cbd5e1",
+                  boxSizing: "border-box",
+                  outline: "none",
+                }}
+              />
             </div>
 
-            {assignedProductsList.length === 0 ? (
-              <div style={{ background: "#f9fafb", border: "1px dashed #c9cccf", borderRadius: "8px", padding: "20px", textAlign: "center" }}>
-                <p style={{ margin: "0 0 10px", fontSize: "12px", color: "#6d7175" }}>
-                  No product assigned yet. Connect a product so the customizer button appears on its page.
-                </p>
-                <button
-                  type="button"
-                  onClick={handleOpenNativePicker}
-                  style={{
-                    background: "#008060",
-                    color: "#fff",
-                    border: "none",
-                    borderRadius: "6px",
-                    padding: "6px 12px",
-                    fontSize: "12px",
-                    fontWeight: 600,
-                    cursor: "pointer",
-                  }}
-                >
-                  + Assign Product
-                </button>
-              </div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                {assignedProductsList.map((p: any) => (
-                  <div
-                    key={p.id}
-                    style={{
-                      display: "flex",
-                      gap: "12px",
-                      alignItems: "center",
-                      background: "#f8fafc",
-                      border: "1px solid #e2e8f0",
-                      borderRadius: "8px",
-                      padding: "10px 12px",
-                    }}
-                  >
-                    <img
-                      src={p.featuredImage?.url || "https://cdn.shopify.com/s/files/1/0533/2089/files/placeholder-images-image_large.png"}
-                      alt={p.title}
-                      style={{ width: "42px", height: "42px", borderRadius: "6px", objectFit: "cover", border: "1px solid #e2e8f0" }}
-                    />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 600, fontSize: "13px", color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                        {p.title}
-                      </div>
-                      <div style={{ fontSize: "11px", color: "#64748b" }}>
-                        {p.variants?.length || 1} variants detected
-                      </div>
-                    </div>
-                  </div>
-                ))}
-
-                {/* 1-Click Sync Mockup Underlay Button */}
-                <button
-                  type="button"
-                  onClick={syncMockupFromProduct}
-                  title="Loads product photo directly onto canvas as the base mockup underlay"
-                  style={{
-                    marginTop: "6px",
-                    background: "#f0fdf4",
-                    border: "1px solid #bbf7d0",
-                    color: "#15803d",
-                    borderRadius: "6px",
-                    padding: "8px 12px",
-                    fontSize: "12px",
-                    fontWeight: 700,
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: "6px",
-                  }}
-                >
-                  <span>🖼️</span> Sync Product Photo to Canvas Underlay
-                </button>
-              </div>
-            )}
+            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginTop: "12px" }}>
+              <span
+                style={{
+                  background: "#f8fafc",
+                  border: "1px solid #e2e8f0",
+                  padding: "4px 10px",
+                  borderRadius: "6px",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  color: "#475569",
+                }}
+              >
+                📐 Canvas: {canvasWidth} × {canvasHeight} px
+              </span>
+              <span
+                style={{
+                  background: "#f8fafc",
+                  border: "1px solid #e2e8f0",
+                  padding: "4px 10px",
+                  borderRadius: "6px",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  color: "#475569",
+                }}
+              >
+                🖨️ Resolution: {printDpi} DPI Print-Ready
+              </span>
+              <span
+                style={{
+                  background: "#eff6ff",
+                  border: "1px solid #bfdbfe",
+                  padding: "4px 10px",
+                  borderRadius: "6px",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  color: "#1d4ed8",
+                }}
+              >
+                🏷️ ID: {template.id.slice(0, 8)}...
+              </span>
+            </div>
           </div>
 
-          {/* 2. Studio Layer Controls */}
-          <div style={{ background: "#ffffff", border: "1px solid #e1e3e5", borderRadius: "10px", padding: "18px", boxShadow: "0 2px 6px rgba(0,0,0,0.02)" }}>
-            <div style={{ fontSize: "13px", fontWeight: 700, color: "#202223", marginBottom: "12px" }}>
-              ⚡ Add Personalization Tools
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "12px" }}>
-              <button
-                type="button"
-                onClick={addTextLayer}
-                style={{
-                  background: "#f8fafc",
-                  border: "1px solid #cbd5e1",
-                  borderRadius: "8px",
-                  padding: "12px 10px",
-                  cursor: "pointer",
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  gap: "6px",
-                  fontSize: "12px",
-                  fontWeight: 600,
-                  color: "#0f172a",
-                }}
-              >
-                <span style={{ fontSize: "20px" }}>🔤</span>
-                <span>+ Custom Text</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={addPhotoUploadArea}
-                style={{
-                  background: "#f8fafc",
-                  border: "1px solid #cbd5e1",
-                  borderRadius: "8px",
-                  padding: "12px 10px",
-                  cursor: "pointer",
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  gap: "6px",
-                  fontSize: "12px",
-                  fontWeight: 600,
-                  color: "#0f172a",
-                }}
-              >
-                <span style={{ fontSize: "20px" }}>📷</span>
-                <span>+ Upload Area</span>
-              </button>
-            </div>
-
-            {/* Custom Mockup File Upload */}
-            <label
+          {/* Assigned Products Card (THE MAIN FOCUS) */}
+          <div
+            style={{
+              background: "#ffffff",
+              borderRadius: "12px",
+              border: "1px solid #e2e8f0",
+              padding: "20px",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
+            }}
+          >
+            <div
               style={{
                 display: "flex",
+                justifyContent: "space-between",
                 alignItems: "center",
-                justifyContent: "center",
-                gap: "8px",
-                padding: "9px 12px",
-                borderRadius: "6px",
-                border: "1px dashed #008060",
-                background: "#f0fdf4",
-                color: "#15803d",
-                fontSize: "12px",
-                fontWeight: 600,
-                cursor: "pointer",
+                marginBottom: "16px",
+                flexWrap: "wrap",
+                gap: "10px",
               }}
             >
-              <span>📁</span> Upload Custom Mockup ({activeSide === "front" ? "Front" : "Back"})
-              <input
-                type="file"
-                accept="image/*"
-                onChange={addMockupBackground}
-                style={{ display: "none" }}
-              />
-            </label>
-          </div>
-
-          {/* 3. Layer Inspector & Properties */}
-          <div style={{ background: "#ffffff", border: "1px solid #e1e3e5", borderRadius: "10px", padding: "18px", boxShadow: "0 2px 6px rgba(0,0,0,0.02)" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-              <div style={{ fontSize: "13px", fontWeight: 700, color: "#202223" }}>
-                {activeLayer ? "🔧 Selected Layer Inspector" : "📑 Canvas Layers Stack"}
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: "#0f172a" }}>
+                    Assigned Products
+                  </h3>
+                  <span
+                    style={{
+                      background: assignedProductIds.length > 0 ? "#008060" : "#94a3b8",
+                      color: "#fff",
+                      fontSize: "11px",
+                      fontWeight: 700,
+                      padding: "2px 8px",
+                      borderRadius: "12px",
+                    }}
+                  >
+                    {assignedProductIds.length}
+                  </span>
+                </div>
+                <p style={{ margin: "4px 0 0", fontSize: "13px", color: "#64748b" }}>
+                  Products linked to this template will show the live personalizer on your storefront.
+                </p>
               </div>
-              {activeLayer && (
-                <button
-                  type="button"
-                  onClick={removeSelectedLayer}
-                  style={{ color: "#d82c0d", background: "none", border: "none", cursor: "pointer", fontSize: "12px", fontWeight: 700 }}
-                >
-                  Delete Layer
-                </button>
-              )}
+
+              <button
+                type="button"
+                onClick={handleOpenProductModal}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "8px 14px",
+                  borderRadius: "8px",
+                  background: "#008060",
+                  color: "#ffffff",
+                  border: "none",
+                  fontSize: "13px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                + Assign Products
+              </button>
             </div>
 
-            {activeLayer ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: "10px", fontSize: "12px" }}>
-                <label style={{ fontWeight: 600, color: "#202223" }}>
-                  Layer Label:
-                  <input
-                    type="text"
-                    value={activeLayer.name || ""}
-                    onChange={(e) => {
-                      activeLayer.set("name", e.target.value);
-                      fabricCanvasRef.current?.renderAll();
-                      updateLayersState(fabricCanvasRef.current);
+            {/* List of Assigned Products */}
+            {assignedProductsList.length === 0 ? (
+              <div
+                style={{
+                  textAlign: "center",
+                  padding: "40px 16px",
+                  background: "#f8fafc",
+                  borderRadius: "10px",
+                  border: "1px dashed #cbd5e1",
+                }}
+              >
+                <div style={{ fontSize: "40px", marginBottom: "8px" }}>🛍️</div>
+                <div style={{ fontSize: "15px", fontWeight: 700, color: "#1e293b", marginBottom: "4px" }}>
+                  No Products Assigned Yet
+                </div>
+                <p
+                  style={{
+                    fontSize: "13px",
+                    color: "#64748b",
+                    maxWidth: "380px",
+                    margin: "0 auto 16px",
+                    lineHeight: 1.4,
+                  }}
+                >
+                  Assign one or more products from your Shopify store so customers can customize them live on the product page.
+                </p>
+                <div style={{ display: "flex", justifyContent: "center", gap: "10px" }}>
+                  <button
+                    type="button"
+                    onClick={handleOpenProductModal}
+                    style={{
+                      padding: "8px 16px",
+                      borderRadius: "6px",
+                      background: "#008060",
+                      color: "#fff",
+                      border: "none",
+                      fontSize: "13px",
+                      fontWeight: 600,
+                      cursor: "pointer",
                     }}
-                    style={{ width: "100%", padding: "7px 10px", border: "1px solid #c9cccf", borderRadius: "6px", marginTop: "3px" }}
-                  />
-                </label>
-
-                {activeLayer.type === "i-text" && (
-                  <>
-                    <label style={{ fontWeight: 600, color: "#202223" }}>
-                      Font Family:
-                      <select
-                        value={activeLayer.fontFamily || "Roboto"}
-                        onChange={(e) => {
-                          activeLayer.set("fontFamily", e.target.value);
-                          fabricCanvasRef.current?.renderAll();
-                        }}
-                        style={{ width: "100%", padding: "7px 10px", border: "1px solid #c9cccf", borderRadius: "6px", marginTop: "3px" }}
-                      >
-                        <option value="Roboto">Roboto (Clean Modern)</option>
-                        <option value="Montserrat">Montserrat (Geometric)</option>
-                        <option value="Playfair Display">Playfair Display (Luxury Serif)</option>
-                        <option value="Pacifico">Pacifico (Handwritten Script)</option>
-                        <option value="Oswald">Oswald (Bold Headline)</option>
-                        <option value="Courier New">Courier New (Vintage Monospace)</option>
-                      </select>
-                    </label>
-
-                    <label style={{ fontWeight: 600, color: "#202223" }}>
-                      Text Ink Color:
-                      <input
-                        type="color"
-                        value={activeLayer.fill || "#111111"}
-                        onChange={(e) => {
-                          activeLayer.set("fill", e.target.value);
-                          fabricCanvasRef.current?.renderAll();
-                        }}
-                        style={{ width: "100%", height: "36px", border: "1px solid #c9cccf", borderRadius: "6px", marginTop: "3px", cursor: "pointer" }}
-                      />
-                    </label>
-                  </>
-                )}
-
-                <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
-                  <button
-                    type="button"
-                    onClick={bringLayerForward}
-                    style={{ flex: 1, padding: "6px 10px", border: "1px solid #c9cccf", borderRadius: "4px", background: "#fff", fontSize: "11px", fontWeight: 600, cursor: "pointer" }}
                   >
-                    Bring Forward
+                    + Assign Existing Products
                   </button>
-                  <button
-                    type="button"
-                    onClick={sendLayerBackward}
-                    style={{ flex: 1, padding: "6px 10px", border: "1px solid #c9cccf", borderRadius: "4px", background: "#fff", fontSize: "11px", fontWeight: 600, cursor: "pointer" }}
-                  >
-                    Send Backward
-                  </button>
+                  {shopProducts.length === 0 && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        fetcher.submit({ intent: "create_sample_products" }, { method: "POST" })
+                      }
+                      style={{
+                        padding: "8px 14px",
+                        borderRadius: "6px",
+                        background: "#fff",
+                        border: "1px solid #cbd5e1",
+                        color: "#334155",
+                        fontSize: "13px",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                      }}
+                    >
+                      Create Sample Products
+                    </button>
+                  )}
                 </div>
               </div>
             ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                {layersList.length === 0 ? (
-                  <p style={{ margin: 0, fontSize: "12px", color: "#6d7175", textAlign: "center", padding: "10px" }}>
-                    No layers added on {activeSide} side yet.
-                  </p>
-                ) : (
-                  layersList.map((layer, idx) => (
+              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                {assignedProductsList.map((product: any) => {
+                  const featImg = product.featuredImage?.url || product.images?.[0]?.url || "";
+                  const variantCount = product.variants?.length || 0;
+
+                  return (
                     <div
-                      key={idx}
-                      onClick={() => {
-                        fabricCanvasRef.current?.setActiveObject(layer);
-                        fabricCanvasRef.current?.renderAll();
-                        setActiveLayer(layer);
-                      }}
+                      key={product.id}
                       style={{
-                        padding: "8px 10px",
-                        borderRadius: "6px",
-                        border: "1px solid #e2e8f0",
-                        background: "#fafbfb",
-                        fontSize: "12px",
-                        cursor: "pointer",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "space-between",
+                        padding: "12px 14px",
+                        borderRadius: "8px",
+                        border: "1px solid #e2e8f0",
+                        background: "#fff",
+                        transition: "all 0.15s ease",
                       }}
                     >
-                      <span style={{ fontWeight: 600 }}>{layer.name || `Layer ${idx + 1}`}</span>
-                      <span style={{ fontSize: "11px", color: "#64748b" }}>{layer.type}</span>
+                      <div style={{ display: "flex", alignItems: "center", gap: "12px", minWidth: 0 }}>
+                        <div
+                          style={{
+                            width: "48px",
+                            height: "48px",
+                            borderRadius: "6px",
+                            border: "1px solid #e2e8f0",
+                            background: "#f1f5f9",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            overflow: "hidden",
+                            flexShrink: 0,
+                          }}
+                        >
+                          {featImg ? (
+                            <img
+                              src={featImg}
+                              alt={product.title}
+                              style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                            />
+                          ) : (
+                            <span style={{ fontSize: "20px" }}>👕</span>
+                          )}
+                        </div>
+
+                        <div style={{ minWidth: 0 }}>
+                          <div
+                            style={{
+                              fontSize: "14px",
+                              fontWeight: 700,
+                              color: "#0f172a",
+                              whiteSpace: "nowrap",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                            }}
+                          >
+                            {product.title}
+                          </div>
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "8px",
+                              fontSize: "12px",
+                              color: "#64748b",
+                              marginTop: "2px",
+                            }}
+                          >
+                            <span>
+                              {variantCount} variant{variantCount !== 1 ? "s" : ""}
+                            </span>
+                            <span>•</span>
+                            <span style={{ color: "#008060", fontWeight: 600 }}>Active</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
+                        {product.handle && (
+                          <a
+                            href={`https://${cleanShopDomain}/products/${product.handle}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            title="Preview on online store"
+                            style={{
+                              padding: "6px 10px",
+                              borderRadius: "6px",
+                              background: "#f1f5f9",
+                              color: "#334155",
+                              border: "1px solid #cbd5e1",
+                              fontSize: "12px",
+                              fontWeight: 600,
+                              textDecoration: "none",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "4px",
+                            }}
+                          >
+                            👁️ Test
+                          </a>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveProduct(product.id)}
+                          title="Unassign this product"
+                          style={{
+                            padding: "6px 10px",
+                            borderRadius: "6px",
+                            background: "#fff",
+                            color: "#ef4444",
+                            border: "1px solid #fecaca",
+                            fontSize: "12px",
+                            fontWeight: 600,
+                            cursor: "pointer",
+                          }}
+                        >
+                          Remove
+                        </button>
+                      </div>
                     </div>
-                  ))
-                )}
+                  );
+                })}
               </div>
             )}
           </div>
 
-          {/* 4. Canvas & Print Specs */}
-          <div style={{ background: "#ffffff", border: "1px solid #e1e3e5", borderRadius: "10px", padding: "16px", fontSize: "12px" }}>
-            <div style={{ fontSize: "13px", fontWeight: 700, color: "#202223", marginBottom: "8px" }}>
-              📐 Print Specifications
+          {/* How It Works Diagram Card */}
+          <div
+            style={{
+              background: "#f8fafc",
+              borderRadius: "12px",
+              border: "1px solid #e2e8f0",
+              padding: "18px 20px",
+            }}
+          >
+            <div style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a", marginBottom: "8px" }}>
+              💡 How Frontend Personalization Works
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "8px" }}>
-              <label style={{ color: "#6d7175" }}>
-                Width (px):
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", fontSize: "12px", color: "#475569" }}>
+              <div style={{ background: "#fff", padding: "12px", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                <strong style={{ color: "#008060" }}>1. Live Product Sync</strong>
+                <p style={{ margin: "4px 0 0", lineHeight: 1.4 }}>
+                  Assigned products automatically display the &quot;🎨 Customize This Product&quot; button. Variant colors and gallery photos sync seamlessly.
+                </p>
+              </div>
+              <div style={{ background: "#fff", padding: "12px", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                <strong style={{ color: "#008060" }}>2. Frontend Drag &amp; Edit</strong>
+                <p style={{ margin: "4px 0 0", lineHeight: 1.4 }}>
+                  Shoppers edit text, choose fonts, upload photos, and drag/scale directly on the live storefront modal canvas.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* RIGHT COLUMN: Personalization Options & Rules */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+          {/* Personalization Features Configuration */}
+          <div
+            style={{
+              background: "#ffffff",
+              borderRadius: "12px",
+              border: "1px solid #e2e8f0",
+              padding: "20px",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
+            }}
+          >
+            <h3 style={{ margin: "0 0 14px", fontSize: "16px", fontWeight: 700, color: "#0f172a" }}>
+              Personalization Features
+            </h3>
+
+            {/* Custom Text Option */}
+            <div
+              style={{
+                padding: "14px",
+                borderRadius: "8px",
+                border: "1px solid #e2e8f0",
+                background: enableText ? "#f8fafc" : "#fff",
+                marginBottom: "14px",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontWeight: 700, fontSize: "14px", color: "#0f172a" }}>
+                  <input
+                    type="checkbox"
+                    checked={enableText}
+                    onChange={(e) => setEnableText(e.target.checked)}
+                    style={{ width: "16px", height: "16px", accentColor: "#008060" }}
+                  />
+                  <span>✏️ Enable Custom Text</span>
+                </label>
+                <span
+                  style={{
+                    fontSize: "11px",
+                    fontWeight: 600,
+                    color: enableText ? "#008060" : "#64748b",
+                    background: enableText ? "#ecfdf5" : "#f1f5f9",
+                    padding: "2px 8px",
+                    borderRadius: "10px",
+                  }}
+                >
+                  {enableText ? "Enabled" : "Disabled"}
+                </span>
+              </div>
+
+              {enableText && (
+                <div style={{ marginTop: "12px", display: "flex", flexDirection: "column", gap: "10px" }}>
+                  <div>
+                    <label style={{ display: "block", fontSize: "12px", color: "#64748b", marginBottom: "4px" }}>
+                      Default Text Placeholder
+                    </label>
+                    <input
+                      type="text"
+                      value={defaultText}
+                      onChange={(e) => setDefaultText(e.target.value)}
+                      style={{
+                        width: "100%",
+                        padding: "8px 10px",
+                        borderRadius: "6px",
+                        border: "1px solid #cbd5e1",
+                        fontSize: "13px",
+                        boxSizing: "border-box",
+                      }}
+                    />
+                  </div>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                    <div>
+                      <label style={{ display: "block", fontSize: "12px", color: "#64748b", marginBottom: "4px" }}>
+                        Default Font
+                      </label>
+                      <select
+                        value={defaultFont}
+                        onChange={(e) => setDefaultFont(e.target.value)}
+                        style={{
+                          width: "100%",
+                          padding: "8px 10px",
+                          borderRadius: "6px",
+                          border: "1px solid #cbd5e1",
+                          fontSize: "13px",
+                          background: "#fff",
+                        }}
+                      >
+                        <option value="Roboto">Roboto</option>
+                        <option value="Montserrat">Montserrat</option>
+                        <option value="Playfair Display">Playfair Display</option>
+                        <option value="Pacifico">Pacifico</option>
+                        <option value="Oswald">Oswald</option>
+                        <option value="Bebas Neue">Bebas Neue</option>
+                        <option value="Courier New">Courier New</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label style={{ display: "block", fontSize: "12px", color: "#64748b", marginBottom: "4px" }}>
+                        Max Characters
+                      </label>
+                      <input
+                        type="number"
+                        value={maxCharacters}
+                        onChange={(e) => setMaxCharacters(parseInt(e.target.value) || 30)}
+                        min={5}
+                        max={100}
+                        style={{
+                          width: "100%",
+                          padding: "8px 10px",
+                          borderRadius: "6px",
+                          border: "1px solid #cbd5e1",
+                          fontSize: "13px",
+                          boxSizing: "border-box",
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label style={{ display: "block", fontSize: "12px", color: "#64748b", marginBottom: "4px" }}>
+                      Default Ink Color
+                    </label>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <input
+                        type="color"
+                        value={defaultColor}
+                        onChange={(e) => setDefaultColor(e.target.value)}
+                        style={{ width: "36px", height: "32px", border: "none", borderRadius: "4px", cursor: "pointer" }}
+                      />
+                      <input
+                        type="text"
+                        value={defaultColor}
+                        onChange={(e) => setDefaultColor(e.target.value)}
+                        style={{
+                          width: "100px",
+                          padding: "6px 8px",
+                          borderRadius: "6px",
+                          border: "1px solid #cbd5e1",
+                          fontSize: "13px",
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Photo Upload Option */}
+            <div
+              style={{
+                padding: "14px",
+                borderRadius: "8px",
+                border: "1px solid #e2e8f0",
+                background: enableUpload ? "#f8fafc" : "#fff",
+                marginBottom: "14px",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontWeight: 700, fontSize: "14px", color: "#0f172a" }}>
+                  <input
+                    type="checkbox"
+                    checked={enableUpload}
+                    onChange={(e) => setEnableUpload(e.target.checked)}
+                    style={{ width: "16px", height: "16px", accentColor: "#008060" }}
+                  />
+                  <span>📷 Customer Photo / Logo Upload</span>
+                </label>
+                <span
+                  style={{
+                    fontSize: "11px",
+                    fontWeight: 600,
+                    color: enableUpload ? "#008060" : "#64748b",
+                    background: enableUpload ? "#ecfdf5" : "#f1f5f9",
+                    padding: "2px 8px",
+                    borderRadius: "10px",
+                  }}
+                >
+                  {enableUpload ? "Enabled" : "Disabled"}
+                </span>
+              </div>
+              <p style={{ margin: "6px 0 0", fontSize: "12px", color: "#64748b", paddingLeft: "24px" }}>
+                Allows customers to upload high-res PNG, JPG, or WEBP photos/logos and drag or scale them on the product.
+              </p>
+            </div>
+
+            {/* Sides & Views Supported */}
+            <div
+              style={{
+                padding: "14px",
+                borderRadius: "8px",
+                border: "1px solid #e2e8f0",
+                background: "#f8fafc",
+              }}
+            >
+              <div style={{ fontWeight: 700, fontSize: "14px", color: "#0f172a", marginBottom: "8px" }}>
+                🔄 Sides Personalization
+              </div>
+              <div style={{ display: "flex", gap: "16px", marginTop: "6px" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", color: "#334155", cursor: "pointer" }}>
+                  <input
+                    type="checkbox"
+                    checked={enableFront}
+                    onChange={(e) => setEnableFront(e.target.checked)}
+                    style={{ accentColor: "#008060" }}
+                  />
+                  <span>👕 Front Side</span>
+                </label>
+
+                <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", color: "#334155", cursor: "pointer" }}>
+                  <input
+                    type="checkbox"
+                    checked={enableBack}
+                    onChange={(e) => setEnableBack(e.target.checked)}
+                    style={{ accentColor: "#008060" }}
+                  />
+                  <span>🔄 Back Side</span>
+                </label>
+              </div>
+              <p style={{ margin: "8px 0 0", fontSize: "11px", color: "#64748b", lineHeight: 1.4 }}>
+                Product images from your Shopify catalog will be automatically detected and used as Front and Back mockups.
+              </p>
+            </div>
+          </div>
+
+          {/* Production Print Settings */}
+          <div
+            style={{
+              background: "#ffffff",
+              borderRadius: "12px",
+              border: "1px solid #e2e8f0",
+              padding: "20px",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
+            }}
+          >
+            <h3 style={{ margin: "0 0 6px", fontSize: "16px", fontWeight: 700, color: "#0f172a" }}>
+              🖨️ Production &amp; Print Output
+            </h3>
+            <p style={{ margin: "0 0 14px", fontSize: "12px", color: "#64748b" }}>
+              High-resolution print files generated at checkout are rendered to these exact specifications.
+            </p>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+              <div>
+                <label style={{ display: "block", fontSize: "12px", color: "#64748b", marginBottom: "4px" }}>
+                  Width (px)
+                </label>
                 <input
                   type="number"
                   value={canvasWidth}
                   onChange={(e) => setCanvasWidth(parseInt(e.target.value) || 1200)}
-                  style={{ width: "100%", padding: "6px 8px", border: "1px solid #c9cccf", borderRadius: "4px", marginTop: "2px" }}
+                  style={{
+                    width: "100%",
+                    padding: "8px 10px",
+                    borderRadius: "6px",
+                    border: "1px solid #cbd5e1",
+                    fontSize: "13px",
+                    boxSizing: "border-box",
+                  }}
                 />
-              </label>
-              <label style={{ color: "#6d7175" }}>
-                Height (px):
+              </div>
+
+              <div>
+                <label style={{ display: "block", fontSize: "12px", color: "#64748b", marginBottom: "4px" }}>
+                  Height (px)
+                </label>
                 <input
                   type="number"
                   value={canvasHeight}
                   onChange={(e) => setCanvasHeight(parseInt(e.target.value) || 1200)}
-                  style={{ width: "100%", padding: "6px 8px", border: "1px solid #c9cccf", borderRadius: "4px", marginTop: "2px" }}
+                  style={{
+                    width: "100%",
+                    padding: "8px 10px",
+                    borderRadius: "6px",
+                    border: "1px solid #cbd5e1",
+                    fontSize: "13px",
+                    boxSizing: "border-box",
+                  }}
                 />
+              </div>
+            </div>
+
+            <div style={{ marginTop: "12px" }}>
+              <label style={{ display: "block", fontSize: "12px", color: "#64748b", marginBottom: "4px" }}>
+                Target Print DPI
               </label>
-            </div>
-            <div style={{ color: "#059669", fontWeight: 600, fontSize: "11px" }}>
-              ✓ 300 DPI High-Resolution Output
-            </div>
-          </div>
-        </div>
-
-        {/* =====================================================================
-            RIGHT COLUMN: INTERACTIVE VISUAL WORKSPACE & LIVE CANVAS
-        ===================================================================== */}
-        <div
-          style={{
-            background: "#1e293b",
-            borderRadius: "14px",
-            border: "1px solid #334155",
-            padding: "20px",
-            boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-          }}
-        >
-          {/* Studio Top Switcher Bar */}
-          <div
-            style={{
-              width: "100%",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: "18px",
-              paddingBottom: "14px",
-              borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
-              flexWrap: "wrap",
-              gap: "12px",
-            }}
-          >
-            {/* Front / Back Switcher Tabs */}
-            <div
-              style={{
-                background: "rgba(15, 23, 42, 0.8)",
-                padding: "4px",
-                borderRadius: "10px",
-                display: "flex",
-                gap: "4px",
-                border: "1px solid rgba(255, 255, 255, 0.1)",
-              }}
-            >
-              <button
-                type="button"
-                onClick={() => handleSwitchSide("front")}
+              <select
+                value={printDpi}
+                onChange={(e) => setPrintDpi(parseInt(e.target.value) || 300)}
                 style={{
-                  padding: "8px 20px",
-                  borderRadius: "8px",
-                  border: "none",
+                  width: "100%",
+                  padding: "8px 10px",
+                  borderRadius: "6px",
+                  border: "1px solid #cbd5e1",
                   fontSize: "13px",
-                  fontWeight: 700,
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  background: activeSide === "front" ? "#008060" : "transparent",
-                  color: "#ffffff",
-                  boxShadow: activeSide === "front" ? "0 2px 8px rgba(0, 128, 96, 0.4)" : "none",
+                  background: "#fff",
                 }}
               >
-                <span>👕</span> Front Side
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleSwitchSide("back")}
-                style={{
-                  padding: "8px 20px",
-                  borderRadius: "8px",
-                  border: "none",
-                  fontSize: "13px",
-                  fontWeight: 700,
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  background: activeSide === "back" ? "#008060" : "transparent",
-                  color: "#ffffff",
-                  boxShadow: activeSide === "back" ? "0 2px 8px rgba(0, 128, 96, 0.4)" : "none",
-                }}
-              >
-                <span>🔄</span> Back Side
-              </button>
+                <option value={300}>300 DPI (Commercial Print Ready - Recommended)</option>
+                <option value={150}>150 DPI (Standard Web / Draft)</option>
+              </select>
             </div>
-
-            {/* Zoom Controls */}
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <span style={{ fontSize: "12px", color: "#94a3b8", fontWeight: 600 }}>
-                Zoom: {Math.round(zoomLevel * 100)}%
-              </span>
-              <button
-                type="button"
-                onClick={() => setZoomLevel((z) => Math.max(0.2, z - 0.05))}
-                style={{ background: "rgba(255, 255, 255, 0.1)", color: "#fff", border: "none", borderRadius: "4px", padding: "4px 8px", fontSize: "12px", cursor: "pointer" }}
-              >
-                -
-              </button>
-              <button
-                type="button"
-                onClick={() => setZoomLevel(0.45)}
-                style={{ background: "rgba(255, 255, 255, 0.1)", color: "#fff", border: "none", borderRadius: "4px", padding: "4px 8px", fontSize: "11px", cursor: "pointer" }}
-              >
-                Reset
-              </button>
-              <button
-                type="button"
-                onClick={() => setZoomLevel((z) => Math.min(1.0, z + 0.05))}
-                style={{ background: "rgba(255, 255, 255, 0.1)", color: "#fff", border: "none", borderRadius: "4px", padding: "4px 8px", fontSize: "12px", cursor: "pointer" }}
-              >
-                +
-              </button>
-            </div>
-          </div>
-
-          {/* Canvas Wrapper */}
-          <div
-            ref={canvasContainerRef}
-            style={{
-              padding: "20px",
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              overflow: "auto",
-              maxWidth: "100%",
-            }}
-          >
-            <div
-              style={{
-                boxShadow: "0 12px 36px rgba(0,0,0,0.4)",
-                borderRadius: "8px",
-                overflow: "hidden",
-                border: "2px solid rgba(255, 255, 255, 0.2)",
-                lineHeight: 0,
-                background: "#ffffff",
-              }}
-            >
-              <canvas ref={canvasRef} />
-            </div>
-          </div>
-
-          {/* Footer Guide text */}
-          <div style={{ marginTop: "14px", fontSize: "12px", color: "#94a3b8", textAlign: "center" }}>
-            💡 <em>Click any text or photo layer on the canvas to drag, scale, or reposition print boundaries.</em>
           </div>
         </div>
       </div>
 
-      {/* =========================================================================
-          STYLED PRODUCT PICKER MODAL (FALLBACK IF NATIVE PICKER CANNOT RUN)
-      ========================================================================= */}
+      {/* Product Selection Modal */}
       {showProductModal && (
         <div
           style={{
@@ -1202,114 +1192,243 @@ export default function TemplateStudio() {
             left: 0,
             right: 0,
             bottom: 0,
-            background: "rgba(0,0,0,0.6)",
-            zIndex: 9999,
+            background: "rgba(15, 23, 42, 0.6)",
+            backdropFilter: "blur(4px)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
+            zIndex: 9999,
             padding: "20px",
           }}
+          onClick={() => setShowProductModal(false)}
         >
           <div
             style={{
-              background: "#fff",
-              borderRadius: "12px",
+              background: "#ffffff",
+              borderRadius: "14px",
               width: "100%",
-              maxWidth: "600px",
+              maxWidth: "580px",
               maxHeight: "85vh",
               display: "flex",
               flexDirection: "column",
+              boxShadow: "0 20px 25px -5px rgba(0,0,0,0.2)",
               overflow: "hidden",
-              boxShadow: "0 16px 40px rgba(0,0,0,0.3)",
             }}
+            onClick={(e) => e.stopPropagation()}
           >
             {/* Modal Header */}
-            <div style={{ padding: "16px 20px", borderBottom: "1px solid #e1e3e5", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700 }}>Assign Products to Template</h3>
+            <div
+              style={{
+                padding: "16px 20px",
+                borderBottom: "1px solid #e2e8f0",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <div>
+                <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: "#0f172a" }}>
+                  Assign Products to Template
+                </h3>
+                <p style={{ margin: "2px 0 0", fontSize: "12px", color: "#64748b" }}>
+                  Selected products will use this template on your storefront.
+                </p>
+              </div>
               <button
                 type="button"
                 onClick={() => setShowProductModal(false)}
-                style={{ background: "none", border: "none", fontSize: "20px", cursor: "pointer", color: "#6d7175" }}
+                style={{
+                  border: "none",
+                  background: "transparent",
+                  fontSize: "20px",
+                  cursor: "pointer",
+                  color: "#94a3b8",
+                }}
               >
                 &times;
               </button>
             </div>
 
-            {/* Modal Search */}
-            <div style={{ padding: "12px 20px", borderBottom: "1px solid #f1f2f3" }}>
+            {/* Modal Search & Quick Actions */}
+            <div style={{ padding: "12px 20px", borderBottom: "1px solid #f1f5f9", background: "#f8fafc" }}>
               <input
                 type="text"
-                placeholder="Search products..."
+                placeholder="🔍 Search products by name..."
                 value={productSearch}
                 onChange={(e) => setProductSearch(e.target.value)}
-                style={{ width: "100%", padding: "8px 12px", borderRadius: "6px", border: "1px solid #c9cccf", fontSize: "13px" }}
+                style={{
+                  width: "100%",
+                  padding: "8px 12px",
+                  borderRadius: "6px",
+                  border: "1px solid #cbd5e1",
+                  fontSize: "13px",
+                  boxSizing: "border-box",
+                  outline: "none",
+                }}
               />
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginTop: "8px",
+                  fontSize: "12px",
+                  color: "#64748b",
+                }}
+              >
+                <span>{tempSelectedIds.length} product(s) selected</span>
+                <div style={{ display: "flex", gap: "10px" }}>
+                  <button
+                    type="button"
+                    onClick={handleSelectAllModal}
+                    style={{ border: "none", background: "none", color: "#008060", cursor: "pointer", fontWeight: 600 }}
+                  >
+                    Select All
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDeselectAllModal}
+                    style={{ border: "none", background: "none", color: "#ef4444", cursor: "pointer", fontWeight: 600 }}
+                  >
+                    Clear All
+                  </button>
+                </div>
+              </div>
             </div>
 
-            {/* Modal Products List */}
-            <div style={{ padding: "10px 20px", overflowY: "auto", flex: 1, display: "flex", flexDirection: "column", gap: "8px" }}>
-              {shopProducts
-                .filter((p: any) => p.title.toLowerCase().includes(productSearch.toLowerCase()))
-                .map((p: any) => {
-                  const isChecked = assignedProductIds.includes(p.id);
-                  return (
-                    <label
-                      key={p.id}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "12px",
-                        padding: "10px",
-                        borderRadius: "8px",
-                        border: isChecked ? "2px solid #008060" : "1px solid #e2e8f0",
-                        background: isChecked ? "#f0fdf4" : "#ffffff",
-                        cursor: "pointer",
-                      }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={isChecked}
-                        onChange={() => toggleProductAssignment(p.id)}
-                      />
-                      <img
-                        src={p.featuredImage?.url || "https://cdn.shopify.com/s/files/1/0533/2089/files/placeholder-images-image_large.png"}
-                        alt={p.title}
-                        style={{ width: "40px", height: "40px", borderRadius: "6px", objectFit: "cover", border: "1px solid #e2e8f0" }}
-                      />
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 600, fontSize: "13px" }}>{p.title}</div>
-                        <div style={{ fontSize: "11px", color: "#6d7175" }}>{p.variants?.length || 1} variants</div>
+            {/* Products List Body */}
+            <div style={{ overflowY: "auto", padding: "10px 20px", flex: 1, maxHeight: "380px" }}>
+              {modalFilteredProducts.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "30px 10px", color: "#94a3b8", fontSize: "13px" }}>
+                  No products matched your search.
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                  {modalFilteredProducts.map((p: any) => {
+                    const isSelected = tempSelectedIds.includes(p.id);
+                    const featImg = p.featuredImage?.url || p.images?.[0]?.url || "";
+                    const variantCount = p.variants?.length || 0;
+
+                    return (
+                      <div
+                        key={p.id}
+                        onClick={() => handleToggleProductInModal(p.id)}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          padding: "10px 12px",
+                          borderRadius: "8px",
+                          border: `1px solid ${isSelected ? "#008060" : "#e2e8f0"}`,
+                          background: isSelected ? "#f0fdf4" : "#fff",
+                          cursor: "pointer",
+                          transition: "all 0.1s ease",
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: "12px", minWidth: 0 }}>
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => {}} // handled by parent onClick
+                            style={{ width: "16px", height: "16px", accentColor: "#008060", cursor: "pointer" }}
+                          />
+                          <div
+                            style={{
+                              width: "38px",
+                              height: "38px",
+                              borderRadius: "4px",
+                              background: "#f1f5f9",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              overflow: "hidden",
+                              flexShrink: 0,
+                            }}
+                          >
+                            {featImg ? (
+                              <img src={featImg} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+                            ) : (
+                              <span style={{ fontSize: "16px" }}>👕</span>
+                            )}
+                          </div>
+                          <div style={{ minWidth: 0 }}>
+                            <div
+                              style={{
+                                fontSize: "13px",
+                                fontWeight: 600,
+                                color: "#0f172a",
+                                whiteSpace: "nowrap",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                              }}
+                            >
+                              {p.title}
+                            </div>
+                            <div style={{ fontSize: "11px", color: "#64748b", marginTop: "1px" }}>
+                              {variantCount} variant{variantCount !== 1 ? "s" : ""}
+                            </div>
+                          </div>
+                        </div>
+
+                        {isSelected && (
+                          <span style={{ color: "#008060", fontSize: "12px", fontWeight: 700, flexShrink: 0 }}>
+                            ✓ Selected
+                          </span>
+                        )}
                       </div>
-                    </label>
-                  );
-                })}
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             {/* Modal Footer */}
-            <div style={{ padding: "14px 20px", borderTop: "1px solid #e1e3e5", display: "flex", justifyContent: "space-between", alignItems: "center", background: "#f8fafc" }}>
-              <span style={{ fontSize: "13px", fontWeight: 600, color: "#64748b" }}>
-                {assignedProductIds.length} selected
-              </span>
+            <div
+              style={{
+                padding: "14px 20px",
+                borderTop: "1px solid #e2e8f0",
+                background: "#f8fafc",
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: "10px",
+              }}
+            >
               <button
                 type="button"
                 onClick={() => setShowProductModal(false)}
                 style={{
-                  background: "#008060",
-                  color: "#fff",
-                  border: "none",
+                  padding: "8px 14px",
                   borderRadius: "6px",
-                  padding: "8px 18px",
+                  background: "#fff",
+                  border: "1px solid #cbd5e1",
+                  color: "#334155",
                   fontSize: "13px",
-                  fontWeight: 700,
+                  fontWeight: 600,
                   cursor: "pointer",
                 }}
               >
-                Done
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmProductModal}
+                style={{
+                  padding: "8px 18px",
+                  borderRadius: "6px",
+                  background: "#008060",
+                  color: "#fff",
+                  border: "none",
+                  fontSize: "13px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Apply Selection ({tempSelectedIds.length})
               </button>
             </div>
           </div>
         </div>
       )}
-    </s-page>
+    </div>
   );
 }

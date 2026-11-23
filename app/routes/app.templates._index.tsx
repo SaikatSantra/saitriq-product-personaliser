@@ -181,9 +181,9 @@ export default function TemplatesIndex() {
               <thead>
                 <tr style={{ borderBottom: "1px solid #e2e8f0", background: "#f8fafc" }}>
                   <th style={{ padding: "12px 18px", fontSize: "12px", fontWeight: 600, color: "#64748b" }}>Template Name</th>
-                  <th style={{ padding: "12px 18px", fontSize: "12px", fontWeight: 600, color: "#64748b" }}>Canvas Dimensions</th>
-                  <th style={{ padding: "12px 18px", fontSize: "12px", fontWeight: 600, color: "#64748b" }}>Layers</th>
-                  <th style={{ padding: "12px 18px", fontSize: "12px", fontWeight: 600, color: "#64748b" }}>Products Linked</th>
+                  <th style={{ padding: "12px 18px", fontSize: "12px", fontWeight: 600, color: "#64748b" }}>Print Specs</th>
+                  <th style={{ padding: "12px 18px", fontSize: "12px", fontWeight: 600, color: "#64748b" }}>Personalization</th>
+                  <th style={{ padding: "12px 18px", fontSize: "12px", fontWeight: 600, color: "#64748b" }}>Assigned Products</th>
                   <th style={{ padding: "12px 18px", fontSize: "12px", fontWeight: 600, color: "#64748b" }}>Last Updated</th>
                   <th style={{ padding: "12px 18px", fontSize: "12px", fontWeight: 600, color: "#64748b", textAlign: "right" }}>Actions</th>
                 </tr>
@@ -237,7 +237,7 @@ export default function TemplatesIndex() {
                       </td>
                       <td style={{ padding: "14px 18px", fontSize: "12px" }}>
                         <span style={{ background: "#f8fafc", border: "1px solid #e2e8f0", padding: "3px 8px", borderRadius: "12px", fontSize: "11px", fontWeight: 600 }}>
-                          {layerCount} layers
+                          ✏️ Text + 📷 Photo
                         </span>
                       </td>
                       <td style={{ padding: "14px 18px", fontSize: "12px" }}>
@@ -263,7 +263,7 @@ export default function TemplatesIndex() {
                               fontWeight: 700,
                             }}
                           >
-                            Open Studio &rarr;
+                            Assign &amp; Setup &rarr;
                           </Link>
                           <button
                             type="button"
