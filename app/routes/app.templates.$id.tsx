@@ -1,7 +1,6 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
-import { useLoaderData, useFetcher, useNavigate, Link } from "react-router";
-import { useAppBridge } from "@shopify/app-bridge-react";
+import { useLoaderData, useFetcher, Link } from "react-router";
 import { authenticate } from "../shopify.server";
 import {
   getTemplate,
@@ -18,12 +17,84 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     throw new Response("Template not found", { status: 404 });
   }
 
-  // Fetch shop products with images, variants, and handle for assignment & live preview
-  const response = await admin.graphql(
-    `#graphql
-      query getProducts {
-        products(first: 60) {
+  // 1. Fetch exact assigned products using nodes(ids: $ids) for complete details
+  const assignedGids = (template.products || []).map((p: any) =>
+    p.shopifyProductId.includes("Product/")
+      ? p.shopifyProductId
+      : `gid://shopify/Product/${p.shopifyProductId}`,
+  );
+
+  let assignedProducts: any[] = [];
+  if (assignedGids.length > 0) {
+    try {
+      const assignedResponse = await admin.graphql(
+        `#graphql
+        query getAssignedProducts($ids: [ID!]!) {
+          nodes(ids: $ids) {
+            ... on Product {
+              id
+              title
+              handle
+              featuredImage {
+                url
+              }
+              images(first: 5) {
+                edges {
+                  node {
+                    url
+                  }
+                }
+              }
+              variants(first: 20) {
+                edges {
+                  node {
+                    id
+                    title
+                    price
+                  }
+                }
+              }
+            }
+          }
+        }`,
+        { variables: { ids: assignedGids } },
+      );
+      const assignedJson = await assignedResponse.json();
+      assignedProducts = (assignedJson.data?.nodes || [])
+        .filter(Boolean)
+        .map((node: any) => ({
+          ...node,
+          images: node.images?.edges?.map((imgEdge: any) => imgEdge.node) || [],
+          variants: node.variants?.edges?.map((vEdge: any) => vEdge.node) || [],
+        }));
+    } catch (err) {
+      console.error("Error fetching assigned products:", err);
+      assignedProducts = [];
+    }
+  }
+
+  // 2. Fetch first page of catalog products with pagination metadata
+  let catalogProducts: any[] = [];
+  let pageInfo = {
+    hasNextPage: false,
+    hasPreviousPage: false,
+    startCursor: null,
+    endCursor: null,
+  };
+
+  try {
+    const catalogResponse = await admin.graphql(
+      `#graphql
+      query getInitialCatalogProducts($first: Int!) {
+        products(first: $first) {
+          pageInfo {
+            hasNextPage
+            hasPreviousPage
+            startCursor
+            endCursor
+          }
           edges {
+            cursor
             node {
               id
               title
@@ -51,23 +122,156 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
           }
         }
       }`,
-  );
-  const productsJson = await response.json();
-  const shopProducts = productsJson.data?.products?.edges?.map((e: any) => ({
-    ...e.node,
-    images: e.node.images?.edges?.map((imgEdge: any) => imgEdge.node) || [],
-    variants: e.node.variants?.edges?.map((vEdge: any) => vEdge.node) || [],
-  })) || [];
+      { variables: { first: 12 } },
+    );
+    const catalogJson = await catalogResponse.json();
+    const pData = catalogJson.data?.products;
+    if (pData) {
+      pageInfo = {
+        hasNextPage: Boolean(pData.pageInfo?.hasNextPage),
+        hasPreviousPage: Boolean(pData.pageInfo?.hasPreviousPage),
+        startCursor: pData.pageInfo?.startCursor || null,
+        endCursor: pData.pageInfo?.endCursor || null,
+      };
+      catalogProducts = (pData.edges || []).map((e: any) => ({
+        ...e.node,
+        cursor: e.cursor,
+        images: e.node.images?.edges?.map((imgEdge: any) => imgEdge.node) || [],
+        variants: e.node.variants?.edges?.map((vEdge: any) => vEdge.node) || [],
+      }));
+    }
+  } catch (err) {
+    console.error("Error fetching initial catalog:", err);
+  }
 
-  return { template, shopProducts, shop: session.shop };
+  return {
+    template,
+    assignedProducts,
+    initialCatalog: {
+      products: catalogProducts,
+      pageInfo,
+    },
+    shop: session.shop,
+  };
 };
 
 export const action = async ({ request, params }: ActionFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { session, admin } = await authenticate.admin(request);
   const templateId = params.id as string;
   const formData = await request.formData();
   const intent = formData.get("intent");
 
+  // A. Search / Paginate Products across store catalog
+  if (intent === "search_products") {
+    const query = (formData.get("q") as string)?.trim() || "";
+    const cursor = (formData.get("cursor") as string)?.trim() || null;
+    const direction = (formData.get("direction") as string) || "next";
+
+    try {
+      let gqlQuery = "";
+      let variables: any = {};
+
+      if (direction === "prev" && cursor) {
+        gqlQuery = `#graphql
+          query getProductsPrev($last: Int!, $before: String, $query: String) {
+            products(last: $last, before: $before, query: $query) {
+              pageInfo {
+                hasNextPage
+                hasPreviousPage
+                startCursor
+                endCursor
+              }
+              edges {
+                cursor
+                node {
+                  id
+                  title
+                  handle
+                  featuredImage {
+                    url
+                  }
+                  variants(first: 20) {
+                    edges {
+                      node {
+                        id
+                        title
+                        price
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }`;
+        variables = {
+          last: 12,
+          before: cursor,
+          query: query ? `*${query}*` : null,
+        };
+      } else {
+        gqlQuery = `#graphql
+          query getProductsNext($first: Int!, $after: String, $query: String) {
+            products(first: $first, after: $after, query: $query) {
+              pageInfo {
+                hasNextPage
+                hasPreviousPage
+                startCursor
+                endCursor
+              }
+              edges {
+                cursor
+                node {
+                  id
+                  title
+                  handle
+                  featuredImage {
+                    url
+                  }
+                  variants(first: 20) {
+                    edges {
+                      node {
+                        id
+                        title
+                        price
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }`;
+        variables = {
+          first: 12,
+          after: cursor,
+          query: query ? `*${query}*` : null,
+        };
+      }
+
+      const res = await admin.graphql(gqlQuery, { variables });
+      const json = await res.json();
+      const pData = json.data?.products;
+
+      const products = (pData?.edges || []).map((e: any) => ({
+        ...e.node,
+        cursor: e.cursor,
+        variants: e.node.variants?.edges?.map((v: any) => v.node) || [],
+      }));
+
+      const pageInfo = {
+        hasNextPage: Boolean(pData?.pageInfo?.hasNextPage),
+        hasPreviousPage: Boolean(pData?.pageInfo?.hasPreviousPage),
+        startCursor: pData?.pageInfo?.startCursor || null,
+        endCursor: pData?.pageInfo?.endCursor || null,
+      };
+
+      return { success: true, intent: "search_products", products, pageInfo, query };
+    } catch (err: any) {
+      console.error("GraphQL product search error:", err);
+      return { success: false, intent: "search_products", products: [], error: err.message };
+    }
+  }
+
+  // B. Save Template & Assignments
   if (intent === "save_template") {
     const title = (formData.get("title") as string)?.trim() || "Untitled Template";
     const canvasWidth = parseInt(formData.get("canvasWidth") as string) || 1200;
@@ -96,6 +300,7 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
     return { success: true, message: "Template and product assignments saved successfully!" };
   }
 
+  // C. Unassign / Quick Update Product Assignments
   if (intent === "unassign_product") {
     const remainingRaw = formData.get("remainingProductIds") as string;
     let remainingProductIds: string[] = [];
@@ -106,11 +311,11 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
     }
 
     await assignProductsToTemplate(templateId, session.shop, remainingProductIds);
-    return { success: true, message: "Product unassigned from template successfully!" };
+    return { success: true, message: "Product assignment updated successfully!" };
   }
 
+  // D. Create Sample Customizable Products
   if (intent === "create_sample_products") {
-    const { admin } = await authenticate.admin(request);
     const sampleProducts = [
       { title: "Custom Classic Unisex T-Shirt" },
       { title: "Personalized Ceramic Coffee Mug" },
@@ -164,10 +369,9 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
 };
 
 export default function TemplateSetup() {
-  const { template, shopProducts, shop } = useLoaderData<typeof loader>();
+  const { template, assignedProducts, initialCatalog, shop } = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
-  const navigate = useNavigate();
-  const shopify = useAppBridge();
+  const searchFetcher = useFetcher<typeof action>();
 
   // Parse existing template configuration from layersJson
   const initialConfig = useMemo(() => {
@@ -209,36 +413,119 @@ export default function TemplateSetup() {
   const [enableUpload, setEnableUpload] = useState(initialConfig.enableUpload);
   const [enableFront, setEnableFront] = useState(initialConfig.enableFront);
   const [enableBack, setEnableBack] = useState(initialConfig.enableBack);
-  const [customFrontMockup, setCustomFrontMockup] = useState(initialConfig.customFrontMockup);
-  const [customBackMockup, setCustomBackMockup] = useState(initialConfig.customBackMockup);
+  const [customFrontMockup] = useState(initialConfig.customFrontMockup);
+  const [customBackMockup] = useState(initialConfig.customBackMockup);
 
   // Assigned product IDs
   const [assignedProductIds, setAssignedProductIds] = useState<string[]>(
-    template.products.map((p: any) => p.shopifyProductId),
+    (template.products || []).map((p: any) =>
+      p.shopifyProductId.includes("Product/")
+        ? p.shopifyProductId
+        : `gid://shopify/Product/${p.shopifyProductId}`,
+    ),
   );
+
+  // Cache of product objects (assigned + catalog) so assigned list always renders titles & images
+  const [productDetailsMap, setProductDetailsMap] = useState<Record<string, any>>(() => {
+    const map: Record<string, any> = {};
+    (assignedProducts || []).forEach((p: any) => {
+      map[p.id] = p;
+      const num = p.id.replace(/\D/g, "");
+      if (num) map[num] = p;
+    });
+    (initialCatalog?.products || []).forEach((p: any) => {
+      map[p.id] = p;
+      const num = p.id.replace(/\D/g, "");
+      if (num) map[num] = p;
+    });
+    return map;
+  });
 
   // Product Selection Modal state
   const [showProductModal, setShowProductModal] = useState(false);
-  const [productSearch, setProductSearch] = useState("");
+  const [productSearchInput, setProductSearchInput] = useState("");
+  const [activeSearchTerm, setActiveSearchTerm] = useState("");
   const [tempSelectedIds, setTempSelectedIds] = useState<string[]>(assignedProductIds);
 
-  // Filtered assigned products list
-  const assignedProductsList = useMemo(() => {
-    return shopProducts.filter((p: any) => assignedProductIds.includes(p.id));
-  }, [shopProducts, assignedProductIds]);
+  // Catalog products & pagination currently active in modal
+  const [modalProducts, setModalProducts] = useState<any[]>(initialCatalog?.products || []);
+  const [modalPageInfo, setModalPageInfo] = useState(
+    initialCatalog?.pageInfo || {
+      hasNextPage: false,
+      hasPreviousPage: false,
+      startCursor: null,
+      endCursor: null,
+    },
+  );
 
-  // Filtered modal products
-  const modalFilteredProducts = useMemo(() => {
-    if (!productSearch.trim()) return shopProducts;
-    const q = productSearch.toLowerCase().trim();
-    return shopProducts.filter((p: any) => p.title.toLowerCase().includes(q));
-  }, [shopProducts, productSearch]);
+  // Sync products returned from searchFetcher
+  useEffect(() => {
+    if (searchFetcher.data?.intent === "search_products") {
+      const prods = (searchFetcher.data as any).products || [];
+      const pInfo = (searchFetcher.data as any).pageInfo || {
+        hasNextPage: false,
+        hasPreviousPage: false,
+        startCursor: null,
+        endCursor: null,
+      };
+      setModalProducts(prods);
+      setModalPageInfo(pInfo);
+
+      // Merge into details map
+      setProductDetailsMap((prev) => {
+        const next = { ...prev };
+        prods.forEach((p: any) => {
+          next[p.id] = p;
+          const num = p.id.replace(/\D/g, "");
+          if (num) next[num] = p;
+        });
+        return next;
+      });
+    }
+  }, [searchFetcher.data]);
+
+  // Assigned products list computed from productDetailsMap
+  const assignedProductsList = useMemo(() => {
+    return assignedProductIds
+      .map((id) => productDetailsMap[id] || productDetailsMap[id.replace(/\D/g, "")])
+      .filter(Boolean);
+  }, [assignedProductIds, productDetailsMap]);
 
   const isSaving = fetcher.state === "submitting" || fetcher.state === "loading";
+  const isSearching = searchFetcher.state === "submitting" || searchFetcher.state === "loading";
+
+  // Trigger search on backend
+  const executeSearch = (searchTerm: string, cursor: string | null = null, direction: "next" | "prev" = "next") => {
+    setActiveSearchTerm(searchTerm);
+    searchFetcher.submit(
+      {
+        intent: "search_products",
+        q: searchTerm.trim(),
+        cursor: cursor || "",
+        direction,
+      },
+      { method: "POST" },
+    );
+  };
+
+  // Debounce search typing
+  const searchTimeoutRef = useRef<any>(null);
+  const handleSearchChange = (val: string) => {
+    setProductSearchInput(val);
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    searchTimeoutRef.current = setTimeout(() => {
+      executeSearch(val, null, "next");
+    }, 400);
+  };
+
+  const handleClearSearch = () => {
+    setProductSearchInput("");
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    executeSearch("", null, "next");
+  };
 
   // Handle Save
   const handleSave = () => {
-    // Generate clean template layers structure for storefront rendering
     const layersPayload = {
       settings: {
         enableText,
@@ -356,7 +643,9 @@ export default function TemplateSetup() {
   };
 
   const handleRemoveProduct = (productId: string) => {
-    const updated = assignedProductIds.filter((id) => id !== productId);
+    const updated = assignedProductIds.filter(
+      (id) => id !== productId && id.replace(/\D/g, "") !== productId.replace(/\D/g, ""),
+    );
     setAssignedProductIds(updated);
     fetcher.submit(
       {
@@ -369,22 +658,45 @@ export default function TemplateSetup() {
 
   const handleOpenProductModal = () => {
     setTempSelectedIds([...assignedProductIds]);
-    setProductSearch("");
+    setProductSearchInput("");
+    setActiveSearchTerm("");
+    setModalProducts(initialCatalog?.products || []);
+    setModalPageInfo(
+      initialCatalog?.pageInfo || {
+        hasNextPage: false,
+        hasPreviousPage: false,
+        startCursor: null,
+        endCursor: null,
+      },
+    );
     setShowProductModal(true);
   };
 
   const handleToggleProductInModal = (productId: string) => {
-    setTempSelectedIds((prev) =>
-      prev.includes(productId) ? prev.filter((id) => id !== productId) : [...prev, productId],
+    const normalized = productId.includes("Product/")
+      ? productId
+      : `gid://shopify/Product/${productId}`;
+    setTempSelectedIds((prev) => {
+      const exists = prev.some(
+        (id) => id === normalized || id.replace(/\D/g, "") === productId.replace(/\D/g, ""),
+      );
+      if (exists) {
+        return prev.filter(
+          (id) => id !== normalized && id.replace(/\D/g, "") !== productId.replace(/\D/g, ""),
+        );
+      }
+      return [...prev, normalized];
+    });
+  };
+
+  const handleSelectAllOnThisPage = () => {
+    const pageIds = modalProducts.map((p) =>
+      p.id.includes("Product/") ? p.id : `gid://shopify/Product/${p.id}`,
     );
+    setTempSelectedIds((prev) => Array.from(new Set([...prev, ...pageIds])));
   };
 
-  const handleSelectAllModal = () => {
-    const allIds = shopProducts.map((p: any) => p.id);
-    setTempSelectedIds(allIds);
-  };
-
-  const handleDeselectAllModal = () => {
+  const handleDeselectAll = () => {
     setTempSelectedIds([]);
   };
 
@@ -658,7 +970,7 @@ export default function TemplateSetup() {
                   </span>
                 </div>
                 <p style={{ margin: "4px 0 0", fontSize: "13px", color: "#64748b" }}>
-                  Products linked to this template will show the live personalizer on your storefront.
+                  Only products linked here will display the &quot;🎨 Customize This Product&quot; button on your storefront.
                 </p>
               </div>
 
@@ -696,7 +1008,7 @@ export default function TemplateSetup() {
               >
                 <div style={{ fontSize: "40px", marginBottom: "8px" }}>🛍️</div>
                 <div style={{ fontSize: "15px", fontWeight: 700, color: "#1e293b", marginBottom: "4px" }}>
-                  No Products Assigned Yet
+                  No Products Assigned
                 </div>
                 <p
                   style={{
@@ -707,7 +1019,7 @@ export default function TemplateSetup() {
                     lineHeight: 1.4,
                   }}
                 >
-                  Assign one or more products from your Shopify store so customers can customize them live on the product page.
+                  This template is currently detached. Click below to search your store catalog and assign products.
                 </p>
                 <div style={{ display: "flex", justifyContent: "center", gap: "10px" }}>
                   <button
@@ -726,26 +1038,24 @@ export default function TemplateSetup() {
                   >
                     + Assign Existing Products
                   </button>
-                  {shopProducts.length === 0 && (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        fetcher.submit({ intent: "create_sample_products" }, { method: "POST" })
-                      }
-                      style={{
-                        padding: "8px 14px",
-                        borderRadius: "6px",
-                        background: "#fff",
-                        border: "1px solid #cbd5e1",
-                        color: "#334155",
-                        fontSize: "13px",
-                        fontWeight: 600,
-                        cursor: "pointer",
-                      }}
-                    >
-                      Create Sample Products
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      fetcher.submit({ intent: "create_sample_products" }, { method: "POST" })
+                    }
+                    style={{
+                      padding: "8px 14px",
+                      borderRadius: "6px",
+                      background: "#fff",
+                      border: "1px solid #cbd5e1",
+                      color: "#334155",
+                      fontSize: "13px",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Create Sample Products
+                  </button>
                 </div>
               </div>
             ) : (
@@ -821,7 +1131,7 @@ export default function TemplateSetup() {
                               {variantCount} variant{variantCount !== 1 ? "s" : ""}
                             </span>
                             <span>•</span>
-                            <span style={{ color: "#008060", fontWeight: 600 }}>Active</span>
+                            <span style={{ color: "#008060", fontWeight: 600 }}>Active Customizer</span>
                           </div>
                         </div>
                       </div>
@@ -1211,7 +1521,7 @@ export default function TemplateSetup() {
         </div>
       </div>
 
-      {/* Product Selection Modal */}
+      {/* Product Selection Modal with Live Shopify Search & Cursor Pagination */}
       {showProductModal && (
         <div
           style={{
@@ -1235,8 +1545,8 @@ export default function TemplateSetup() {
               background: "#ffffff",
               borderRadius: "14px",
               width: "100%",
-              maxWidth: "580px",
-              maxHeight: "85vh",
+              maxWidth: "620px",
+              maxHeight: "88vh",
               display: "flex",
               flexDirection: "column",
               boxShadow: "0 20px 25px -5px rgba(0,0,0,0.2)",
@@ -1259,7 +1569,7 @@ export default function TemplateSetup() {
                   Assign Products to Template
                 </h3>
                 <p style={{ margin: "2px 0 0", fontSize: "12px", color: "#64748b" }}>
-                  Selected products will use this template on your storefront.
+                  Search your entire store catalog and select products to link.
                 </p>
               </div>
               <button
@@ -1277,45 +1587,96 @@ export default function TemplateSetup() {
               </button>
             </div>
 
-            {/* Modal Search & Quick Actions */}
-            <div style={{ padding: "12px 20px", borderBottom: "1px solid #f1f5f9", background: "#f8fafc" }}>
-              <input
-                type="text"
-                placeholder="🔍 Search products by name..."
-                value={productSearch}
-                onChange={(e) => setProductSearch(e.target.value)}
-                style={{
-                  width: "100%",
-                  padding: "8px 12px",
-                  borderRadius: "6px",
-                  border: "1px solid #cbd5e1",
-                  fontSize: "13px",
-                  boxSizing: "border-box",
-                  outline: "none",
-                }}
-              />
+            {/* Modal Search Bar with Live Execution */}
+            <div style={{ padding: "14px 20px", borderBottom: "1px solid #f1f5f9", background: "#f8fafc" }}>
+              <div style={{ display: "flex", gap: "8px", position: "relative" }}>
+                <input
+                  type="text"
+                  placeholder="🔍 Search all store products (title, tag, type)..."
+                  value={productSearchInput}
+                  onChange={(e) => handleSearchChange(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      executeSearch(productSearchInput, null, "next");
+                    }
+                  }}
+                  style={{
+                    flex: 1,
+                    padding: "9px 36px 9px 12px",
+                    borderRadius: "6px",
+                    border: "1px solid #cbd5e1",
+                    fontSize: "13px",
+                    boxSizing: "border-box",
+                    outline: "none",
+                  }}
+                />
+                {productSearchInput && (
+                  <button
+                    type="button"
+                    onClick={handleClearSearch}
+                    style={{
+                      position: "absolute",
+                      right: "92px",
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                      border: "none",
+                      background: "none",
+                      color: "#94a3b8",
+                      cursor: "pointer",
+                      fontSize: "14px",
+                      padding: "4px",
+                    }}
+                  >
+                    ✕
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => executeSearch(productSearchInput, null, "next")}
+                  disabled={isSearching}
+                  style={{
+                    padding: "8px 16px",
+                    borderRadius: "6px",
+                    background: "#008060",
+                    color: "#fff",
+                    border: "none",
+                    fontSize: "13px",
+                    fontWeight: 600,
+                    cursor: isSearching ? "not-allowed" : "pointer",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {isSearching ? "Searching..." : "Search"}
+                </button>
+              </div>
+
+              {/* Selection Summary & Quick Actions */}
               <div
                 style={{
                   display: "flex",
                   justifyContent: "space-between",
                   alignItems: "center",
-                  marginTop: "8px",
+                  marginTop: "10px",
                   fontSize: "12px",
                   color: "#64748b",
                 }}
               >
-                <span>{tempSelectedIds.length} product(s) selected</span>
-                <div style={{ display: "flex", gap: "10px" }}>
+                <span>
+                  <strong>{tempSelectedIds.length}</strong> product(s) selected
+                  {activeSearchTerm ? ` • Filtered by "${activeSearchTerm}"` : ""}
+                </span>
+                <div style={{ display: "flex", gap: "12px" }}>
                   <button
                     type="button"
-                    onClick={handleSelectAllModal}
+                    onClick={handleSelectAllOnThisPage}
                     style={{ border: "none", background: "none", color: "#008060", cursor: "pointer", fontWeight: 600 }}
                   >
-                    Select All
+                    Select Page
                   </button>
                   <button
                     type="button"
-                    onClick={handleDeselectAllModal}
+                    onClick={handleDeselectAll}
                     style={{ border: "none", background: "none", color: "#ef4444", cursor: "pointer", fontWeight: 600 }}
                   >
                     Clear All
@@ -1325,15 +1686,24 @@ export default function TemplateSetup() {
             </div>
 
             {/* Products List Body */}
-            <div style={{ overflowY: "auto", padding: "10px 20px", flex: 1, maxHeight: "380px" }}>
-              {modalFilteredProducts.length === 0 ? (
-                <div style={{ textAlign: "center", padding: "30px 10px", color: "#94a3b8", fontSize: "13px" }}>
-                  No products matched your search.
+            <div style={{ overflowY: "auto", padding: "12px 20px", flex: 1, minHeight: "260px", maxHeight: "360px" }}>
+              {isSearching ? (
+                <div style={{ textAlign: "center", padding: "40px 10px", color: "#64748b", fontSize: "14px" }}>
+                  <div style={{ fontSize: "28px", marginBottom: "8px" }}>⏳</div>
+                  Searching store products across Shopify...
+                </div>
+              ) : modalProducts.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "40px 10px", color: "#94a3b8", fontSize: "13px" }}>
+                  <div style={{ fontSize: "28px", marginBottom: "8px" }}>🔍</div>
+                  No products matched &quot;{productSearchInput}&quot;. Try a different keyword or clear search.
                 </div>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                  {modalFilteredProducts.map((p: any) => {
-                    const isSelected = tempSelectedIds.includes(p.id);
+                  {modalProducts.map((p: any) => {
+                    const normalizedId = p.id.includes("Product/") ? p.id : `gid://shopify/Product/${p.id}`;
+                    const isSelected = tempSelectedIds.some(
+                      (id) => id === normalizedId || id.replace(/\D/g, "") === p.id.replace(/\D/g, ""),
+                    );
                     const featImg = p.featuredImage?.url || p.images?.[0]?.url || "";
                     const variantCount = p.variants?.length || 0;
 
@@ -1362,9 +1732,9 @@ export default function TemplateSetup() {
                           />
                           <div
                             style={{
-                              width: "38px",
-                              height: "38px",
-                              borderRadius: "4px",
+                              width: "40px",
+                              height: "40px",
+                              borderRadius: "6px",
                               background: "#f1f5f9",
                               display: "flex",
                               alignItems: "center",
@@ -1376,7 +1746,7 @@ export default function TemplateSetup() {
                             {featImg ? (
                               <img src={featImg} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
                             ) : (
-                              <span style={{ fontSize: "16px" }}>👕</span>
+                              <span style={{ fontSize: "18px" }}>👕</span>
                             )}
                           </div>
                           <div style={{ minWidth: 0 }}>
@@ -1392,7 +1762,7 @@ export default function TemplateSetup() {
                             >
                               {p.title}
                             </div>
-                            <div style={{ fontSize: "11px", color: "#64748b", marginTop: "1px" }}>
+                            <div style={{ fontSize: "11px", color: "#64748b", marginTop: "2px" }}>
                               {variantCount} variant{variantCount !== 1 ? "s" : ""}
                             </div>
                           </div>
@@ -1410,7 +1780,63 @@ export default function TemplateSetup() {
               )}
             </div>
 
-            {/* Modal Footer */}
+            {/* Pagination Controls Footer */}
+            <div
+              style={{
+                padding: "10px 20px",
+                borderTop: "1px solid #f1f5f9",
+                background: "#ffffff",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                fontSize: "12px",
+                color: "#64748b",
+              }}
+            >
+              <span>Showing {modalProducts.length} items</span>
+              <div style={{ display: "flex", gap: "8px" }}>
+                <button
+                  type="button"
+                  disabled={!modalPageInfo.hasPreviousPage || isSearching}
+                  onClick={() =>
+                    executeSearch(activeSearchTerm, modalPageInfo.startCursor, "prev")
+                  }
+                  style={{
+                    padding: "5px 12px",
+                    borderRadius: "6px",
+                    border: "1px solid #cbd5e1",
+                    background: modalPageInfo.hasPreviousPage ? "#fff" : "#f1f5f9",
+                    color: modalPageInfo.hasPreviousPage ? "#334155" : "#94a3b8",
+                    cursor: modalPageInfo.hasPreviousPage ? "pointer" : "not-allowed",
+                    fontSize: "12px",
+                    fontWeight: 600,
+                  }}
+                >
+                  ← Previous
+                </button>
+                <button
+                  type="button"
+                  disabled={!modalPageInfo.hasNextPage || isSearching}
+                  onClick={() =>
+                    executeSearch(activeSearchTerm, modalPageInfo.endCursor, "next")
+                  }
+                  style={{
+                    padding: "5px 12px",
+                    borderRadius: "6px",
+                    border: "1px solid #cbd5e1",
+                    background: modalPageInfo.hasNextPage ? "#fff" : "#f1f5f9",
+                    color: modalPageInfo.hasNextPage ? "#334155" : "#94a3b8",
+                    cursor: modalPageInfo.hasNextPage ? "pointer" : "not-allowed",
+                    fontSize: "12px",
+                    fontWeight: 600,
+                  }}
+                >
+                  Next →
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Bottom Actions */}
             <div
               style={{
                 padding: "14px 20px",
@@ -1447,7 +1873,7 @@ export default function TemplateSetup() {
                   color: "#fff",
                   border: "none",
                   fontSize: "13px",
-                  fontWeight: 600,
+                  fontWeight: 700,
                   cursor: "pointer",
                 }}
               >
