@@ -20,45 +20,56 @@
 
 <div class="saitriq-personalizer-root" id="saitriq-personalizer-{{ block.id }}" {{ block.shopify_attributes }}{% unless request.design_mode %} style="display: none;"{% endunless %}>
   <style>
-    #saitriq-personalizer-{{ block.id }} .saitriq-customize-btn {
-      background-color: {{ block.settings.button_bg_color | default: '#008060' }};
-      color: {{ block.settings.button_text_color | default: '#ffffff' }};
-      border: {{ block.settings.button_border_width | default: 0 }}px solid {{ block.settings.button_border_color | default: '#008060' }};
-      border-radius: {{ block.settings.button_border_radius | default: 8 }}px;
-      font-size: {{ block.settings.button_font_size | default: 15 }}px;
-      font-weight: {{ block.settings.button_font_weight | default: '600' }};
-      padding: {{ block.settings.button_padding_vertical | default: 14 }}px {{ block.settings.button_padding_horizontal | default: 24 }}px;
-      margin-top: {{ block.settings.button_margin_top | default: 8 }}px;
-      margin-bottom: {{ block.settings.button_margin_bottom | default: 12 }}px;
-      {% if block.settings.button_full_width %}
-        width: 100%;
-        display: flex;
-      {% else %}
-        width: auto;
-        display: inline-flex;
-      {% endif %}
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      text-align: center;
-      text-decoration: none;
-      line-height: 1.2;
-      letter-spacing: 0.2px;
-      {% if block.settings.button_shadow %}
-        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
-      {% else %}
-        box-shadow: none;
-      {% endif %}
-      transition: all 0.2s ease-in-out;
-    }
-    #saitriq-personalizer-{{ block.id }} .saitriq-customize-btn:hover {
-      background-color: {{ block.settings.button_hover_bg_color | default: '#006e52' }};
-      color: {{ block.settings.button_hover_text_color | default: '#ffffff' }};
-      {% if block.settings.button_shadow %}
-        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
-        transform: translateY(-1px);
-      {% endif %}
-    }
+    {% if block.settings.use_theme_button_style %}
+      #saitriq-personalizer-{{ block.id }} .saitriq-customize-btn {
+        margin-top: {{ block.settings.button_margin_top | default: 8 }}px;
+        margin-bottom: {{ block.settings.button_margin_bottom | default: 12 }}px;
+        {% if block.settings.button_full_width %}
+          width: 100%;
+        {% endif %}
+        cursor: pointer;
+      }
+    {% else %}
+      #saitriq-personalizer-{{ block.id }} .saitriq-customize-btn {
+        background-color: {{ block.settings.button_bg_color | default: '#008060' }};
+        color: {{ block.settings.button_text_color | default: '#ffffff' }};
+        border: {{ block.settings.button_border_width | default: 0 }}px solid {{ block.settings.button_border_color | default: '#008060' }};
+        border-radius: {{ block.settings.button_border_radius | default: 8 }}px;
+        font-size: {{ block.settings.button_font_size | default: 15 }}px;
+        font-weight: {{ block.settings.button_font_weight | default: '600' }};
+        padding: {{ block.settings.button_padding_vertical | default: 14 }}px {{ block.settings.button_padding_horizontal | default: 24 }}px;
+        margin-top: {{ block.settings.button_margin_top | default: 8 }}px;
+        margin-bottom: {{ block.settings.button_margin_bottom | default: 12 }}px;
+        {% if block.settings.button_full_width %}
+          width: 100%;
+          display: flex;
+        {% else %}
+          width: auto;
+          display: inline-flex;
+        {% endif %}
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        text-align: center;
+        text-decoration: none;
+        line-height: 1.2;
+        letter-spacing: 0.2px;
+        {% if block.settings.button_shadow %}
+          box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+        {% else %}
+          box-shadow: none;
+        {% endif %}
+        transition: all 0.2s ease-in-out;
+      }
+      #saitriq-personalizer-{{ block.id }} .saitriq-customize-btn:hover {
+        background-color: {{ block.settings.button_hover_bg_color | default: '#006e52' }};
+        color: {{ block.settings.button_hover_text_color | default: '#ffffff' }};
+        {% if block.settings.button_shadow %}
+          box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+          transform: translateY(-1px);
+        {% endif %}
+      }
+    {% endif %}
   </style>
 
   <saitriq-personalizer
@@ -146,7 +157,7 @@
     <div class="saitriq-trigger-wrapper">
       <button
         type="button"
-        class="saitriq-customize-btn button"
+        class="saitriq-customize-btn{% if block.settings.use_theme_button_style %} saitriq-theme-style button button--primary{% if block.settings.button_full_width %} button--full-width{% endif %}{% else %} button{% endif %}"
       >
         {{ btn_text | escape }}
       </button>
@@ -229,6 +240,17 @@
       "id": "product",
       "label": "Product",
       "autofill": true
+    },
+    {
+      "type": "header",
+      "content": "Theme Style & Button Integration"
+    },
+    {
+      "type": "checkbox",
+      "id": "use_theme_button_style",
+      "label": "Use button design as per theme",
+      "default": false,
+      "info": "When enabled, the button automatically inherits your theme's native button colors, font, borders, and shape."
     },
     {
       "type": "header",

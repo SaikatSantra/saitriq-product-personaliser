@@ -8,9 +8,6 @@
   data-enabled="true"
   data-shop="{{ shop.permanent_domain }}"
   data-fabric-url="{{ 'fabric.min.js' | asset_url }}"
-  data-button-text="{{ block.settings.button_text | default: '🎨 Customize This Product' | escape }}"
-  data-button-bg="{{ block.settings.button_bg_color | default: '#008060' | escape }}"
-  data-button-color="{{ block.settings.button_text_color | default: '#ffffff' | escape }}"
   style="display: none;"
 ></div>
 
@@ -20,25 +17,6 @@
   "target": "body",
   "stylesheet": "personalizer.css",
   "javascript": "personalizer.js",
-  "settings": [
-    {
-      "type": "text",
-      "id": "button_text",
-      "label": "Customize Button Text",
-      "default": "🎨 Customize This Product"
-    },
-    {
-      "type": "color",
-      "id": "button_bg_color",
-      "label": "Button Background Color",
-      "default": "#008060"
-    },
-    {
-      "type": "color",
-      "id": "button_text_color",
-      "label": "Button Text Color",
-      "default": "#ffffff"
-    }
-  ]
+  "settings": []
 }
 {% endschema %}

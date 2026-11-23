@@ -2,7 +2,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700&family=Oswald:wght@500&family=Pacifico&family=Playfair+Display:wght@600&family=Roboto:wght@400;500;700&display=swap');
 
 .saitriq-personalizer-root,
-.saitriq-customize-btn,
+.saitriq-customize-btn:not(.saitriq-theme-style),
 .saitriq-modal-backdrop,
 .saitriq-modal-window,
 .saitriq-control-card,
@@ -17,7 +17,7 @@
   width: 100%;
 }
 
-.saitriq-customize-btn {
+.saitriq-customize-btn:not(.saitriq-theme-style) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -37,10 +37,14 @@
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
 }
 
-.saitriq-customize-btn:hover {
+.saitriq-customize-btn:not(.saitriq-theme-style):hover {
   filter: brightness(1.08);
   transform: translateY(-1px);
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.16);
+}
+
+.saitriq-customize-btn.saitriq-theme-style {
+  cursor: pointer;
 }
 
 /* Modal Overlay */
