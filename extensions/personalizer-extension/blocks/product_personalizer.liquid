@@ -19,7 +19,7 @@
 {% assign btn_text = block.settings.button_text | default: default_btn_text %}
 {% assign btn_color = block.settings.primary_color | default: '#008060' %}
 
-<div class="saitriq-personalizer-root" id="saitriq-personalizer-{{ block.id }}" {{ block.shopify_attributes }}>
+<div class="saitriq-personalizer-root" id="saitriq-personalizer-{{ block.id }}" {{ block.shopify_attributes }} style="display: none;">
   <saitriq-personalizer
     data-product-id="{{ current_product.id }}"
     data-product-handle="{{ current_product.handle }}"

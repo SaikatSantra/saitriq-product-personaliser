@@ -39,9 +39,17 @@
 
       if (!isAppActive) {
         this.style.display = "none";
+        const root = this.closest(".saitriq-personalizer-root") || this.parentElement;
+        if (root && root.classList.contains("saitriq-personalizer-root")) root.style.display = "none";
         return;
       }
-      this.style.display = "";
+      
+      // Keep hidden until template assignment is verified from backend
+      this.style.display = "none";
+      const initialRoot = this.closest(".saitriq-personalizer-root") || this.parentElement;
+      if (initialRoot && initialRoot.classList.contains("saitriq-personalizer-root") && !this.isDesignMode) {
+        initialRoot.style.display = "none";
+      }
 
       this.locales = {};
       const localeScript = this.querySelector(".saitriq-locales-json") || document.querySelector(".saitriq-locales-json");
@@ -382,7 +390,12 @@
       }
 
       if (!this.templateData) {
-        this.templateData = this.getDefaultPreviewTemplate();
+        if (this.isDesignMode) {
+          this.templateData = this.getDefaultPreviewTemplate();
+        } else {
+          console.warn("[Saitriq] Cannot open personalizer: product is not assigned to any template.");
+          return;
+        }
       }
 
       this.openModal();
@@ -456,6 +469,8 @@
         candidateEndpoints.push(`/api/storefront/template?${queryParams}`);
 
         let data = null;
+        let isExplicitlyUnassigned = false;
+
         for (const ep of candidateEndpoints) {
           try {
             const resp = await fetch(ep, {
@@ -464,9 +479,16 @@
             });
             if (resp && resp.ok) {
               const json = await resp.json().catch(() => null);
-              if (json && json.hasCustomizer && json.template) {
-                data = json;
-                break;
+              if (json) {
+                // If backend explicitly says no customizer is assigned, stop immediately!
+                if (json.hasCustomizer === false) {
+                  isExplicitlyUnassigned = true;
+                  break;
+                }
+                if (json.hasCustomizer && json.template) {
+                  data = json;
+                  break;
+                }
               }
             }
           } catch (fetchErr) {
@@ -474,40 +496,30 @@
           }
         }
 
-        if (data && data.languages && typeof data.languages === "object") {
-          this.languages = data.languages;
-          const activeCode = this.currentLocale || "en";
-          const langEntry = data.languages[activeCode] || data.languages["en"];
-          if (langEntry?.strings) {
-            const cleanText = {};
-            Object.keys(langEntry.strings).forEach((k) => {
-              if (langEntry.strings[k] && String(langEntry.strings[k]).trim() !== "") {
-                cleanText[k] = langEntry.strings[k];
-              }
-            });
-            this.locales = { ...this.locales, ...cleanText };
-            if (cleanText.button_text) {
-              this.buttonText = cleanText.button_text;
-            }
+        const rootEl = this.closest(".saitriq-personalizer-root") || this.parentElement;
+        const isRoot = rootEl && rootEl.classList.contains("saitriq-personalizer-root");
+
+        if (isExplicitlyUnassigned || !data || !data.hasCustomizer || !data.template) {
+          this.templateData = null;
+          this.hasCustomizer = false;
+          if (this.isDesignMode) {
+            this.style.display = "";
+            if (isRoot) rootEl.style.display = "";
+          } else {
+            this.style.display = "none";
+            if (isRoot) rootEl.style.display = "none";
           }
-        } else if (data && data.storefrontText && typeof data.storefrontText === "object") {
-          const cleanText = {};
-          Object.keys(data.storefrontText).forEach((k) => {
-            if (data.storefrontText[k] && String(data.storefrontText[k]).trim() !== "") {
-              cleanText[k] = data.storefrontText[k];
-            }
-          });
-          this.locales = { ...this.locales, ...cleanText };
-          if (cleanText.button_text) {
-            this.buttonText = cleanText.button_text;
-          }
+          console.log("[Saitriq] Product is not assigned to any template. Customize button hidden.");
+          return;
         }
 
-        if (data && data.template) {
-          this.templateData = data.template;
-          window.__saitriq_template = data.template;
-          console.log("[Saitriq] Successfully loaded template from backend:", data.template.id, data.template.title);
-        }
+        // Product HAS a verified template assigned:
+        this.hasCustomizer = true;
+        this.templateData = data.template;
+        window.__saitriq_template = data.template;
+        this.style.display = "";
+        if (isRoot) rootEl.style.display = "";
+        console.log("[Saitriq] Successfully loaded template from backend:", data.template.id, data.template.title);
       } catch (err) {
         console.warn("[Saitriq] Storefront endpoint fetch exception:", err);
       } finally {
@@ -519,10 +531,9 @@
 
         if (this.pendingOpen || this.autoOpen) {
           this.pendingOpen = false;
-          if (!this.templateData) {
-            this.templateData = this.getDefaultPreviewTemplate();
+          if (this.templateData) {
+            this.openModal();
           }
-          this.openModal();
         }
       }
     }
@@ -539,7 +550,12 @@
 
     openModal() {
       if (!this.templateData) {
-        this.templateData = this.getDefaultPreviewTemplate();
+        if (this.isDesignMode) {
+          this.templateData = this.getDefaultPreviewTemplate();
+        } else {
+          console.warn("[Saitriq] Cannot open personalizer: product is not assigned to any template.");
+          return;
+        }
       }
 
       let modal = document.getElementById("saitriq-personalizer-modal");

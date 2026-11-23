@@ -191,7 +191,7 @@ export async function assignProductsToTemplate(
 ) {
   const shop = await ensureShop(shopifyDomain);
 
-  // Unlink previous products for this template
+  // 1. Remove previous products assigned to this template
   await prisma.product.deleteMany({
     where: {
       shopId: shop.id,
@@ -199,10 +199,35 @@ export async function assignProductsToTemplate(
     },
   });
 
-  // Create new associations
+  // 2. Clean up any orphaned records with null templateId
+  await prisma.product.deleteMany({
+    where: {
+      shopId: shop.id,
+      templateId: null,
+    },
+  });
+
+  // 3. Create fresh associations
   if (shopifyProductIds.length > 0) {
+    // Collect normalized GID format (e.g. gid://shopify/Product/12345)
+    const uniqueIds = Array.from(
+      new Set(
+        shopifyProductIds.map((pId) =>
+          pId.includes("Product/") ? pId : `gid://shopify/Product/${pId}`,
+        ),
+      ),
+    );
+
+    // Delete any previous associations for these specific products to avoid duplicates
+    await prisma.product.deleteMany({
+      where: {
+        shopId: shop.id,
+        shopifyProductId: { in: uniqueIds },
+      },
+    });
+
     await prisma.product.createMany({
-      data: shopifyProductIds.map((pId) => ({
+      data: uniqueIds.map((pId) => ({
         shopId: shop.id,
         shopifyProductId: pId,
         templateId,

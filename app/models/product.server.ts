@@ -2,6 +2,7 @@ import prisma from "../db.server";
 import { ensureShop } from "./shop.server";
 
 export async function getTemplateForProduct(shopifyDomain: string, rawProductId: string) {
+  if (!shopifyDomain || !rawProductId) return null;
   const shop = await ensureShop(shopifyDomain);
 
   // Normalize ID: handle both numeric "9876543210" and GID "gid://shopify/Product/9876543210"
@@ -10,15 +11,20 @@ export async function getTemplateForProduct(shopifyDomain: string, rawProductId:
     : `gid://shopify/Product/${rawProductId}`;
   const numericId = rawProductId.replace(/\D/g, "");
 
+  const idConditions = [{ shopifyProductId: rawProductId }];
+  if (cleanId && cleanId !== rawProductId) {
+    idConditions.push({ shopifyProductId: cleanId });
+  }
+  if (numericId && numericId !== rawProductId && numericId !== cleanId) {
+    idConditions.push({ shopifyProductId: numericId });
+  }
+
   const product = await prisma.product.findFirst({
     where: {
       shopId: shop.id,
       isActive: true,
-      OR: [
-        { shopifyProductId: rawProductId },
-        { shopifyProductId: cleanId },
-        { shopifyProductId: numericId },
-      ],
+      templateId: { not: null },
+      OR: idConditions,
     },
     select: {
       templateId: true,
@@ -28,8 +34,8 @@ export async function getTemplateForProduct(shopifyDomain: string, rawProductId:
   const templateId = product?.templateId;
 
   if (templateId) {
-    const template = await prisma.template.findUnique({
-      where: { id: templateId },
+    const template = await prisma.template.findFirst({
+      where: { id: templateId, shopId: shop.id },
       include: {
         optionGroups: {
           orderBy: { position: "asc" },
@@ -42,6 +48,6 @@ export async function getTemplateForProduct(shopifyDomain: string, rawProductId:
     if (template) return template;
   }
 
-  // If this product does not have a linked template, return null so it remains an uncustomized default product
+  // If this product does not have an active linked template, return null
   return null;
 }

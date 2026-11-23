@@ -96,6 +96,19 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
     return { success: true, message: "Template and product assignments saved successfully!" };
   }
 
+  if (intent === "unassign_product") {
+    const remainingRaw = formData.get("remainingProductIds") as string;
+    let remainingProductIds: string[] = [];
+    try {
+      remainingProductIds = JSON.parse(remainingRaw || "[]");
+    } catch {
+      remainingProductIds = [];
+    }
+
+    await assignProductsToTemplate(templateId, session.shop, remainingProductIds);
+    return { success: true, message: "Product unassigned from template successfully!" };
+  }
+
   if (intent === "create_sample_products") {
     const { admin } = await authenticate.admin(request);
     const sampleProducts = [
@@ -343,7 +356,15 @@ export default function TemplateSetup() {
   };
 
   const handleRemoveProduct = (productId: string) => {
-    setAssignedProductIds((prev) => prev.filter((id) => id !== productId));
+    const updated = assignedProductIds.filter((id) => id !== productId);
+    setAssignedProductIds(updated);
+    fetcher.submit(
+      {
+        intent: "unassign_product",
+        remainingProductIds: JSON.stringify(updated),
+      },
+      { method: "POST" },
+    );
   };
 
   const handleOpenProductModal = () => {
@@ -370,6 +391,13 @@ export default function TemplateSetup() {
   const handleConfirmProductModal = () => {
     setAssignedProductIds([...tempSelectedIds]);
     setShowProductModal(false);
+    fetcher.submit(
+      {
+        intent: "unassign_product",
+        remainingProductIds: JSON.stringify(tempSelectedIds),
+      },
+      { method: "POST" },
+    );
   };
 
   const cleanShopDomain = shop.replace(/^https?:\/\//, "").replace(/\/.*$/, "").trim();
