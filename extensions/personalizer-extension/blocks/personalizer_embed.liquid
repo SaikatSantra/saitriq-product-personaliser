@@ -6,6 +6,8 @@
 <div
   id="saitriq-personalizer-embed"
   data-enabled="true"
+  data-shop="{{ shop.permanent_domain }}"
+  data-fabric-url="{{ 'fabric.min.js' | asset_url }}"
   style="display: none;"
 ></div>
 
@@ -15,6 +17,19 @@
   "target": "body",
   "stylesheet": "personalizer.css",
   "javascript": "personalizer.js",
-  "settings": []
+  "settings": [
+    {
+      "type": "text",
+      "id": "button_text",
+      "label": "Customize Button Text",
+      "default": "🎨 Customize This Product"
+    },
+    {
+      "type": "color",
+      "id": "primary_color",
+      "label": "Primary Accent Color",
+      "default": "#008060"
+    }
+  ]
 }
 {% endschema %}

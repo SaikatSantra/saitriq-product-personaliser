@@ -33,22 +33,21 @@
     }
 
     async connectedCallback() {
-      const embedEl = document.getElementById("saitriq-personalizer-embed");
       this.isDesignMode = this.getAttribute("data-design-mode") === "true" || window.Shopify?.designMode === true;
-      const isAppActive = Boolean(embedEl) || this.isDesignMode;
+      const root = this.closest(".saitriq-personalizer-root") || this.parentElement;
 
-      if (!isAppActive) {
+      // In design mode (Theme Customizer preview), reveal immediately
+      if (this.isDesignMode) {
+        this.style.display = "";
+        if (root && root.classList.contains("saitriq-personalizer-root")) {
+          root.style.display = "";
+        }
+      } else {
+        // Keep hidden until template assignment is verified from backend
         this.style.display = "none";
-        const root = this.closest(".saitriq-personalizer-root") || this.parentElement;
-        if (root && root.classList.contains("saitriq-personalizer-root")) root.style.display = "none";
-        return;
-      }
-      
-      // Keep hidden until template assignment is verified from backend
-      this.style.display = "none";
-      const initialRoot = this.closest(".saitriq-personalizer-root") || this.parentElement;
-      if (initialRoot && initialRoot.classList.contains("saitriq-personalizer-root") && !this.isDesignMode) {
-        initialRoot.style.display = "none";
+        if (root && root.classList.contains("saitriq-personalizer-root")) {
+          root.style.display = "none";
+        }
       }
 
       this.locales = {};
@@ -458,10 +457,18 @@
           t: String(Date.now()),
         }).toString();
 
+        const savedAppUrl =
+          this.appUrl ||
+          window.__saitriq_app_url ||
+          sessionStorage.getItem("saitriq_app_url") ||
+          localStorage.getItem("saitriq_app_url") ||
+          (new URLSearchParams(window.location.search).get("saitriq_app_url") || "");
+
         const candidateEndpoints = [];
-        if (this.appUrl) {
-          candidateEndpoints.push(`${this.appUrl.replace(/\/$/, "")}/api/storefront/template?${queryParams}`);
-          candidateEndpoints.push(`${this.appUrl.replace(/\/$/, "")}/api/storefront?${queryParams}`);
+        if (savedAppUrl) {
+          try { sessionStorage.setItem("saitriq_app_url", savedAppUrl); } catch (e) {}
+          candidateEndpoints.push(`${savedAppUrl.replace(/\/$/, "")}/api/storefront/template?${queryParams}`);
+          candidateEndpoints.push(`${savedAppUrl.replace(/\/$/, "")}/api/storefront?${queryParams}`);
         }
         // Native Shopify App Proxy paths (same-origin, zero config)
         candidateEndpoints.push(`/apps/personalizer/template?${queryParams}`);
@@ -475,19 +482,23 @@
           try {
             const resp = await fetch(ep, {
               headers: { Accept: "application/json" },
+              credentials: "include",
               cache: "no-store",
             });
             if (resp && resp.ok) {
-              const json = await resp.json().catch(() => null);
-              if (json) {
-                // If backend explicitly says no customizer is assigned, stop immediately!
-                if (json.hasCustomizer === false) {
-                  isExplicitlyUnassigned = true;
-                  break;
-                }
-                if (json.hasCustomizer && json.template) {
-                  data = json;
-                  break;
+              const contentType = resp.headers.get("content-type") || "";
+              if (contentType.includes("application/json")) {
+                const json = await resp.json().catch(() => null);
+                if (json) {
+                  // If backend explicitly says no customizer is assigned, stop immediately!
+                  if (json.hasCustomizer === false) {
+                    isExplicitlyUnassigned = true;
+                    break;
+                  }
+                  if (json.hasCustomizer && json.template) {
+                    data = json;
+                    break;
+                  }
                 }
               }
             }
@@ -2191,6 +2202,72 @@
 
   customElements.define("saitriq-personalizer", SaitriqPersonalizer);
 
+  // Auto-inject personalizer button into product form if App Embed is active or on product page
+  function autoInjectPersonalizer() {
+    if (document.querySelector("saitriq-personalizer")) return; // Block already exists
+
+    const isProductPage =
+      window.location.pathname.includes("/products/") ||
+      Boolean(document.querySelector('form[action*="/cart/add"], meta[property="og:type"][content="product"]'));
+
+    if (!isProductPage) return;
+
+    const embedEl = document.getElementById("saitriq-personalizer-embed");
+    const target =
+      document.querySelector(".product-form__buttons") ||
+      document.querySelector('form[action*="/cart/add"] .product-form__buttons') ||
+      document.querySelector('form[action*="/cart/add"] button[type="submit"]')?.parentElement ||
+      document.querySelector('form[action*="/cart/add"]') ||
+      document.querySelector(".product__info-container .product-form");
+
+    if (!target) return;
+
+    const productId =
+      window.ShopifyAnalytics?.meta?.product?.id ||
+      window.__st?.rid ||
+      document.querySelector("[data-product-id]")?.getAttribute("data-product-id") ||
+      "";
+
+    const productTitle = window.ShopifyAnalytics?.meta?.product?.title || document.title;
+    const productImage = window.ShopifyAnalytics?.meta?.product?.image || "";
+
+    function mount(pId, pTitle, pImg) {
+      if (document.querySelector("saitriq-personalizer")) return;
+      const rootDiv = document.createElement("div");
+      rootDiv.className = "saitriq-personalizer-root";
+      rootDiv.style.display = "none";
+
+      const el = document.createElement("saitriq-personalizer");
+      el.setAttribute("data-product-id", String(pId));
+      el.setAttribute("data-product-title", pTitle || "");
+      el.setAttribute("data-product-image", pImg || "");
+      el.setAttribute("data-shop", embedEl?.getAttribute("data-shop") || window.location.hostname);
+      el.setAttribute("data-fabric-url", embedEl?.getAttribute("data-fabric-url") || "");
+      el.setAttribute("data-button-text", "🎨 Customize This Product");
+      el.setAttribute("data-primary-color", "#008060");
+      el.style.display = "none";
+
+      rootDiv.appendChild(el);
+      target.appendChild(rootDiv);
+    }
+
+    if (productId) {
+      mount(productId, productTitle, productImage);
+    } else {
+      const handleMatch = window.location.pathname.match(/\/products\/([a-zA-Z0-9_.-]+)/);
+      if (handleMatch && handleMatch[1]) {
+        fetch(`/products/${handleMatch[1]}.js`)
+          .then((r) => (r.ok ? r.json() : null))
+          .then((prod) => {
+            if (prod && prod.id) {
+              mount(prod.id, prod.title, prod.featured_image || "");
+            }
+          })
+          .catch(() => {});
+      }
+    }
+  }
+
   // Cart page preview enhancer
   function initCartPreviewEnhancer() {
     if (!window.location.pathname.includes("/cart")) return;
@@ -2268,9 +2345,13 @@
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", () => {
+      autoInjectPersonalizer();
+      setTimeout(autoInjectPersonalizer, 300);
       initCartPreviewEnhancer();
     });
   } else {
+    autoInjectPersonalizer();
+    setTimeout(autoInjectPersonalizer, 300);
     initCartPreviewEnhancer();
   }
 })();

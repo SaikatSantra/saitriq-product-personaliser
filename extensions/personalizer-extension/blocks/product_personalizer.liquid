@@ -19,20 +19,21 @@
 {% assign btn_text = block.settings.button_text | default: default_btn_text %}
 {% assign btn_color = block.settings.primary_color | default: '#008060' %}
 
-<div class="saitriq-personalizer-root" id="saitriq-personalizer-{{ block.id }}" {{ block.shopify_attributes }} style="display: none;">
+<div class="saitriq-personalizer-root" id="saitriq-personalizer-{{ block.id }}" {{ block.shopify_attributes }}{% unless request.design_mode %} style="display: none;"{% endunless %}>
   <saitriq-personalizer
     data-product-id="{{ current_product.id }}"
     data-product-handle="{{ current_product.handle }}"
     data-product-title="{{ current_product.title | escape }}"
     data-product-image="{{ base_image_url }}"
     data-shop="{{ shop.permanent_domain }}"
+    data-app-url="{{ block.settings.app_url | default: '' }}"
     data-fabric-url="{{ 'fabric.min.js' | asset_url }}"
     data-button-text="{{ btn_text | escape }}"
     data-primary-color="{{ btn_color | escape }}"
     data-auto-open="{{ block.settings.auto_open | default: false }}"
     data-design-mode="{% if request.design_mode %}true{% else %}false{% endif %}"
     data-locale="{{ request.locale.iso_code | downcase }}"
-    style="display: none;"
+    {% unless request.design_mode %}style="display: none;"{% endunless %}
   >
     <script type="application/json" class="saitriq-locales-json">
       {
@@ -140,6 +141,12 @@
       "id": "auto_open",
       "label": "Open personalizer studio inline on page load",
       "default": false
+    },
+    {
+      "type": "text",
+      "id": "app_url",
+      "label": "Custom App Backend URL",
+      "info": "Optional: Only needed if not using default Shopify App Proxy"
     }
   ]
 }
