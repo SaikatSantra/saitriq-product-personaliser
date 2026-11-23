@@ -9,20 +9,31 @@ import {
   deleteTemplate,
   duplicateTemplate,
 } from "../models/template.server";
+import { getShopBillingInfo } from "../models/billing.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { session, billing } = await authenticate.admin(request);
   const templates = await listTemplates(session.shop);
-  return { templates };
+  const billingInfo = await getShopBillingInfo(session.shop, billing);
+  return { templates, billingInfo };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { session, billing } = await authenticate.admin(request);
   const formData = await request.formData();
   const intent = formData.get("intent");
   const templateId = formData.get("templateId") as string;
 
   if (intent === "create") {
+    const billingInfo = await getShopBillingInfo(session.shop, billing);
+    if (!billingInfo.canCreateMore) {
+      return {
+        success: false,
+        planLimitReached: true,
+        message: `Plan limit reached: your store is on the ${billingInfo.activePlan} plan (${billingInfo.currentTemplateCount} of ${billingInfo.templateLimit} templates used). Please upgrade to create more templates.`,
+      };
+    }
+
     const title = (formData.get("title") as string)?.trim() || "New Personalization Template";
     const canvasWidth = parseInt(formData.get("canvasWidth") as string) || 1200;
     const canvasHeight = parseInt(formData.get("canvasHeight") as string) || 1200;
@@ -48,6 +59,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
 
   if (intent === "duplicate" && templateId) {
+    const billingInfo = await getShopBillingInfo(session.shop, billing);
+    if (!billingInfo.canCreateMore) {
+      return {
+        success: false,
+        planLimitReached: true,
+        message: `Cannot duplicate template: plan limit reached (${billingInfo.currentTemplateCount} of ${billingInfo.templateLimit} templates used on ${billingInfo.activePlan} plan). Please upgrade your plan.`,
+      };
+    }
+
     await duplicateTemplate(templateId, session.shop);
     return { success: true, message: "Template duplicated successfully" };
   }
@@ -164,7 +184,7 @@ function getTemplateIcon(title: string) {
 }
 
 export default function TemplatesIndex() {
-  const { templates } = useLoaderData<typeof loader>();
+  const { templates, billingInfo } = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
   const navigate = useNavigate();
 
@@ -190,6 +210,10 @@ export default function TemplatesIndex() {
   }
 
   const handleOpenCreateModal = (preset?: { name: string; w: number; h: number }) => {
+    if (!billingInfo.canCreateMore) {
+      navigate("/app/pricing");
+      return;
+    }
     if (preset) {
       setNewTitle(preset.name);
       setNewWidth(preset.w);
@@ -276,7 +300,53 @@ export default function TemplatesIndex() {
 
       {fetcher.data?.message && (
         <div style={{ marginBottom: "16px" }}>
-          <s-banner tone="success">{fetcher.data.message}</s-banner>
+          <s-banner tone={fetcher.data?.success ? "success" : "critical"}>{fetcher.data.message}</s-banner>
+        </div>
+      )}
+
+      {/* Plan Limit Alert Banner */}
+      {!billingInfo.canCreateMore && (
+        <div
+          style={{
+            background: "#fffbeb",
+            border: "1px solid #fde68a",
+            borderRadius: "10px",
+            padding: "14px 18px",
+            marginBottom: "16px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: "12px",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <span style={{ fontSize: "20px" }}>⚠️</span>
+            <div>
+              <div style={{ fontWeight: 700, color: "#92400e", fontSize: "14px" }}>
+                Template limit reached ({templates.length} of {billingInfo.templateLimit} templates used on {billingInfo.activePlan} plan)
+              </div>
+              <div style={{ color: "#b45309", fontSize: "12px" }}>
+                Upgrade to Starter ($5/mo for 5 templates) or Unlimited ($20/mo) to unlock additional template slots.
+              </div>
+            </div>
+          </div>
+          <Link
+            to="/app/pricing"
+            style={{
+              padding: "8px 16px",
+              background: "#2563eb",
+              color: "#ffffff",
+              borderRadius: "8px",
+              fontSize: "13px",
+              fontWeight: 700,
+              textDecoration: "none",
+              whiteSpace: "nowrap",
+            }}
+          >
+            Upgrade Plan →
+          </Link>
         </div>
       )}
 
@@ -339,8 +409,8 @@ export default function TemplatesIndex() {
             <div style={{ fontSize: "10px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
               Active Templates
             </div>
-            <div style={{ fontSize: "18px", fontWeight: 800, color: "#0f172a", marginTop: "1px" }}>
-              {templates.length}
+            <div style={{ fontSize: "18px", fontWeight: 800, color: !billingInfo.canCreateMore && billingInfo.templateLimit !== Infinity ? "#dc2626" : "#0f172a", marginTop: "1px" }}>
+              {templates.length} / {billingInfo.templateLimit === Infinity ? "∞" : billingInfo.templateLimit}
             </div>
           </div>
 
@@ -358,6 +428,47 @@ export default function TemplatesIndex() {
             </div>
             <div style={{ fontSize: "18px", fontWeight: 800, color: "#008060", marginTop: "1px" }}>
               {totalProducts}
+            </div>
+          </div>
+
+          <div
+            style={{
+              background: "#f8fafc",
+              border: "1px solid #e2e8f0",
+              borderRadius: "8px",
+              padding: "6px 14px",
+              minWidth: "110px",
+            }}
+          >
+            <div style={{ fontSize: "10px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+              App Plan
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "2px" }}>
+              <span
+                style={{
+                  fontSize: "13px",
+                  fontWeight: 700,
+                  color:
+                    billingInfo.activePlan === "Unlimited"
+                      ? "#7e22ce"
+                      : billingInfo.activePlan === "Starter"
+                        ? "#1d4ed8"
+                        : "#0f172a",
+                }}
+              >
+                {billingInfo.activePlan}
+              </span>
+              <Link
+                to="/app/pricing"
+                style={{
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  color: "#2563eb",
+                  textDecoration: "underline",
+                }}
+              >
+                {billingInfo.activePlan === "Unlimited" ? "View" : "Upgrade"}
+              </Link>
             </div>
           </div>
 

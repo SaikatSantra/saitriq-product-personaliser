@@ -4,11 +4,13 @@ import { useEffect } from "react";
 import { authenticate } from "../shopify.server";
 import { listTemplates, createTemplate } from "../models/template.server";
 import { listCustomizedOrders } from "../models/order.server";
+import { getShopBillingInfo } from "../models/billing.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { session, billing } = await authenticate.admin(request);
   const templates = await listTemplates(session.shop);
   const orders = await listCustomizedOrders(session.shop);
+  const billingInfo = await getShopBillingInfo(session.shop, billing);
 
   const totalProductsLinked = templates.reduce(
     (acc: number, t: any) => acc + (t.products?.length || 0),
@@ -22,15 +24,25 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     totalProductsLinked,
     orders: orders.slice(0, 5),
     totalOrders: orders.length,
+    billingInfo,
   };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { admin, session } = await authenticate.admin(request);
+  const { admin, session, billing } = await authenticate.admin(request);
   const formData = await request.formData();
   const intent = formData.get("intent");
 
   if (intent === "create_category_template") {
+    const billingInfo = await getShopBillingInfo(session.shop, billing);
+    if (!billingInfo.canCreateMore) {
+      return {
+        success: false,
+        planLimitReached: true,
+        message: `Plan limit reached: your store has used ${billingInfo.currentTemplateCount} of ${billingInfo.templateLimit} templates on the ${billingInfo.activePlan} plan. Please upgrade your plan to create more templates.`,
+      };
+    }
+
     const category = (formData.get("category") as string) || "apparel";
     const templatesMap: Record<string, { title: string; width: number; height: number; dpi: number }> = {
       apparel: { title: "Custom Classic T-Shirt (Front & Back)", width: 1200, height: 1200, dpi: 300 },
@@ -96,6 +108,7 @@ export default function PersonalizerDashboard() {
     totalProductsLinked,
     orders,
     totalOrders,
+    billingInfo,
   } = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
   const navigate = useNavigate();
@@ -107,6 +120,10 @@ export default function PersonalizerDashboard() {
   }, [fetcher.data, navigate]);
 
   const handleCreateCategory = (category: string) => {
+    if (!billingInfo.canCreateMore) {
+      navigate("/app/pricing");
+      return;
+    }
     fetcher.submit({ intent: "create_category_template", category }, { method: "POST" });
   };
 
@@ -115,13 +132,59 @@ export default function PersonalizerDashboard() {
       <s-button slot="primary-action" variant="primary" href="/app/templates">
         Template studio
       </s-button>
-      <s-button slot="secondary-actions" href="/app/settings">
-        Settings
+      <s-button slot="secondary-actions" href="/app/pricing">
+        Plans &amp; pricing
       </s-button>
 
       {fetcher.data?.message && (
         <div style={{ marginBottom: "16px" }}>
-          <s-banner tone="success">{fetcher.data.message}</s-banner>
+          <s-banner tone={fetcher.data?.success ? "success" : "critical"}>{fetcher.data.message}</s-banner>
+        </div>
+      )}
+
+      {/* Plan Limit Warning Banner */}
+      {!billingInfo.canCreateMore && (
+        <div
+          style={{
+            background: "#fffbeb",
+            border: "1px solid #fde68a",
+            borderRadius: "10px",
+            padding: "14px 18px",
+            marginBottom: "16px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: "12px",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <span style={{ fontSize: "20px" }}>⚠️</span>
+            <div>
+              <div style={{ fontWeight: 700, color: "#92400e", fontSize: "14px" }}>
+                Template limit reached ({totalTemplates} of {billingInfo.templateLimit} templates used on {billingInfo.activePlan} plan)
+              </div>
+              <div style={{ color: "#b45309", fontSize: "12px" }}>
+                Upgrade to Starter ($5/mo for 5 templates) or Unlimited ($20/mo) to unlock additional template slots.
+              </div>
+            </div>
+          </div>
+          <Link
+            to="/app/pricing"
+            style={{
+              padding: "8px 16px",
+              background: "#2563eb",
+              color: "#ffffff",
+              borderRadius: "8px",
+              fontSize: "13px",
+              fontWeight: 700,
+              textDecoration: "none",
+              whiteSpace: "nowrap",
+            }}
+          >
+            Upgrade Plan →
+          </Link>
         </div>
       )}
 
@@ -193,6 +256,41 @@ export default function PersonalizerDashboard() {
               >
                 300 DPI print-ready
               </span>
+              <Link
+                to="/app/pricing"
+                style={{
+                  background:
+                    billingInfo.activePlan === "Unlimited"
+                      ? "#f3e8ff"
+                      : billingInfo.activePlan === "Starter"
+                        ? "#eff6ff"
+                        : "#f8fafc",
+                  border: `1px solid ${
+                    billingInfo.activePlan === "Unlimited"
+                      ? "#d8b4fe"
+                      : billingInfo.activePlan === "Starter"
+                        ? "#bfdbfe"
+                        : "#cbd5e1"
+                  }`,
+                  color:
+                    billingInfo.activePlan === "Unlimited"
+                      ? "#7e22ce"
+                      : billingInfo.activePlan === "Starter"
+                        ? "#1d4ed8"
+                        : "#334155",
+                  padding: "3px 10px",
+                  borderRadius: "20px",
+                  fontSize: "11px",
+                  fontWeight: 700,
+                  textDecoration: "none",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                }}
+              >
+                <span>📦 Plan: {billingInfo.activePlan} ({billingInfo.currentTemplateCount}/{billingInfo.templateLimit === Infinity ? "∞" : billingInfo.templateLimit})</span>
+                <span style={{ textDecoration: "underline" }}>Upgrade</span>
+              </Link>
             </div>
 
             <h1 style={{ fontSize: "22px", fontWeight: 700, margin: "0 0 8px", color: "#0f172a", lineHeight: 1.3 }}>

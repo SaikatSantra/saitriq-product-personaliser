@@ -157,7 +157,11 @@
     <div class="saitriq-trigger-wrapper">
       <button
         type="button"
-        class="saitriq-customize-btn{% if block.settings.use_theme_button_style %} saitriq-theme-style button button--primary{% if block.settings.button_full_width %} button--full-width{% endif %}{% else %} button{% endif %}"
+        class="saitriq-customize-btn  
+        {% if block.settings.use_theme_button_style %} 
+        saitriq-theme-style button button--primary 
+        {% if block.settings.button_full_width %} button--full-width {% endif %}
+         {% else %} button{% endif %}"
       >
         {{ btn_text | escape }}
       </button>
