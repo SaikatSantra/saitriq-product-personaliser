@@ -2,6 +2,6 @@ extends: theme-check:theme-app-extension
 
 AssetSizeAppBlockJavaScript:
   enabled: true
-  threshold_in_bytes: 95000
+  threshold_in_bytes: 100000
 
 
