@@ -8,8 +8,7 @@ import {
   PLAN_STARTER,
   PLAN_UNLIMITED,
 } from "../models/billing.types";
-import { getShopBillingInfo } from "../models/billing.server";
-import prisma from "../db.server";
+import { getShopBillingInfo, cancelShopSubscription } from "../models/billing.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session, billing } = await authenticate.admin(request);
@@ -44,31 +43,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
 
   if (intent === "cancel") {
-    const billingInfo = await getShopBillingInfo(session.shop, billing);
-    if (billingInfo.activeSubscription?.id) {
-      try {
-        await billing.cancel({
-          subscriptionId: billingInfo.activeSubscription.id,
-          isTest: process.env.NODE_ENV !== "production",
-          prorate: true,
-        });
-      } catch (e) {
-        console.warn("[Billing] Error cancelling subscription:", e);
-      }
-    }
-
-    await prisma.shop.update({
-      where: { shopifyDomain: session.shop },
-      data: { planName: PLAN_FREE },
-    });
-
-    return {
-      success: true,
-      message: "Subscription cancelled successfully. Your store is now on the Free plan.",
-    };
+    const result = await cancelShopSubscription(session.shop, billing);
+    return result;
   }
 
-  return { success: false };
+  return { success: false, message: "Action not recognized" };
 };
 
 export default function PricingPage() {

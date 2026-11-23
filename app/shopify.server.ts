@@ -7,7 +7,7 @@ import {
 } from "@shopify/shopify-app-react-router/server";
 import { PrismaSessionStorage } from "@shopify/shopify-app-session-storage-prisma";
 import prisma from "./db.server";
-import { PLAN_STARTER, PLAN_UNLIMITED } from "./models/billing.server";
+import { PLAN_STARTER, PLAN_UNLIMITED } from "./models/billing.types";
 
 const shopify = shopifyApp({
   apiKey: process.env.SHOPIFY_API_KEY,

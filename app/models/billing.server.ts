@@ -8,8 +8,6 @@ import {
   type ShopBillingInfo,
 } from "./billing.types";
 
-export * from "./billing.types";
-
 /**
  * Retrieves the current shop's plan, checks live Shopify billing subscriptions,
  * syncs local database state, and evaluates template quotas.
@@ -79,5 +77,38 @@ export async function getShopBillingInfo(
     templateLimit: planConfig.templateLimit,
     canCreateMore,
     activeSubscription,
+  };
+}
+
+/**
+ * Cancels active Shopify app subscription and resets local shop plan to Free.
+ */
+export async function cancelShopSubscription(
+  shopifyDomain: string,
+  billingContext?: any,
+): Promise<{ success: boolean; message: string }> {
+  if (billingContext && typeof billingContext.check === "function") {
+    try {
+      const billingInfo = await getShopBillingInfo(shopifyDomain, billingContext);
+      if (billingInfo.activeSubscription?.id) {
+        await billingContext.cancel({
+          subscriptionId: billingInfo.activeSubscription.id,
+          isTest: process.env.NODE_ENV !== "production",
+          prorate: true,
+        });
+      }
+    } catch (e) {
+      console.warn("[Billing] Error cancelling subscription with Shopify:", e);
+    }
+  }
+
+  await prisma.shop.update({
+    where: { shopifyDomain },
+    data: { planName: PLAN_FREE },
+  });
+
+  return {
+    success: true,
+    message: "Subscription cancelled successfully. Your store is now on the Free plan.",
   };
 }
