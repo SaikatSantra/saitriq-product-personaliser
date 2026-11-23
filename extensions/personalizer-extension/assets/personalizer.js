@@ -466,6 +466,19 @@
           }
         }
 
+        if (data && data.storefrontText && typeof data.storefrontText === "object") {
+          const cleanText = {};
+          Object.keys(data.storefrontText).forEach((k) => {
+            if (data.storefrontText[k] && String(data.storefrontText[k]).trim() !== "") {
+              cleanText[k] = data.storefrontText[k];
+            }
+          });
+          this.locales = { ...this.locales, ...cleanText };
+          if (cleanText.button_text) {
+            this.buttonText = cleanText.button_text;
+          }
+        }
+
         if (data && data.template) {
           this.templateData = data.template;
           window.__saitriq_template = data.template;

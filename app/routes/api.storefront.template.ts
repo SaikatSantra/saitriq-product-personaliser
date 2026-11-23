@@ -1,4 +1,5 @@
 import type { LoaderFunctionArgs } from "react-router";
+import prisma from "../db.server";
 import { getTemplateForProduct } from "../models/product.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -18,9 +19,24 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     return new Response(null, { status: 204, headers: corsHeaders });
   }
 
+  let storefrontText: Record<string, string> = {};
+  if (shop) {
+    try {
+      const shopRecord = await prisma.shop.findUnique({
+        where: { shopifyDomain: shop },
+      });
+      if (shopRecord?.settings) {
+        const parsed = JSON.parse(shopRecord.settings);
+        if (parsed.storefrontText && typeof parsed.storefrontText === "object") {
+          storefrontText = parsed.storefrontText;
+        }
+      }
+    } catch {}
+  }
+
   if (!shop) {
     return Response.json(
-      { hasCustomizer: false, error: "Missing shop parameter" },
+      { hasCustomizer: false, error: "Missing shop parameter", storefrontText },
       { headers: corsHeaders },
     );
   }
@@ -29,7 +45,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   if (!template) {
     return Response.json(
-      { hasCustomizer: false, message: "No template assigned to this product" },
+      { hasCustomizer: false, message: "No template assigned to this product", storefrontText },
       { headers: corsHeaders },
     );
   }
@@ -44,6 +60,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   return Response.json(
     {
       hasCustomizer: true,
+      storefrontText,
       template: {
         id: template.id,
         title: template.title,
