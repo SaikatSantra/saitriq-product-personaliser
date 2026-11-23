@@ -141,55 +141,14 @@ export default function TemplatesIndex() {
   const totalProducts = templates.reduce((acc: number, t: any) => acc + (t.products?.length || 0), 0);
 
   return (
-    <div
-      style={{
-        maxWidth: "1140px",
-        margin: "0 auto",
-        padding: "16px 20px 48px",
-        fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
-      }}
-    >
-      {/* Top Header */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: "16px",
-          flexWrap: "wrap",
-          gap: "12px",
-        }}
+    <s-page heading="Personalization templates">
+      <s-button
+        slot="primary-action"
+        variant="primary"
+        onClick={() => handleOpenCreateModal()}
       >
-        <div>
-          <h1 style={{ margin: 0, fontSize: "18px", fontWeight: 800, color: "#0f172a" }}>
-            Personalization Templates
-          </h1>
-          <p style={{ margin: "2px 0 0", fontSize: "13px", color: "#64748b" }}>
-            Manage product templates, assign items from your catalog, and configure 300 DPI print output.
-          </p>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => handleOpenCreateModal()}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "6px",
-            padding: "8px 16px",
-            borderRadius: "8px",
-            background: "#008060",
-            color: "#ffffff",
-            border: "none",
-            fontSize: "13px",
-            fontWeight: 700,
-            cursor: "pointer",
-            boxShadow: "0 2px 4px rgba(0, 128, 96, 0.2)",
-          }}
-        >
-          + Create Template
-        </button>
-      </div>
+        Create template
+      </s-button>
 
       {fetcher.data?.message && (
         <div
@@ -914,6 +873,6 @@ export default function TemplatesIndex() {
           </div>
         </div>
       )}
-    </div>
+    </s-page>
   );
 }

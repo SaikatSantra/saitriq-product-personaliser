@@ -111,257 +111,220 @@ export default function PersonalizerDashboard() {
   };
 
   return (
-    <s-page heading="Product Personalizer & Print Studio">
-      <div slot="primary-action" style={{ display: "flex", gap: "8px" }}>
-        <s-button variant="secondary" href="/app/settings">
-          ⚙️ App Settings
-        </s-button>
-        <s-button variant="primary" href="/app/templates">
-          🎨 Template Studio
-        </s-button>
-      </div>
+    <s-page heading="Product personalizer & print studio">
+      <s-button slot="primary-action" variant="primary" href="/app/templates">
+        Template studio
+      </s-button>
+      <s-button slot="secondary-actions" href="/app/settings">
+        Settings
+      </s-button>
 
       {fetcher.data?.message && (
-        <div style={{ marginBottom: "20px" }}>
+        <div style={{ marginBottom: "16px" }}>
           <s-banner tone="success">{fetcher.data.message}</s-banner>
         </div>
       )}
 
       {/* =========================================================================
-          HERO BANNER WITH GRAPHICAL CANVAS MOCKUP
+          POLARIS HERO CARD (Clean light theme conforming to Shopify visual guidelines)
       ========================================================================= */}
       <div
         style={{
-          background: "linear-gradient(135deg, #0b192c 0%, #1e3e62 50%, #000000 100%)",
-          color: "#fff",
-          borderRadius: "14px",
+          background: "#ffffff",
+          color: "#0f172a",
+          borderRadius: "12px",
           padding: "20px 24px",
-          marginBottom: "18px",
-          boxShadow: "0 8px 24px rgba(11, 25, 44, 0.2)",
-          position: "relative",
-          overflow: "hidden",
-          border: "1px solid rgba(255, 255, 255, 0.12)",
+          marginBottom: "16px",
+          boxShadow: "0 1px 3px rgba(0, 0, 0, 0.05)",
+          border: "1px solid #e2e8f0",
         }}
       >
-        {/* Subtle background glow effect */}
-        <div
-          style={{
-            position: "absolute",
-            top: "-80px",
-            right: "-80px",
-            width: "320px",
-            height: "320px",
-            background: "radial-gradient(circle, rgba(0, 128, 96, 0.35) 0%, rgba(0,0,0,0) 70%)",
-            pointerEvents: "none",
-          }}
-        />
-        <div
-          style={{
-            position: "absolute",
-            bottom: "-60px",
-            left: "20%",
-            width: "260px",
-            height: "260px",
-            background: "radial-gradient(circle, rgba(37, 99, 235, 0.25) 0%, rgba(0,0,0,0) 70%)",
-            pointerEvents: "none",
-          }}
-        />
-
         <div
           style={{
             display: "grid",
             gridTemplateColumns: "1.4fr 1fr",
-            gap: "28px",
+            gap: "24px",
             alignItems: "center",
-            position: "relative",
-            zIndex: 1,
           }}
         >
-          {/* Left Column: Headlines & CTAs */}
+          {/* Left Column: Headlines & Feature Badges */}
           <div>
-            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "14px" }}>
+            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "12px" }}>
               <span
                 style={{
-                  background: "rgba(0, 128, 96, 0.25)",
-                  border: "1px solid rgba(0, 128, 96, 0.5)",
-                  color: "#6ee7b7",
-                  padding: "4px 10px",
+                  background: "#ecfdf5",
+                  border: "1px solid #a7f3d0",
+                  color: "#065f46",
+                  padding: "3px 10px",
                   borderRadius: "20px",
                   fontSize: "11px",
                   fontWeight: 700,
-                  letterSpacing: "0.5px",
                   display: "inline-flex",
                   alignItems: "center",
                   gap: "6px",
                 }}
               >
-                <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: "#10b981" }} />
-                STOREFRONT STUDIO 2.0
+                <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#10b981" }} />
+                Storefront studio 2.0
               </span>
               <span
                 style={{
-                  background: "rgba(255, 255, 255, 0.12)",
-                  border: "1px solid rgba(255, 255, 255, 0.2)",
-                  color: "#e2e8f0",
-                  padding: "4px 10px",
+                  background: "#f1f5f9",
+                  border: "1px solid #e2e8f0",
+                  color: "#475569",
+                  padding: "3px 10px",
                   borderRadius: "20px",
                   fontSize: "11px",
                   fontWeight: 600,
                 }}
               >
-                🌐 MULTI-LANGUAGE ENGINE
+                Multi-language engine
+              </span>
+              <span
+                style={{
+                  background: "#eff6ff",
+                  border: "1px solid #bfdbfe",
+                  color: "#1d4ed8",
+                  padding: "3px 10px",
+                  borderRadius: "20px",
+                  fontSize: "11px",
+                  fontWeight: 600,
+                }}
+              >
+                300 DPI print-ready
               </span>
             </div>
 
-            <h1 style={{ fontSize: "28px", fontWeight: 800, margin: "0 0 10px", color: "#ffffff", lineHeight: 1.25 }}>
-              Custom Product Personalizer &amp; Live Studio
+            <h1 style={{ fontSize: "22px", fontWeight: 700, margin: "0 0 8px", color: "#0f172a", lineHeight: 1.3 }}>
+              Live product personalization &amp; automated print files
             </h1>
 
-            <p style={{ margin: "0 0 24px", color: "#cbd5e1", fontSize: "14px", lineHeight: 1.6, maxWidth: "560px" }}>
-              Empower customers to personalize products live with custom multiline text, photo uploads, alignment tools, and side-by-side front &amp; back previews. Produces 300 DPI high-res print files uploaded directly to Shopify Files upon checkout.
+            <p style={{ margin: "0 0 16px", color: "#64748b", fontSize: "13px", lineHeight: 1.5, maxWidth: "560px" }}>
+              Enable customers to customize products live with multiline text, photo uploads, alignment tools, and front &amp; back previews. Produces 300 DPI high-resolution print files uploaded directly to your Shopify Files CDN upon checkout.
             </p>
 
-            <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
               <Link
                 to="/app/templates"
                 style={{
-                  background: "linear-gradient(135deg, #008060 0%, #00a876 100%)",
-                  color: "#ffffff",
-                  fontWeight: 700,
-                  padding: "11px 22px",
-                  borderRadius: "8px",
-                  textDecoration: "none",
-                  fontSize: "13px",
-                  boxShadow: "0 4px 14px rgba(0, 128, 96, 0.4)",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "8px",
-                }}
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M12 5v14M5 12h14" />
-                </svg>
-                Launch Template Studio
-              </Link>
-
-              <Link
-                to="/app/settings"
-                style={{
-                  background: "rgba(255, 255, 255, 0.12)",
+                  background: "#008060",
                   color: "#ffffff",
                   fontWeight: 600,
-                  padding: "11px 18px",
-                  borderRadius: "8px",
+                  padding: "8px 16px",
+                  borderRadius: "6px",
                   textDecoration: "none",
                   fontSize: "13px",
-                  border: "1px solid rgba(255, 255, 255, 0.25)",
                   display: "inline-flex",
                   alignItems: "center",
                   gap: "6px",
-                  backdropFilter: "blur(6px)",
                 }}
               >
-                🌐 Multi-Language &amp; Settings
+                Open template studio &rarr;
+              </Link>
+
+              <Link
+                to="/app/guide"
+                style={{
+                  background: "#ffffff",
+                  color: "#334155",
+                  fontWeight: 600,
+                  padding: "8px 14px",
+                  borderRadius: "6px",
+                  textDecoration: "none",
+                  fontSize: "13px",
+                  border: "1px solid #cbd5e1",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                }}
+              >
+                Setup guide
               </Link>
             </div>
           </div>
 
-          {/* Right Column: Graphical Studio Canvas Mockup */}
+          {/* Right Column: Clean Vector Mockup Card */}
           <div
             style={{
-              background: "rgba(15, 23, 42, 0.65)",
-              border: "1px solid rgba(255, 255, 255, 0.15)",
-              borderRadius: "14px",
-              padding: "18px",
-              boxShadow: "0 16px 32px rgba(0,0,0,0.4)",
-              backdropFilter: "blur(12px)",
-              position: "relative",
+              background: "#f8fafc",
+              border: "1px solid #e2e8f0",
+              borderRadius: "10px",
+              padding: "16px",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
             }}
           >
-            {/* Header bar of graphic card */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px", borderBottom: "1px solid rgba(255,255,255,0.1)", paddingBottom: "10px" }}>
-              <div style={{ display: "flex", gap: "6px" }}>
-                <span style={{ width: "9px", height: "9px", borderRadius: "50%", background: "#ef4444" }} />
-                <span style={{ width: "9px", height: "9px", borderRadius: "50%", background: "#f59e0b" }} />
-                <span style={{ width: "9px", height: "9px", borderRadius: "50%", background: "#10b981" }} />
-              </div>
-              <span style={{ fontSize: "11px", color: "#94a3b8", fontWeight: 600, letterSpacing: "0.5px" }}>
-                LIVE STUDIO PREVIEW
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", borderBottom: "1px solid #e2e8f0", paddingBottom: "8px" }}>
+              <span style={{ fontSize: "11px", color: "#64748b", fontWeight: 700, textTransform: "uppercase" }}>
+                Studio Live Preview
+              </span>
+              <span style={{ fontSize: "11px", color: "#059669", fontWeight: 600 }}>
+                ● Active on storefront
               </span>
             </div>
 
-            {/* Graphic Illustration */}
             <div
               style={{
-                background: "linear-gradient(180deg, #1e293b 0%, #0f172a 100%)",
-                borderRadius: "10px",
-                padding: "20px",
-                position: "relative",
+                background: "#ffffff",
+                borderRadius: "8px",
+                padding: "16px",
                 display: "flex",
                 flexDirection: "column",
                 alignItems: "center",
                 justifyContent: "center",
-                minHeight: "170px",
-                border: "1px dashed rgba(255,255,255,0.2)",
+                minHeight: "130px",
+                border: "1px dashed #cbd5e1",
+                position: "relative",
               }}
             >
-              {/* Product Vector Illustration (Custom Cap / Shirt) */}
-              <svg width="100" height="90" viewBox="0 0 100 90" fill="none" style={{ filter: "drop-shadow(0 8px 16px rgba(0,0,0,0.5))" }}>
-                {/* Cap Visor */}
-                <ellipse cx="50" cy="62" rx="42" ry="14" fill="#334155" />
-                <ellipse cx="50" cy="60" rx="40" ry="12" fill="#1e293b" />
-                {/* Cap Crown */}
-                <path d="M18 56 C20 20, 80 20, 82 56 Z" fill="#0f172a" stroke="#475569" stroke-width="2" />
-                {/* Button top */}
+              {/* Product Vector Illustration */}
+              <svg width="84" height="74" viewBox="0 0 100 90" fill="none">
+                <ellipse cx="50" cy="62" rx="42" ry="14" fill="#cbd5e1" />
+                <ellipse cx="50" cy="60" rx="40" ry="12" fill="#94a3b8" />
+                <path d="M18 56 C20 20, 80 20, 82 56 Z" fill="#334155" stroke="#1e293b" strokeWidth="2" />
                 <circle cx="50" cy="22" r="4" fill="#64748b" />
-                {/* Customizer Dashed Print Area */}
-                <rect x="30" y="32" width="40" height="20" rx="3" fill="rgba(0, 128, 96, 0.2)" stroke="#10b981" stroke-width="1.5" stroke-dasharray="3 3" />
-                {/* Print text */}
-                <text x="50" y="45" fill="#6ee7b7" fontSize="8" fontWeight="bold" textAnchor="middle" fontFamily="sans-serif">
+                <rect x="30" y="32" width="40" height="20" rx="3" fill="rgba(0, 128, 96, 0.1)" stroke="#008060" strokeWidth="1.5" strokeDasharray="3 3" />
+                <text x="50" y="45" fill="#008060" fontSize="8" fontWeight="bold" textAnchor="middle" fontFamily="sans-serif">
                   CUSTOM
                 </text>
               </svg>
 
-              {/* Floating feature pills */}
               <div
                 style={{
                   position: "absolute",
-                  top: "12px",
-                  left: "12px",
-                  background: "rgba(16, 185, 129, 0.9)",
-                  color: "#022c22",
-                  fontSize: "10px",
-                  fontWeight: 800,
-                  padding: "3px 8px",
-                  borderRadius: "12px",
-                  boxShadow: "0 2px 6px rgba(0,0,0,0.3)",
-                }}
-              >
-                ✓ 300 DPI READY
-              </div>
-
-              <div
-                style={{
-                  position: "absolute",
-                  bottom: "12px",
-                  right: "12px",
-                  background: "rgba(37, 99, 235, 0.9)",
-                  color: "#ffffff",
-                  fontSize: "10px",
+                  top: "8px",
+                  left: "8px",
+                  background: "#ecfdf5",
+                  border: "1px solid #a7f3d0",
+                  color: "#065f46",
+                  fontSize: "9px",
                   fontWeight: 700,
-                  padding: "3px 8px",
-                  borderRadius: "12px",
-                  boxShadow: "0 2px 6px rgba(0,0,0,0.3)",
+                  padding: "2px 6px",
+                  borderRadius: "10px",
                 }}
               >
-                👕 FRONT &amp; BACK
+                ✓ 300 DPI
+              </div>
+              <div
+                style={{
+                  position: "absolute",
+                  bottom: "8px",
+                  right: "8px",
+                  background: "#eff6ff",
+                  border: "1px solid #bfdbfe",
+                  color: "#1d4ed8",
+                  fontSize: "9px",
+                  fontWeight: 700,
+                  padding: "2px 6px",
+                  borderRadius: "10px",
+                }}
+              >
+                👕 Front &amp; Back
               </div>
             </div>
 
-            {/* Bottom status of card */}
-            <div style={{ marginTop: "12px", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "11px", color: "#94a3b8" }}>
-              <span>Shopify Files Cloud Sync</span>
-              <span style={{ color: "#34d399", fontWeight: 600 }}>● Active &amp; Ready</span>
+            <div style={{ marginTop: "10px", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "11px", color: "#64748b" }}>
+              <span>Shopify Files CDN</span>
+              <span style={{ color: "#059669", fontWeight: 600 }}>Direct Cloud Upload</span>
             </div>
           </div>
         </div>

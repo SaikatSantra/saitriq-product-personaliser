@@ -80,129 +80,16 @@ export default function AppGuide() {
   ];
 
   return (
-    <div
-      style={{
-        maxWidth: "1140px",
-        margin: "0 auto",
-        padding: "16px 20px 48px",
-        fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
-      }}
-    >
-      {/* Top Header */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: "16px",
-          flexWrap: "wrap",
-          gap: "12px",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <Link
-            to="/app"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "6px",
-              padding: "7px 12px",
-              borderRadius: "8px",
-              background: "#fff",
-              border: "1px solid #cbd5e1",
-              color: "#334155",
-              fontSize: "13px",
-              fontWeight: 600,
-              textDecoration: "none",
-            }}
-          >
-            ← Dashboard
-          </Link>
-          <div>
-            <h1 style={{ margin: 0, fontSize: "20px", fontWeight: 800, color: "#0f172a" }}>
-              Setup &amp; Store Integration Guide
-            </h1>
-            <p style={{ margin: "2px 0 0", fontSize: "13px", color: "#64748b" }}>
-              Step-by-step instructions to create templates, assign catalog products, and enable the live storefront customizer.
-            </p>
-          </div>
-        </div>
+    <s-page heading="Setup guide">
+      <s-button slot="primary-action" variant="primary" href="/app/templates">
+        Create template
+      </s-button>
 
-        <Link
-          to="/app/templates"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "6px",
-            padding: "9px 18px",
-            borderRadius: "8px",
-            background: "#008060",
-            color: "#ffffff",
-            fontSize: "13px",
-            fontWeight: 700,
-            textDecoration: "none",
-            boxShadow: "0 2px 4px rgba(0, 128, 96, 0.2)",
-          }}
-        >
-          🎨 Go to Templates
-        </Link>
-      </div>
-
-      {/* Graphical Hero Banner */}
-      <div
-        style={{
-          background: "linear-gradient(135deg, #0b192c 0%, #1e3e62 60%, #008060 100%)",
-          color: "#ffffff",
-          borderRadius: "14px",
-          padding: "24px 28px",
-          marginBottom: "24px",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          flexWrap: "wrap",
-          gap: "16px",
-          boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.2)",
-          position: "relative",
-          overflow: "hidden",
-        }}
-      >
-        <div style={{ maxWidth: "700px", position: "relative", zIndex: 1 }}>
-          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "10px" }}>
-            <span
-              style={{
-                background: "rgba(0, 128, 96, 0.3)",
-                border: "1px solid rgba(0, 128, 96, 0.6)",
-                color: "#6ee7b7",
-                padding: "3px 10px",
-                borderRadius: "20px",
-                fontSize: "11px",
-                fontWeight: 700,
-                letterSpacing: "0.5px",
-              }}
-            >
-              🚀 QUICK ONBOARDING ROADMAP
-            </span>
-            <span
-              style={{
-                background: "rgba(255, 255, 255, 0.12)",
-                border: "1px solid rgba(255, 255, 255, 0.2)",
-                color: "#e2e8f0",
-                padding: "3px 10px",
-                borderRadius: "20px",
-                fontSize: "11px",
-                fontWeight: 600,
-              }}
-            >
-              📖 6 EASY STEPS
-            </span>
-          </div>
-          <h2 style={{ margin: "0 0 8px", fontSize: "22px", fontWeight: 800, color: "#ffffff" }}>
-            Get Your Store Customizer Ready in Minutes
-          </h2>
-          <p style={{ margin: 0, fontSize: "13.5px", lineHeight: "1.6", color: "#cbd5e1" }}>
-            Follow this 6-step roadmap to configure 300 DPI templates, connect products from your Shopify catalog, customize language translations, and handle order fulfillment.
-          </p>
-        </div>
+      {/* Polaris Info Banner */}
+      <div style={{ marginBottom: "16px" }}>
+        <s-banner tone="info" heading="Quick onboarding roadmap">
+          Follow this 6-step roadmap to configure 300 DPI templates, connect products from your Shopify catalog, customize language translations, and fulfill custom orders.
+        </s-banner>
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: "16px", marginBottom: "32px" }}>
@@ -303,6 +190,6 @@ export default function AppGuide() {
           </div>
         ))}
       </div>
-    </div>
+    </s-page>
   );
 }

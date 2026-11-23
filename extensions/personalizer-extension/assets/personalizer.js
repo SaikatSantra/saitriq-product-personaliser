@@ -2111,7 +2111,7 @@
         }
 
         if (!variantId) {
-          alert(this.t("error_select_variant", "Could not detect active product variant. Please select a variant on the product page."));
+          this.showErrorBanner(this.t("error_select_variant", "Could not detect active product variant. Please select a variant on the product page."));
           if (submitBtn) {
             submitBtn.disabled = false;
             submitBtn.textContent = this.t("add_to_cart", "Add to Cart with Design");
@@ -2154,7 +2154,7 @@
           window.location.href = "/cart";
         } else {
           const errData = await cartResponse.json().catch(() => ({}));
-          alert(errData.description || this.t("error_add_to_cart", "Could not add customized item to cart. Please try again."));
+          this.showErrorBanner(errData.description || this.t("error_add_to_cart", "Could not add customized item to cart. Please try again."));
           if (submitBtn) {
             submitBtn.disabled = false;
             submitBtn.textContent = this.t("add_to_cart", "Add to Cart with Design");
@@ -2162,12 +2162,30 @@
         }
       } catch (err) {
         console.error("[Saitriq] Error adding to cart:", err);
-        alert(this.t("error_add_to_cart", "Could not add customized item to cart. Please try again."));
+        this.showErrorBanner(this.t("error_add_to_cart", "Could not add customized item to cart. Please try again."));
         if (submitBtn) {
           submitBtn.disabled = false;
           submitBtn.textContent = this.t("add_to_cart", "Add to Cart with Design");
         }
       }
+    }
+
+    showErrorBanner(message) {
+      let banner = this.querySelector(".saitriq-error-toast");
+      if (!banner) {
+        banner = document.createElement("div");
+        banner.className = "saitriq-error-toast";
+        banner.style.cssText = "position:absolute;top:20px;left:50%;transform:translateX(-50%);background:#fee2e2;border:1px solid #f87171;color:#b91c1c;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;z-index:999999;box-shadow:0 6px 18px rgba(0,0,0,0.18);display:flex;align-items:center;gap:8px;";
+        const modalWin = this.querySelector(".saitriq-modal-window") || this;
+        modalWin.style.position = "relative";
+        modalWin.appendChild(banner);
+      }
+      banner.innerHTML = `<span>⚠️</span><span>${message}</span>`;
+      banner.style.display = "flex";
+      setTimeout(() => {
+        if (banner) banner.style.display = "none";
+      }, 5000);
+    }
     }
   }
 

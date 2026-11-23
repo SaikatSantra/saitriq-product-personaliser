@@ -715,129 +715,31 @@ export default function TemplateSetup() {
   const cleanShopDomain = shop.replace(/^https?:\/\//, "").replace(/\/.*$/, "").trim();
 
   return (
-    <div
-      style={{
-        maxWidth: "1140px",
-        margin: "0 auto",
-        padding: "16px 20px 48px",
-        fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
-      }}
+    <s-page
+      heading={title || "Personalization template"}
+      back-action="/app/templates"
     >
-      {/* Top Navigation & Action Header */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: "16px",
-          flexWrap: "wrap",
-          gap: "12px",
-        }}
+      <s-button
+        slot="primary-action"
+        variant="primary"
+        onClick={handleSave}
+        disabled={isSaving}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <Link
-            to="/app/templates"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "6px",
-              padding: "7px 12px",
-              borderRadius: "8px",
-              background: "#fff",
-              border: "1px solid #cbd5e1",
-              color: "#334155",
-              fontSize: "13px",
-              fontWeight: 600,
-              textDecoration: "none",
-            }}
-          >
-            ← Back to Templates
-          </Link>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <span
-              style={{
-                display: "inline-block",
-                width: "8px",
-                height: "8px",
-                borderRadius: "50%",
-                background: assignedProductIds.length > 0 ? "#10b981" : "#f59e0b",
-              }}
-            />
-            <span style={{ fontSize: "13px", color: "#64748b", fontWeight: 500 }}>
-              {assignedProductIds.length > 0
-                ? `Active on ${assignedProductIds.length} Product${assignedProductIds.length > 1 ? "s" : ""}`
-                : "No products linked yet"}
-            </span>
-          </div>
-        </div>
-
-        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          {assignedProductsList.length > 0 && assignedProductsList[0].handle && (
-            <a
-              href={`https://${cleanShopDomain}/products/${assignedProductsList[0].handle}`}
-              target="_blank"
-              rel="noreferrer"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "6px",
-                padding: "8px 14px",
-                borderRadius: "8px",
-                background: "#f1f5f9",
-                color: "#0f172a",
-                border: "1px solid #cbd5e1",
-                fontSize: "13px",
-                fontWeight: 600,
-                textDecoration: "none",
-              }}
-            >
-              👁️ View Live on Store ↗
-            </a>
-          )}
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={isSaving}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "6px",
-              padding: "9px 20px",
-              borderRadius: "8px",
-              background: "#008060",
-              color: "#ffffff",
-              border: "none",
-              fontSize: "14px",
-              fontWeight: 700,
-              cursor: isSaving ? "not-allowed" : "pointer",
-              boxShadow: "0 2px 5px rgba(0, 128, 96, 0.25)",
-              opacity: isSaving ? 0.7 : 1,
-            }}
-          >
-            {isSaving ? "Saving Changes..." : "💾 Save Template"}
-          </button>
-        </div>
-      </div>
-
-      {/* Success Notification Banner */}
-      {fetcher.data?.message && (
-        <div
-          style={{
-            marginBottom: "20px",
-            padding: "12px 18px",
-            borderRadius: "8px",
-            background: "#ecfdf5",
-            border: "1px solid #a7f3d0",
-            color: "#065f46",
-            fontSize: "14px",
-            fontWeight: 600,
-            display: "flex",
-            alignItems: "center",
-            gap: "8px",
-          }}
+        {isSaving ? "Saving..." : "Save template"}
+      </s-button>
+      {assignedProductsList.length > 0 && assignedProductsList[0].handle && (
+        <s-button
+          slot="secondary-actions"
+          href={`https://${cleanShopDomain}/products/${assignedProductsList[0].handle}`}
+          target="_blank"
         >
-          <span>✓</span>
-          <span>{fetcher.data.message}</span>
+          View on store
+        </s-button>
+      )}
+
+      {fetcher.data?.message && (
+        <div style={{ marginBottom: "16px" }}>
+          <s-banner tone="success">{fetcher.data.message}</s-banner>
         </div>
       )}
 
@@ -1890,6 +1792,6 @@ export default function TemplateSetup() {
           </div>
         </div>
       )}
-    </div>
+    </s-page>
   );
 }

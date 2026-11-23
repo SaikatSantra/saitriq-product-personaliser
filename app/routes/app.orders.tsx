@@ -365,142 +365,20 @@ export default function CustomizedOrdersPage() {
   ).length;
 
   return (
-    <div
-      style={{
-        maxWidth: "1140px",
-        margin: "0 auto",
-        padding: "16px 20px 48px",
-        fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
-      }}
-    >
-      {/* Top Header */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: "16px",
-          flexWrap: "wrap",
-          gap: "12px",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <Link
-            to="/app"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "6px",
-              padding: "7px 12px",
-              borderRadius: "8px",
-              background: "#fff",
-              border: "1px solid #cbd5e1",
-              color: "#334155",
-              fontSize: "13px",
-              fontWeight: 600,
-              textDecoration: "none",
-            }}
-          >
-            ← Dashboard
-          </Link>
-          <div>
-            <h1 style={{ margin: 0, fontSize: "20px", fontWeight: 800, color: "#0f172a" }}>
-              Customized Orders &amp; Print Production
-            </h1>
-            <p style={{ margin: "2px 0 0", fontSize: "13px", color: "#64748b" }}>
-              Inspect customer personalization designs, download transparent print assets, and generate 300 DPI production files.
-            </p>
-          </div>
-        </div>
-
-        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-          <Link
-            to="/app/templates"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "6px",
-              padding: "8px 16px",
-              borderRadius: "8px",
-              background: "#008060",
-              color: "#ffffff",
-              fontSize: "13px",
-              fontWeight: 700,
-              textDecoration: "none",
-              boxShadow: "0 2px 4px rgba(0, 128, 96, 0.2)",
-            }}
-          >
-            🎨 Manage Templates
-          </Link>
-        </div>
-      </div>
-
-      {/* Graphical Hero Banner */}
-      <div
-        style={{
-          background: "linear-gradient(135deg, #0b192c 0%, #1e3e62 60%, #008060 100%)",
-          borderRadius: "14px",
-          padding: "24px 28px",
-          color: "#ffffff",
-          marginBottom: "24px",
-          boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.2)",
-          position: "relative",
-          overflow: "hidden",
-        }}
-      >
-        <div style={{ position: "relative", zIndex: 1, maxWidth: "700px" }}>
-          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "10px" }}>
-            <span
-              style={{
-                background: "rgba(0, 128, 96, 0.3)",
-                border: "1px solid rgba(0, 128, 96, 0.6)",
-                color: "#6ee7b7",
-                padding: "3px 10px",
-                borderRadius: "20px",
-                fontSize: "11px",
-                fontWeight: 700,
-                letterSpacing: "0.5px",
-              }}
-            >
-              ⚡ LIVE FULFILLMENT PIPELINE
-            </span>
-            <span
-              style={{
-                background: "rgba(255, 255, 255, 0.12)",
-                border: "1px solid rgba(255, 255, 255, 0.2)",
-                color: "#e2e8f0",
-                padding: "3px 10px",
-                borderRadius: "20px",
-                fontSize: "11px",
-                fontWeight: 600,
-              }}
-            >
-              ☁️ SHOPIFY FILES CDN HOSTED
-            </span>
-          </div>
-
-          <h2 style={{ fontSize: "22px", fontWeight: 800, margin: "0 0 8px", color: "#ffffff" }}>
-            Production Print Files &amp; Design Snaps
-          </h2>
-          <p style={{ margin: "0", color: "#cbd5e1", fontSize: "13px", lineHeight: 1.5 }}>
-            Every time a shopper customizes front or back sides and places an order, their multi-line text parameters, uploaded photos, and visual preview canvas are captured and linked directly to their Shopify line item.
-          </p>
-        </div>
-      </div>
-
+    <s-page heading="Custom orders">
       {/* Top Metrics */}
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-          gap: "16px",
-          marginBottom: "24px",
+          gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+          gap: "12px",
+          marginBottom: "16px",
         }}
       >
         <div
           style={{
             background: "#fff",
-            padding: "18px",
+            padding: "14px 16px",
             borderRadius: "10px",
             border: "1px solid #e2e8f0",
             display: "flex",
@@ -509,20 +387,20 @@ export default function CustomizedOrdersPage() {
           }}
         >
           <div>
-            <div style={{ fontSize: "12px", color: "#64748b", fontWeight: 600, textTransform: "uppercase" }}>
-              Total Custom Orders
+            <div style={{ fontSize: "11px", color: "#64748b", fontWeight: 600, textTransform: "uppercase" }}>
+              Total custom orders
             </div>
-            <div style={{ fontSize: "28px", fontWeight: 800, margin: "4px 0 0", color: "#0f172a" }}>
+            <div style={{ fontSize: "24px", fontWeight: 800, margin: "2px 0 0", color: "#0f172a" }}>
               {orders.length}
             </div>
           </div>
-          <span style={{ fontSize: "28px" }}>📦</span>
+          <span style={{ fontSize: "24px" }}>📦</span>
         </div>
 
         <div
           style={{
             background: "#fff",
-            padding: "18px",
+            padding: "14px 16px",
             borderRadius: "10px",
             border: "1px solid #e2e8f0",
             display: "flex",
@@ -531,20 +409,20 @@ export default function CustomizedOrdersPage() {
           }}
         >
           <div>
-            <div style={{ fontSize: "12px", color: "#64748b", fontWeight: 600, textTransform: "uppercase" }}>
-              300 DPI Print Ready
+            <div style={{ fontSize: "11px", color: "#64748b", fontWeight: 600, textTransform: "uppercase" }}>
+              Print files ready
             </div>
-            <div style={{ fontSize: "28px", fontWeight: 800, margin: "4px 0 0", color: "#008060" }}>
+            <div style={{ fontSize: "24px", fontWeight: 800, margin: "2px 0 0", color: "#008060" }}>
               {completedPrintsCount}
             </div>
           </div>
-          <span style={{ fontSize: "28px" }}>🖨️</span>
+          <span style={{ fontSize: "24px" }}>🖨️</span>
         </div>
 
         <div
           style={{
             background: "#fff",
-            padding: "18px",
+            padding: "14px 16px",
             borderRadius: "10px",
             border: "1px solid #e2e8f0",
             display: "flex",
@@ -553,14 +431,14 @@ export default function CustomizedOrdersPage() {
           }}
         >
           <div>
-            <div style={{ fontSize: "12px", color: "#64748b", fontWeight: 600, textTransform: "uppercase" }}>
-              Store Sync
+            <div style={{ fontSize: "11px", color: "#64748b", fontWeight: 600, textTransform: "uppercase" }}>
+              Connected store
             </div>
-            <div style={{ fontSize: "14px", fontWeight: 700, margin: "8px 0 0", color: "#0f172a", wordBreak: "break-all" }}>
+            <div style={{ fontSize: "13px", fontWeight: 700, margin: "4px 0 0", color: "#0f172a", wordBreak: "break-all" }}>
               {shop}
             </div>
           </div>
-          <span style={{ fontSize: "28px" }}>🟢</span>
+          <span style={{ fontSize: "24px" }}>🟢</span>
         </div>
       </div>
 
@@ -1261,6 +1139,6 @@ export default function CustomizedOrdersPage() {
           </div>
         </div>
       )}
-    </div>
+    </s-page>
   );
 }
