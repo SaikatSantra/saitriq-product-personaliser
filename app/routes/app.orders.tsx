@@ -445,100 +445,100 @@ export default function CustomizedOrdersPage() {
       )}
 
       {/* =========================================================================
-          POLARIS GRAPHICAL OVERVIEW BANNER
+          POLARIS COMPACT GRAPHICAL OVERVIEW BANNER
       ========================================================================= */}
       <div
         style={{
           background: "#ffffff",
           border: "1px solid #e2e8f0",
-          borderRadius: "12px",
-          padding: "16px 22px",
-          marginBottom: "16px",
+          borderRadius: "10px",
+          padding: "10px 16px",
+          marginBottom: "12px",
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
           flexWrap: "wrap",
-          gap: "16px",
-          boxShadow: "0 1px 3px rgba(0, 0, 0, 0.04)",
+          gap: "12px",
+          boxShadow: "0 1px 2px rgba(0, 0, 0, 0.03)",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
           <div
             style={{
-              width: "48px",
-              height: "48px",
-              borderRadius: "10px",
+              width: "36px",
+              height: "36px",
+              borderRadius: "8px",
               background: "linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)",
               border: "1px solid #bbf7d0",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              fontSize: "24px",
+              fontSize: "18px",
               flexShrink: 0,
             }}
           >
             📦
           </div>
           <div>
-            <h2 style={{ fontSize: "16px", fontWeight: 700, margin: 0, color: "#0f172a" }}>
+            <h2 style={{ fontSize: "14px", fontWeight: 700, margin: 0, color: "#0f172a" }}>
               Customized Production Orders &amp; Print Snapshots
             </h2>
-            <p style={{ margin: "3px 0 0", fontSize: "13px", color: "#64748b" }}>
+            <p style={{ margin: "1px 0 0", fontSize: "11px", color: "#64748b" }}>
               Inspect customer personalization designs, front &amp; back previews, and download 300 DPI production print files.
             </p>
           </div>
         </div>
 
-        {/* Polaris Metric Pills */}
-        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
+        {/* Compact Polaris Metric Pills */}
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
           <div
             style={{
               background: "#f8fafc",
               border: "1px solid #e2e8f0",
-              borderRadius: "8px",
-              padding: "6px 14px",
-              minWidth: "90px",
+              borderRadius: "6px",
+              padding: "4px 10px",
+              textAlign: "center",
             }}
           >
-            <div style={{ fontSize: "10px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
-              Total Orders
-            </div>
-            <div style={{ fontSize: "18px", fontWeight: 800, color: "#0f172a", marginTop: "1px" }}>
+            <span style={{ fontSize: "10px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+              Orders:{" "}
+            </span>
+            <span style={{ fontSize: "13px", fontWeight: 800, color: "#0f172a" }}>
               {orders.length}
-            </div>
+            </span>
           </div>
 
           <div
             style={{
               background: "#f8fafc",
               border: "1px solid #e2e8f0",
-              borderRadius: "8px",
-              padding: "6px 14px",
-              minWidth: "90px",
+              borderRadius: "6px",
+              padding: "4px 10px",
+              textAlign: "center",
             }}
           >
-            <div style={{ fontSize: "10px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
-              Print Ready
-            </div>
-            <div style={{ fontSize: "18px", fontWeight: 800, color: "#008060", marginTop: "1px" }}>
+            <span style={{ fontSize: "10px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+              Ready:{" "}
+            </span>
+            <span style={{ fontSize: "13px", fontWeight: 800, color: "#008060" }}>
               {completedPrintsCount}
-            </div>
+            </span>
           </div>
 
           <div
             style={{
               background: "#f8fafc",
               border: "1px solid #e2e8f0",
-              borderRadius: "8px",
-              padding: "6px 14px",
+              borderRadius: "6px",
+              padding: "4px 10px",
             }}
           >
-            <div style={{ fontSize: "10px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
-              Print Engine
-            </div>
-            <div style={{ fontSize: "13px", fontWeight: 700, color: "#2563eb", marginTop: "2px" }}>
+            <span style={{ fontSize: "10px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+              Print:{" "}
+            </span>
+            <span style={{ fontSize: "11px", fontWeight: 700, color: "#2563eb" }}>
               ✓ 300 DPI High-Res
-            </div>
+            </span>
           </div>
         </div>
       </div>
@@ -600,28 +600,28 @@ export default function CustomizedOrdersPage() {
             overflow: "hidden",
           }}
         >
-          {/* Card Controls Bar: Tabs & Search Input */}
+          {/* Card Controls Bar: Compact Tabs & Search Input */}
           <div
             style={{
-              padding: "12px 18px",
+              padding: "8px 14px",
               borderBottom: "1px solid #f1f5f9",
               background: "#ffffff",
               display: "flex",
               justifyContent: "space-between",
               alignItems: "center",
               flexWrap: "wrap",
-              gap: "12px",
+              gap: "10px",
             }}
           >
             {/* Filter Tabs */}
-            <div style={{ display: "flex", gap: "6px" }}>
+            <div style={{ display: "flex", gap: "4px" }}>
               <button
                 type="button"
                 onClick={() => setFilterTab("all")}
                 style={{
-                  padding: "6px 14px",
-                  borderRadius: "6px",
-                  fontSize: "12px",
+                  padding: "4px 10px",
+                  borderRadius: "5px",
+                  fontSize: "11px",
                   fontWeight: 600,
                   border: filterTab === "all" ? "1px solid #008060" : "1px solid #cbd5e1",
                   background: filterTab === "all" ? "#f0fdf4" : "#ffffff",
@@ -629,15 +629,15 @@ export default function CustomizedOrdersPage() {
                   cursor: "pointer",
                 }}
               >
-                All Orders ({orders.length})
+                All ({orders.length})
               </button>
               <button
                 type="button"
                 onClick={() => setFilterTab("ready")}
                 style={{
-                  padding: "6px 14px",
-                  borderRadius: "6px",
-                  fontSize: "12px",
+                  padding: "4px 10px",
+                  borderRadius: "5px",
+                  fontSize: "11px",
                   fontWeight: 600,
                   border: filterTab === "ready" ? "1px solid #008060" : "1px solid #cbd5e1",
                   background: filterTab === "ready" ? "#f0fdf4" : "#ffffff",
@@ -651,9 +651,9 @@ export default function CustomizedOrdersPage() {
                 type="button"
                 onClick={() => setFilterTab("pending")}
                 style={{
-                  padding: "6px 14px",
-                  borderRadius: "6px",
-                  fontSize: "12px",
+                  padding: "4px 10px",
+                  borderRadius: "5px",
+                  fontSize: "11px",
                   fontWeight: 600,
                   border: filterTab === "pending" ? "1px solid #008060" : "1px solid #cbd5e1",
                   background: filterTab === "pending" ? "#f0fdf4" : "#ffffff",
@@ -661,19 +661,19 @@ export default function CustomizedOrdersPage() {
                   cursor: "pointer",
                 }}
               >
-                Pending Render ({pendingPrintsCount})
+                Pending ({pendingPrintsCount})
               </button>
             </div>
 
             {/* Live Search */}
-            <div style={{ position: "relative", minWidth: "260px" }}>
+            <div style={{ position: "relative", minWidth: "220px" }}>
               <span
                 style={{
                   position: "absolute",
-                  left: "10px",
+                  left: "8px",
                   top: "50%",
                   transform: "translateY(-50%)",
-                  fontSize: "13px",
+                  fontSize: "11px",
                   color: "#94a3b8",
                   pointerEvents: "none",
                 }}
@@ -684,13 +684,13 @@ export default function CustomizedOrdersPage() {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search by order #, item, or text..."
+                placeholder="Filter by order #, item, text..."
                 style={{
                   width: "100%",
-                  padding: "7px 12px 7px 32px",
-                  borderRadius: "6px",
+                  padding: "5px 10px 5px 26px",
+                  borderRadius: "5px",
                   border: "1px solid #cbd5e1",
-                  fontSize: "13px",
+                  fontSize: "11px",
                   outline: "none",
                   boxSizing: "border-box",
                 }}
@@ -701,13 +701,13 @@ export default function CustomizedOrdersPage() {
                   onClick={() => setSearchQuery("")}
                   style={{
                     position: "absolute",
-                    right: "8px",
+                    right: "6px",
                     top: "50%",
                     transform: "translateY(-50%)",
                     border: "none",
                     background: "none",
                     cursor: "pointer",
-                    fontSize: "13px",
+                    fontSize: "12px",
                     color: "#94a3b8",
                   }}
                 >
@@ -718,8 +718,8 @@ export default function CustomizedOrdersPage() {
           </div>
 
           {filteredOrders.length === 0 ? (
-            <div style={{ padding: "48px 20px", textAlign: "center", color: "#64748b" }}>
-              <p style={{ margin: "0 0 12px", fontSize: "14px" }}>
+            <div style={{ padding: "36px 16px", textAlign: "center", color: "#64748b" }}>
+              <p style={{ margin: "0 0 10px", fontSize: "13px" }}>
                 No custom orders found matching <strong>&ldquo;{searchQuery}&rdquo;</strong>.
               </p>
               <button
@@ -729,11 +729,11 @@ export default function CustomizedOrdersPage() {
                   setFilterTab("all");
                 }}
                 style={{
-                  padding: "6px 14px",
-                  borderRadius: "6px",
+                  padding: "5px 12px",
+                  borderRadius: "5px",
                   border: "1px solid #cbd5e1",
                   background: "#fff",
-                  fontSize: "12px",
+                  fontSize: "11px",
                   fontWeight: 600,
                   cursor: "pointer",
                   color: "#0f172a",
@@ -747,27 +747,28 @@ export default function CustomizedOrdersPage() {
               <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
                 <thead>
                   <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
-                    <th style={{ padding: "12px 18px", fontSize: "12px", fontWeight: 600, color: "#64748b" }}>
+                    <th style={{ padding: "8px 12px", fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
                       Order
                     </th>
-                    <th style={{ padding: "12px 18px", fontSize: "12px", fontWeight: 600, color: "#64748b" }}>
+                    <th style={{ padding: "8px 12px", fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
                       Product
                     </th>
-                    <th style={{ padding: "12px 18px", fontSize: "12px", fontWeight: 600, color: "#64748b" }}>
+                    <th style={{ padding: "8px 12px", fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", minWidth: "125px" }}>
                       Design Previews
                     </th>
-                    <th style={{ padding: "12px 18px", fontSize: "12px", fontWeight: 600, color: "#64748b" }}>
-                      Customer Selections
+                    <th style={{ padding: "8px 12px", fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                      Customer Customizations
                     </th>
-                    <th style={{ padding: "12px 18px", fontSize: "12px", fontWeight: 600, color: "#64748b" }}>
+                    <th style={{ padding: "8px 12px", fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
                       Date
                     </th>
                     <th
                       style={{
-                        padding: "12px 18px",
-                        fontSize: "12px",
-                        fontWeight: 600,
+                        padding: "8px 12px",
+                        fontSize: "11px",
+                        fontWeight: 700,
                         color: "#64748b",
+                        textTransform: "uppercase",
                         textAlign: "right",
                       }}
                     >
@@ -784,59 +785,66 @@ export default function CustomizedOrdersPage() {
                         style={{ borderBottom: "1px solid #f1f5f9" }}
                       >
                         {/* 1. Order Number & Status */}
-                        <td style={{ padding: "14px 18px", verticalAlign: "middle" }}>
-                          <a
-                            href={o.adminOrderUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            style={{
-                              fontWeight: 700,
-                              fontSize: "14px",
-                              color: "#008060",
-                              textDecoration: "none",
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: "4px",
-                            }}
-                          >
-                            {o.shopifyOrderId} ↗
-                          </a>
+                        <td style={{ padding: "8px 12px", verticalAlign: "middle", whiteSpace: "nowrap" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                            <a
+                              href={o.adminOrderUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              style={{
+                                fontWeight: 700,
+                                fontSize: "13px",
+                                color: "#008060",
+                                textDecoration: "none",
+                              }}
+                            >
+                              {o.shopifyOrderId} ↗
+                            </a>
+                            {o.financialStatus && (
+                              <span
+                                style={{
+                                  background: "#f1f5f9",
+                                  color: "#475569",
+                                  padding: "1px 5px",
+                                  borderRadius: "3px",
+                                  fontSize: "9px",
+                                  fontWeight: 700,
+                                  textTransform: "uppercase",
+                                }}
+                              >
+                                {o.financialStatus}
+                              </span>
+                            )}
+                          </div>
                           <div style={{ fontSize: "11px", color: "#64748b", marginTop: "2px" }}>
                             Line item: {o.lineItemId}
                           </div>
-                          {o.financialStatus && (
-                            <span
-                              style={{
-                                display: "inline-block",
-                                marginTop: "4px",
-                                background: "#f1f5f9",
-                                color: "#475569",
-                                padding: "2px 6px",
-                                borderRadius: "4px",
-                                fontSize: "10px",
-                                fontWeight: 700,
-                                textTransform: "uppercase",
-                              }}
-                            >
-                              {o.financialStatus}
-                            </span>
-                          )}
                         </td>
 
                         {/* 2. Product Title & Quantity */}
-                        <td style={{ padding: "14px 18px", verticalAlign: "middle" }}>
-                          <div style={{ fontWeight: 600, fontSize: "13px", color: "#0f172a" }}>
+                        <td style={{ padding: "8px 12px", verticalAlign: "middle", maxWidth: "180px" }}>
+                          <div
+                            style={{
+                              fontWeight: 600,
+                              fontSize: "12px",
+                              color: "#0f172a",
+                              whiteSpace: "nowrap",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                            }}
+                            title={o.productTitle}
+                          >
                             {o.productTitle}
                           </div>
                           <span
                             style={{
                               display: "inline-block",
-                              marginTop: "3px",
+                              marginTop: "2px",
                               background: "#f8fafc",
                               border: "1px solid #e2e8f0",
-                              padding: "2px 6px",
-                              borderRadius: "4px",
-                              fontSize: "11px",
+                              padding: "1px 5px",
+                              borderRadius: "3px",
+                              fontSize: "10px",
                               color: "#64748b",
                               fontWeight: 600,
                             }}
@@ -845,24 +853,25 @@ export default function CustomizedOrdersPage() {
                           </span>
                         </td>
 
-                        {/* 3. Previews (Front, Back, Uploaded) */}
-                        <td style={{ padding: "14px 18px", verticalAlign: "middle" }}>
-                          <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+                        {/* 3. Previews (Compact Horizontal Row: Front, Back, Uploaded) */}
+                        <td style={{ padding: "8px 12px", verticalAlign: "middle", minWidth: "135px" }}>
+                          <div style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: "6px", flexWrap: "nowrap" }}>
                             {/* Front Preview */}
                             {(o.frontPreviewUrl || o.previewImageUrl) ? (
                               <div
                                 style={{
                                   position: "relative",
                                   cursor: "pointer",
-                                  width: "52px",
-                                  height: "52px",
-                                  borderRadius: "6px",
+                                  width: "36px",
+                                  height: "36px",
+                                  borderRadius: "5px",
                                   overflow: "hidden",
                                   border: "1px solid #cbd5e1",
                                   background: "#f8fafc",
+                                  flexShrink: 0,
                                 }}
                                 onClick={() => setActiveModalImage(normalizePreviewUrl(o.frontPreviewUrl || o.previewImageUrl, shop))}
-                                title="Click to view Front Design Preview"
+                                title="Click to zoom Front Design Preview"
                               >
                                 <img
                                   src={normalizePreviewUrl(o.frontPreviewUrl || o.previewImageUrl, shop)}
@@ -884,17 +893,18 @@ export default function CustomizedOrdersPage() {
                                 <div
                                   style={{
                                     position: "absolute",
-                                    bottom: "2px",
-                                    left: "2px",
-                                    background: "rgba(15, 23, 42, 0.75)",
+                                    bottom: "1px",
+                                    left: "1px",
+                                    background: "rgba(15, 23, 42, 0.8)",
                                     color: "#fff",
-                                    fontSize: "8px",
-                                    padding: "1px 3px",
+                                    fontSize: "7px",
+                                    padding: "0 2px",
                                     borderRadius: "2px",
                                     fontWeight: 700,
+                                    lineHeight: "10px",
                                   }}
                                 >
-                                  FRONT
+                                  F
                                 </div>
                               </div>
                             ) : null}
@@ -905,15 +915,16 @@ export default function CustomizedOrdersPage() {
                                 style={{
                                   position: "relative",
                                   cursor: "pointer",
-                                  width: "52px",
-                                  height: "52px",
-                                  borderRadius: "6px",
+                                  width: "36px",
+                                  height: "36px",
+                                  borderRadius: "5px",
                                   overflow: "hidden",
                                   border: "1px solid #cbd5e1",
                                   background: "#f8fafc",
+                                  flexShrink: 0,
                                 }}
                                 onClick={() => setActiveModalImage(normalizePreviewUrl(o.backPreviewUrl, shop))}
-                                title="Click to view Back Design Preview"
+                                title="Click to zoom Back Design Preview"
                               >
                                 <img
                                   src={normalizePreviewUrl(o.backPreviewUrl, shop)}
@@ -934,17 +945,18 @@ export default function CustomizedOrdersPage() {
                                 <div
                                   style={{
                                     position: "absolute",
-                                    bottom: "2px",
-                                    left: "2px",
-                                    background: "rgba(15, 23, 42, 0.75)",
+                                    bottom: "1px",
+                                    left: "1px",
+                                    background: "rgba(15, 23, 42, 0.8)",
                                     color: "#fff",
-                                    fontSize: "8px",
-                                    padding: "1px 3px",
+                                    fontSize: "7px",
+                                    padding: "0 2px",
                                     borderRadius: "2px",
                                     fontWeight: 700,
+                                    lineHeight: "10px",
                                   }}
                                 >
-                                  BACK
+                                  B
                                 </div>
                               </div>
                             ) : null}
@@ -955,15 +967,16 @@ export default function CustomizedOrdersPage() {
                                 style={{
                                   position: "relative",
                                   cursor: "pointer",
-                                  width: "52px",
-                                  height: "52px",
-                                  borderRadius: "6px",
+                                  width: "36px",
+                                  height: "36px",
+                                  borderRadius: "5px",
                                   overflow: "hidden",
-                                  border: "2px solid #008060",
+                                  border: "1.5px solid #008060",
                                   background: "#f0fdf4",
+                                  flexShrink: 0,
                                 }}
                                 onClick={() => setActiveModalImage(normalizePreviewUrl(o.frontUploadedUrl || o.uploadedImageUrl, shop))}
-                                title="Click to view Customer's Original Uploaded Photo"
+                                title="Click to zoom Customer's Original Uploaded Photo"
                               >
                                 <img
                                   src={normalizePreviewUrl(o.frontUploadedUrl || o.uploadedImageUrl, shop)}
@@ -985,14 +998,15 @@ export default function CustomizedOrdersPage() {
                                 <div
                                   style={{
                                     position: "absolute",
-                                    top: "2px",
-                                    left: "2px",
+                                    top: "1px",
+                                    left: "1px",
                                     background: "#008060",
                                     color: "#fff",
-                                    fontSize: "8px",
-                                    padding: "1px 3px",
+                                    fontSize: "7px",
+                                    padding: "0 2px",
                                     borderRadius: "2px",
                                     fontWeight: "bold",
+                                    lineHeight: "10px",
                                   }}
                                 >
                                   RAW
@@ -1002,115 +1016,141 @@ export default function CustomizedOrdersPage() {
                           </div>
                         </td>
 
-                        {/* 4. Customer Customizations */}
-                        <td style={{ padding: "14px 18px", verticalAlign: "middle" }}>
-                          <div style={{ display: "flex", flexDirection: "column", gap: "5px" }}>
-                            {Object.entries(o.customerSelections).map(([key, val]) => {
-                              if (key.startsWith("_") || key === "Custom Design Preview") return null;
+                        {/* 4. Customer Customizations (Compact Inline Chips) */}
+                        <td style={{ padding: "8px 12px", verticalAlign: "middle" }}>
+                          {(() => {
+                            const rawEntries = Object.entries(o.customerSelections || {});
+                            const textEntries = rawEntries.filter(([key, val]) => {
+                              if (key.startsWith("_") || key === "Custom Design Preview") return false;
+                              const strVal = String(val || "").trim();
+                              if (!strVal) return false;
+                              const lowerKey = key.toLowerCase();
+                              if (
+                                lowerKey.includes("preview") ||
+                                lowerKey.includes("upload") ||
+                                lowerKey.includes("photo") ||
+                                lowerKey.includes("image") ||
+                                strVal.startsWith("http://") ||
+                                strVal.startsWith("https://") ||
+                                strVal.startsWith("data:")
+                              ) {
+                                return false;
+                              }
+                              return true;
+                            });
 
-                              const strVal = String(val || "");
-                              const isImage =
-                                key.toLowerCase().includes("upload") ||
-                                key.toLowerCase().includes("photo") ||
-                                key.toLowerCase().includes("image") ||
-                                strVal.startsWith("http") ||
-                                strVal.startsWith("data:image");
+                            const uploadEntries = rawEntries.filter(([key, val]) => {
+                              if (key.startsWith("_")) return false;
+                              const strVal = String(val || "").trim();
+                              const lowerKey = key.toLowerCase();
+                              return (
+                                (lowerKey.includes("upload") || lowerKey.includes("photo") || lowerKey.includes("image")) &&
+                                (strVal.startsWith("http") || strVal.startsWith("data:") || strVal.includes("/api/"))
+                              );
+                            });
 
-                              if (isImage) {
-                                return (
-                                  <div key={key} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                            return (
+                              <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 6px", alignItems: "center" }}>
+                                {textEntries.map(([key, val]) => {
+                                  const strVal = String(val || "");
+                                  const isColor = strVal.startsWith("#") && (strVal.length === 4 || strVal.length === 7);
+                                  return (
                                     <span
-                                      style={{
-                                        fontWeight: 600,
-                                        color: "#475569",
-                                        background: "#f1f5f9",
-                                        padding: "2px 6px",
-                                        borderRadius: "4px",
-                                        fontSize: "11px",
-                                      }}
-                                    >
-                                      {key}:
-                                    </span>
-                                    <a
-                                      href={normalizePreviewUrl(strVal, shop)}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      download="customer_uploaded_image"
+                                      key={key}
                                       style={{
                                         display: "inline-flex",
                                         alignItems: "center",
-                                        gap: "4px",
-                                        color: "#008060",
-                                        fontWeight: 600,
-                                        fontSize: "11px",
-                                        background: "#ecfdf5",
-                                        border: "1px solid #a7f3d0",
-                                        padding: "2px 6px",
+                                        gap: "3px",
+                                        background: "#f1f5f9",
+                                        border: "1px solid #e2e8f0",
                                         borderRadius: "4px",
-                                        textDecoration: "none",
+                                        padding: "1px 6px",
+                                        fontSize: "11px",
+                                        lineHeight: "18px",
+                                        color: "#334155",
                                       }}
                                     >
-                                      📥 Download Raw
-                                    </a>
-                                  </div>
-                                );
-                              }
+                                      <span style={{ color: "#64748b", fontWeight: 500 }}>{key}:</span>
+                                      <strong style={{ color: "#0f172a" }}>{strVal}</strong>
+                                      {isColor && (
+                                        <span
+                                          style={{
+                                            display: "inline-block",
+                                            width: "10px",
+                                            height: "10px",
+                                            borderRadius: "2px",
+                                            background: strVal,
+                                            border: "1px solid rgba(0,0,0,0.2)",
+                                          }}
+                                        />
+                                      )}
+                                    </span>
+                                  );
+                                })}
 
-                              return (
-                                <div
-                                  key={key}
-                                  style={{
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    gap: "6px",
-                                    fontSize: "12px",
-                                  }}
-                                >
-                                  <span
+                                {uploadEntries.map(([key, val]) => (
+                                  <a
+                                    key={key}
+                                    href={normalizePreviewUrl(String(val), shop)}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    download="customer_upload"
                                     style={{
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: "3px",
+                                      color: "#008060",
                                       fontWeight: 600,
-                                      color: "#475569",
-                                      background: "#f1f5f9",
-                                      padding: "2px 6px",
+                                      fontSize: "10px",
+                                      background: "#ecfdf5",
+                                      border: "1px solid #a7f3d0",
+                                      padding: "1px 6px",
                                       borderRadius: "4px",
-                                      fontSize: "11px",
+                                      textDecoration: "none",
+                                      lineHeight: "18px",
                                     }}
+                                    title={`Download customer's original upload: ${key}`}
                                   >
-                                    {key}:
+                                    📎 Upload [Raw]
+                                  </a>
+                                ))}
+
+                                {textEntries.length === 0 && uploadEntries.length === 0 && (
+                                  <span style={{ fontSize: "11px", color: "#94a3b8", fontStyle: "italic" }}>
+                                    Standard design
                                   </span>
-                                  <span style={{ color: "#0f172a", fontWeight: 600 }}>
-                                    {strVal}
-                                  </span>
-                                </div>
-                              );
-                            })}
-                          </div>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </td>
 
                         {/* 5. Order Date */}
                         <td
                           style={{
-                            padding: "14px 18px",
+                            padding: "8px 12px",
                             color: "#64748b",
-                            fontSize: "12px",
+                            fontSize: "11px",
                             verticalAlign: "middle",
+                            whiteSpace: "nowrap",
                           }}
                         >
                           {new Date(o.createdAt).toLocaleDateString()}
                         </td>
 
-                        {/* 6. Production Print & Delete Actions */}
+                        {/* 6. Production Print & Delete Actions (Compact) */}
                         <td
                           style={{
-                            padding: "14px 18px",
+                            padding: "8px 12px",
                             textAlign: "right",
                             verticalAlign: "middle",
+                            whiteSpace: "nowrap",
                           }}
                         >
                           <div
                             style={{
                               display: "inline-flex",
-                              gap: "6px",
+                              gap: "4px",
                               alignItems: "center",
                               justifyContent: "flex-end",
                             }}
@@ -1121,16 +1161,16 @@ export default function CustomizedOrdersPage() {
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 style={{
-                                  padding: "6px 12px",
-                                  borderRadius: "6px",
+                                  padding: "4px 8px",
+                                  borderRadius: "4px",
                                   background: "#008060",
                                   color: "#fff",
                                   textDecoration: "none",
-                                  fontSize: "12px",
+                                  fontSize: "11px",
                                   fontWeight: 700,
                                   display: "inline-flex",
                                   alignItems: "center",
-                                  gap: "4px",
+                                  gap: "3px",
                                 }}
                               >
                                 📥 PDF
@@ -1141,17 +1181,17 @@ export default function CustomizedOrdersPage() {
                                 onClick={() => handleGeneratePrint(o)}
                                 disabled={fetcher.state !== "idle"}
                                 style={{
-                                  padding: "6px 10px",
-                                  borderRadius: "6px",
+                                  padding: "4px 8px",
+                                  borderRadius: "4px",
                                   border: "1px solid #cbd5e1",
                                   background: "#ffffff",
                                   color: "#008060",
                                   cursor: "pointer",
-                                  fontSize: "12px",
+                                  fontSize: "11px",
                                   fontWeight: 600,
                                 }}
                               >
-                                {fetcher.state !== "idle" ? "Rendering..." : "⚡ Generate PDF"}
+                                {fetcher.state !== "idle" ? "Rendering..." : "⚡ PDF"}
                               </button>
                             )}
 
@@ -1161,12 +1201,12 @@ export default function CustomizedOrdersPage() {
                                 onClick={() => setActiveModalImage(o.previewImageUrl)}
                                 title="View customer design snapshot"
                                 style={{
-                                  padding: "6px 10px",
-                                  borderRadius: "6px",
+                                  padding: "4px 8px",
+                                  borderRadius: "4px",
                                   border: "1px solid #cbd5e1",
                                   background: "#fff",
                                   cursor: "pointer",
-                                  fontSize: "12px",
+                                  fontSize: "11px",
                                   color: "#334155",
                                   fontWeight: 600,
                                 }}
@@ -1181,12 +1221,12 @@ export default function CustomizedOrdersPage() {
                               onClick={() => setDeleteTarget(o)}
                               title="Delete customized order"
                               style={{
-                                padding: "6px 10px",
-                                borderRadius: "6px",
+                                padding: "4px 8px",
+                                borderRadius: "4px",
                                 border: "1px solid #fecaca",
                                 background: "#fff5f5",
                                 cursor: "pointer",
-                                fontSize: "12px",
+                                fontSize: "11px",
                                 color: "#dc2626",
                                 fontWeight: 600,
                               }}
