@@ -570,7 +570,7 @@
     renderTriggerButton() {
       this.innerHTML = `
         <div class="saitriq-trigger-wrapper">
-          <button type="button" class="saitriq-customize-btn" style="background-color: ${this.primaryColor};">
+          <button type="button" class="saitriq-customize-btn button" style="background-color: ${this.primaryColor};">
             ${this.buttonText}
           </button>
         </div>

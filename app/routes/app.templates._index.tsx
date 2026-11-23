@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { useLoaderData, useFetcher, useNavigate, Link } from "react-router";
 import { authenticate } from "../shopify.server";
@@ -60,12 +60,119 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   return { success: false };
 };
 
+function getTemplateIcon(title: string) {
+  const lower = (title || "").toLowerCase();
+  if (lower.includes("mug") || lower.includes("cup") || lower.includes("drink")) {
+    return (
+      <div
+        style={{
+          width: "44px",
+          height: "44px",
+          borderRadius: "8px",
+          background: "#fef3c7",
+          border: "1px solid #fde68a",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: "22px",
+          flexShrink: 0,
+        }}
+      >
+        ☕
+      </div>
+    );
+  }
+  if (lower.includes("cap") || lower.includes("hat")) {
+    return (
+      <div
+        style={{
+          width: "44px",
+          height: "44px",
+          borderRadius: "8px",
+          background: "#f1f5f9",
+          border: "1px solid #e2e8f0",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: "22px",
+          flexShrink: 0,
+        }}
+      >
+        🧢
+      </div>
+    );
+  }
+  if (lower.includes("phone") || lower.includes("case")) {
+    return (
+      <div
+        style={{
+          width: "44px",
+          height: "44px",
+          borderRadius: "8px",
+          background: "#fdf4ff",
+          border: "1px solid #f5d0fe",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: "22px",
+          flexShrink: 0,
+        }}
+      >
+        📱
+      </div>
+    );
+  }
+  if (lower.includes("canvas") || lower.includes("art") || lower.includes("poster") || lower.includes("print")) {
+    return (
+      <div
+        style={{
+          width: "44px",
+          height: "44px",
+          borderRadius: "8px",
+          background: "#f0fdf4",
+          border: "1px solid #bbf7d0",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: "22px",
+          flexShrink: 0,
+        }}
+      >
+        🖼️
+      </div>
+    );
+  }
+  // Default: apparel / t-shirt
+  return (
+    <div
+      style={{
+        width: "44px",
+        height: "44px",
+        borderRadius: "8px",
+        background: "#eff6ff",
+        border: "1px solid #bfdbfe",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: "22px",
+        flexShrink: 0,
+      }}
+    >
+      👕
+    </div>
+  );
+}
+
 export default function TemplatesIndex() {
   const { templates } = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
   const navigate = useNavigate();
 
-  // Modal States (replacing browser native prompt and confirm)
+  // Search & Filter State
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterTab, setFilterTab] = useState<"all" | "assigned" | "unassigned">("all");
+
+  // Modal States
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newTitle, setNewTitle] = useState("Custom T-Shirt Template");
   const [newWidth, setNewWidth] = useState(1200);
@@ -139,6 +246,23 @@ export default function TemplatesIndex() {
   };
 
   const totalProducts = templates.reduce((acc: number, t: any) => acc + (t.products?.length || 0), 0);
+  const assignedCount = templates.filter((t: any) => (t.products?.length || 0) > 0).length;
+  const unassignedCount = templates.filter((t: any) => (t.products?.length || 0) === 0).length;
+
+  const filteredTemplates = useMemo(() => {
+    return templates.filter((t: any) => {
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const matchTitle = t.title?.toLowerCase().includes(q);
+        const matchDims = `${t.canvasWidth}x${t.canvasHeight}`.includes(q);
+        if (!matchTitle && !matchDims) return false;
+      }
+      const count = t.products?.length || 0;
+      if (filterTab === "assigned" && count === 0) return false;
+      if (filterTab === "unassigned" && count > 0) return false;
+      return true;
+    });
+  }, [templates, searchQuery, filterTab]);
 
   return (
     <s-page heading="Personalization templates">
@@ -151,115 +275,127 @@ export default function TemplatesIndex() {
       </s-button>
 
       {fetcher.data?.message && (
-        <div
-          style={{
-            marginBottom: "16px",
-            padding: "10px 16px",
-            borderRadius: "8px",
-            background: "#ecfdf5",
-            border: "1px solid #a7f3d0",
-            color: "#065f46",
-            fontSize: "13px",
-            fontWeight: 600,
-            display: "flex",
-            alignItems: "center",
-            gap: "8px",
-          }}
-        >
-          <span>✓</span>
-          <span>{fetcher.data.message}</span>
+        <div style={{ marginBottom: "16px" }}>
+          <s-banner tone="success">{fetcher.data.message}</s-banner>
         </div>
       )}
 
-      {/* Overview Stats Cards */}
+      {/* =========================================================================
+          GRAPHICAL OVERVIEW BANNER (Clean, cohesive, high-contrast Polaris bar)
+      ========================================================================= */}
       <div
         style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-          gap: "12px",
+          background: "#ffffff",
+          border: "1px solid #e2e8f0",
+          borderRadius: "12px",
+          padding: "16px 22px",
           marginBottom: "16px",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: "16px",
+          boxShadow: "0 1px 3px rgba(0, 0, 0, 0.04)",
         }}
       >
-        <div
-          style={{
-            background: "#fff",
-            padding: "12px 16px",
-            borderRadius: "10px",
-            border: "1px solid #e2e8f0",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
+        <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+          <div
+            style={{
+              width: "48px",
+              height: "48px",
+              borderRadius: "10px",
+              background: "linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)",
+              border: "1px solid #a7f3d0",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: "24px",
+              flexShrink: 0,
+            }}
+          >
+            🎨
+          </div>
           <div>
-            <div style={{ fontSize: "11px", color: "#64748b", fontWeight: 600, textTransform: "uppercase" }}>
+            <h2 style={{ fontSize: "16px", fontWeight: 700, margin: 0, color: "#0f172a" }}>
+              Personalization Templates &amp; Product Assignment
+            </h2>
+            <p style={{ margin: "3px 0 0", fontSize: "13px", color: "#64748b" }}>
+              Design print parameters, assign templates to products, and auto-generate 300 DPI print files upon checkout.
+            </p>
+          </div>
+        </div>
+
+        {/* Polaris Metric Pills */}
+        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
+          <div
+            style={{
+              background: "#f8fafc",
+              border: "1px solid #e2e8f0",
+              borderRadius: "8px",
+              padding: "6px 14px",
+              minWidth: "90px",
+            }}
+          >
+            <div style={{ fontSize: "10px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
               Active Templates
             </div>
-            <div style={{ fontSize: "22px", fontWeight: 800, margin: "2px 0 0", color: "#0f172a" }}>
+            <div style={{ fontSize: "18px", fontWeight: 800, color: "#0f172a", marginTop: "1px" }}>
               {templates.length}
             </div>
           </div>
-          <span style={{ fontSize: "22px" }}>🎨</span>
-        </div>
 
-        <div
-          style={{
-            background: "#fff",
-            padding: "12px 16px",
-            borderRadius: "10px",
-            border: "1px solid #e2e8f0",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
-          <div>
-            <div style={{ fontSize: "11px", color: "#64748b", fontWeight: 600, textTransform: "uppercase" }}>
+          <div
+            style={{
+              background: "#f8fafc",
+              border: "1px solid #e2e8f0",
+              borderRadius: "8px",
+              padding: "6px 14px",
+              minWidth: "90px",
+            }}
+          >
+            <div style={{ fontSize: "10px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
               Linked Products
             </div>
-            <div style={{ fontSize: "22px", fontWeight: 800, margin: "2px 0 0", color: "#008060" }}>
+            <div style={{ fontSize: "18px", fontWeight: 800, color: "#008060", marginTop: "1px" }}>
               {totalProducts}
             </div>
           </div>
-          <span style={{ fontSize: "22px" }}>🛍️</span>
-        </div>
 
-        <div
-          style={{
-            background: "#fff",
-            padding: "12px 16px",
-            borderRadius: "10px",
-            border: "1px solid #e2e8f0",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
-          <div>
-            <div style={{ fontSize: "11px", color: "#64748b", fontWeight: 600, textTransform: "uppercase" }}>
-              Print Resolution
+          <div
+            style={{
+              background: "#f8fafc",
+              border: "1px solid #e2e8f0",
+              borderRadius: "8px",
+              padding: "6px 14px",
+            }}
+          >
+            <div style={{ fontSize: "10px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+              Print Output
             </div>
-            <div style={{ fontSize: "22px", fontWeight: 800, margin: "2px 0 0", color: "#0f172a" }}>
-              300 DPI
+            <div style={{ fontSize: "13px", fontWeight: 700, color: "#2563eb", marginTop: "2px" }}>
+              ✓ 300 DPI High-Res
             </div>
           </div>
-          <span style={{ fontSize: "22px" }}>🖨️</span>
         </div>
       </div>
 
+      {/* =========================================================================
+          POLARIS TEMPLATES RESOURCE TABLE CARD
+      ========================================================================= */}
       {templates.length === 0 ? (
         <div
           style={{
-            background: "#fff",
+            background: "#ffffff",
             border: "1px solid #e2e8f0",
             borderRadius: "12px",
             textAlign: "center",
-            padding: "64px 20px",
+            padding: "56px 24px",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
           }}
         >
-          <div style={{ fontSize: "52px", marginBottom: "14px" }}>🎨</div>
+          <div style={{ fontSize: "52px", marginBottom: "12px" }}>🎨</div>
           <h3 style={{ fontSize: "18px", fontWeight: 700, margin: "0 0 8px", color: "#0f172a" }}>
-            No Templates Created Yet
+            No personalization templates yet
           </h3>
           <p
             style={{
@@ -270,13 +406,42 @@ export default function TemplatesIndex() {
               lineHeight: 1.5,
             }}
           >
-            Create your first personalization template to assign products from your store, configure text &amp; photo options, and produce 300 DPI print-ready files automatically on checkout.
+            Create templates with calibrated dimensions, assign them to products in your Shopify catalog, and provide your shoppers with a live customizer experience.
           </p>
+
+          {/* Quick presets */}
+          <div style={{ display: "flex", justifyContent: "center", gap: "10px", flexWrap: "wrap", marginBottom: "24px" }}>
+            {[
+              { label: "👕 T-Shirt / Apparel", name: "Custom T-Shirt Template", w: 1200, h: 1200 },
+              { label: "☕ Ceramic Mug", name: "Custom Ceramic Mug Template", w: 1000, h: 1000 },
+              { label: "📱 Phone Case", name: "Custom Phone Case Template", w: 1000, h: 1800 },
+              { label: "🖼️ Canvas Wall Art", name: "Custom Canvas Wall Art Template", w: 1600, h: 1200 },
+            ].map((p) => (
+              <button
+                key={p.label}
+                type="button"
+                onClick={() => handleOpenCreateModal(p)}
+                style={{
+                  background: "#f8fafc",
+                  border: "1px solid #cbd5e1",
+                  borderRadius: "8px",
+                  padding: "8px 14px",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  color: "#334155",
+                  cursor: "pointer",
+                }}
+              >
+                + {p.label}
+              </button>
+            ))}
+          </div>
+
           <button
             type="button"
             onClick={() => handleOpenCreateModal()}
             style={{
-              padding: "10px 20px",
+              padding: "10px 22px",
               borderRadius: "8px",
               background: "#008060",
               color: "#fff",
@@ -286,190 +451,384 @@ export default function TemplatesIndex() {
               cursor: "pointer",
             }}
           >
-            + Create Your First Template
+            Create Custom Template
           </button>
         </div>
       ) : (
         <div
           style={{
-            background: "#fff",
+            background: "#ffffff",
             borderRadius: "12px",
             border: "1px solid #e2e8f0",
             overflow: "hidden",
-            boxShadow: "0 2px 6px rgba(0,0,0,0.02)",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
           }}
         >
+          {/* Controls Bar: Filter Tabs & Live Search Input */}
           <div
             style={{
-              padding: "16px 20px",
+              padding: "12px 18px",
               borderBottom: "1px solid #f1f5f9",
               display: "flex",
               justifyContent: "space-between",
               alignItems: "center",
+              flexWrap: "wrap",
+              gap: "12px",
+              background: "#ffffff",
             }}
           >
-            <h3 style={{ margin: 0, fontSize: "15px", fontWeight: 700, color: "#0f172a" }}>
-              All Templates ({templates.length})
-            </h3>
-            <button
-              type="button"
-              onClick={() => handleOpenCreateModal()}
-              style={{
-                background: "#008060",
-                color: "#fff",
-                border: "none",
-                borderRadius: "6px",
-                padding: "6px 12px",
-                fontSize: "12px",
-                fontWeight: 600,
-                cursor: "pointer",
-              }}
-            >
-              + New Template
-            </button>
+            {/* Tabs */}
+            <div style={{ display: "flex", gap: "6px" }}>
+              <button
+                type="button"
+                onClick={() => setFilterTab("all")}
+                style={{
+                  padding: "6px 14px",
+                  borderRadius: "6px",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  border: filterTab === "all" ? "1px solid #008060" : "1px solid #cbd5e1",
+                  background: filterTab === "all" ? "#f0fdf4" : "#ffffff",
+                  color: filterTab === "all" ? "#008060" : "#475569",
+                  cursor: "pointer",
+                }}
+              >
+                All ({templates.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilterTab("assigned")}
+                style={{
+                  padding: "6px 14px",
+                  borderRadius: "6px",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  border: filterTab === "assigned" ? "1px solid #008060" : "1px solid #cbd5e1",
+                  background: filterTab === "assigned" ? "#f0fdf4" : "#ffffff",
+                  color: filterTab === "assigned" ? "#008060" : "#475569",
+                  cursor: "pointer",
+                }}
+              >
+                Assigned ({assignedCount})
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilterTab("unassigned")}
+                style={{
+                  padding: "6px 14px",
+                  borderRadius: "6px",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  border: filterTab === "unassigned" ? "1px solid #008060" : "1px solid #cbd5e1",
+                  background: filterTab === "unassigned" ? "#f0fdf4" : "#ffffff",
+                  color: filterTab === "unassigned" ? "#008060" : "#475569",
+                  cursor: "pointer",
+                }}
+              >
+                Unassigned ({unassignedCount})
+              </button>
+            </div>
+
+            {/* Search Input */}
+            <div style={{ position: "relative", minWidth: "260px" }}>
+              <span
+                style={{
+                  position: "absolute",
+                  left: "10px",
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  fontSize: "13px",
+                  color: "#94a3b8",
+                  pointerEvents: "none",
+                }}
+              >
+                🔍
+              </span>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search templates..."
+                style={{
+                  width: "100%",
+                  padding: "7px 12px 7px 32px",
+                  borderRadius: "6px",
+                  border: "1px solid #cbd5e1",
+                  fontSize: "13px",
+                  outline: "none",
+                  boxSizing: "border-box",
+                }}
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  style={{
+                    position: "absolute",
+                    right: "8px",
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    border: "none",
+                    background: "none",
+                    cursor: "pointer",
+                    fontSize: "13px",
+                    color: "#94a3b8",
+                  }}
+                >
+                  &times;
+                </button>
+              )}
+            </div>
           </div>
 
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
-              <thead>
-                <tr style={{ borderBottom: "1px solid #e2e8f0", background: "#f8fafc" }}>
-                  <th style={{ padding: "12px 18px", fontSize: "12px", fontWeight: 600, color: "#64748b" }}>
-                    Template Name
-                  </th>
-                  <th style={{ padding: "12px 18px", fontSize: "12px", fontWeight: 600, color: "#64748b" }}>
-                    Print Specs
-                  </th>
-                  <th style={{ padding: "12px 18px", fontSize: "12px", fontWeight: 600, color: "#64748b" }}>
-                    Personalization
-                  </th>
-                  <th style={{ padding: "12px 18px", fontSize: "12px", fontWeight: 600, color: "#64748b" }}>
-                    Assigned Products
-                  </th>
-                  <th style={{ padding: "12px 18px", fontSize: "12px", fontWeight: 600, color: "#64748b" }}>
-                    Last Updated
-                  </th>
-                  <th style={{ padding: "12px 18px", fontSize: "12px", fontWeight: 600, color: "#64748b", textAlign: "right" }}>
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {templates.map((tpl) => (
-                  <tr key={tpl.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
-                    <td style={{ padding: "14px 18px", fontWeight: 700 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                        <span>🎨</span>
-                        <Link
-                          to={`/app/templates/${tpl.id}`}
-                          style={{ color: "#008060", textDecoration: "none", fontSize: "14px" }}
-                        >
-                          {tpl.title}
-                        </Link>
-                        <button
-                          type="button"
-                          onClick={() => handleOpenRename(tpl.id, tpl.title)}
-                          title="Rename template"
-                          style={{
-                            background: "none",
-                            border: "none",
-                            cursor: "pointer",
-                            padding: "2px 4px",
-                            fontSize: "12px",
-                            color: "#94a3b8",
-                          }}
-                        >
-                          ✏️
-                        </button>
-                      </div>
-                    </td>
-                    <td style={{ padding: "14px 18px", color: "#64748b", fontSize: "12px" }}>
-                      <span style={{ background: "#f1f5f9", padding: "4px 8px", borderRadius: "4px", fontWeight: 600 }}>
-                        {tpl.canvasWidth} × {tpl.canvasHeight} px ({tpl.printDpi} DPI)
-                      </span>
-                    </td>
-                    <td style={{ padding: "14px 18px", fontSize: "12px" }}>
-                      <span
-                        style={{
-                          background: "#f8fafc",
-                          border: "1px solid #e2e8f0",
-                          padding: "3px 8px",
-                          borderRadius: "12px",
-                          fontSize: "11px",
-                          fontWeight: 600,
-                        }}
-                      >
-                        ✏️ Text + 📷 Photo
-                      </span>
-                    </td>
-                    <td style={{ padding: "14px 18px", fontSize: "12px" }}>
-                      <span
-                        style={{
-                          color: (tpl.products?.length || 0) > 0 ? "#059669" : "#94a3b8",
-                          fontWeight: 600,
-                        }}
-                      >
-                        {(tpl.products?.length || 0) > 0 ? "✓ " : "○ "}
-                        {tpl.products?.length || 0} products
-                      </span>
-                    </td>
-                    <td style={{ padding: "14px 18px", color: "#64748b", fontSize: "12px" }}>
-                      {new Date(tpl.updatedAt).toLocaleDateString()}
-                    </td>
-                    <td style={{ padding: "14px 18px", textAlign: "right" }}>
-                      <div style={{ display: "inline-flex", gap: "6px", alignItems: "center" }}>
-                        <Link
-                          to={`/app/templates/${tpl.id}`}
-                          style={{
-                            padding: "6px 12px",
-                            borderRadius: "6px",
-                            background: "#008060",
-                            color: "#fff",
-                            textDecoration: "none",
-                            fontSize: "12px",
-                            fontWeight: 700,
-                          }}
-                        >
-                          Assign &amp; Setup &rarr;
-                        </Link>
-                        <button
-                          type="button"
-                          onClick={() => handleDuplicate(tpl.id)}
-                          title="Duplicate template"
-                          style={{
-                            padding: "6px 10px",
-                            borderRadius: "6px",
-                            border: "1px solid #cbd5e1",
-                            background: "#fff",
-                            cursor: "pointer",
-                            fontSize: "12px",
-                            color: "#475569",
-                          }}
-                        >
-                          Duplicate
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setDeleteTarget({ id: tpl.id, title: tpl.title })}
-                          title="Delete template"
-                          style={{
-                            padding: "6px 10px",
-                            borderRadius: "6px",
-                            border: "1px solid #fecaca",
-                            background: "#fff5f5",
-                            cursor: "pointer",
-                            fontSize: "12px",
-                            color: "#dc2626",
-                          }}
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </td>
+          {/* Table */}
+          {filteredTemplates.length === 0 ? (
+            <div style={{ padding: "48px 20px", textAlign: "center", color: "#64748b" }}>
+              <p style={{ margin: "0 0 12px", fontSize: "14px" }}>
+                No templates found matching <strong>&ldquo;{searchQuery}&rdquo;</strong>.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery("");
+                  setFilterTab("all");
+                }}
+                style={{
+                  padding: "6px 14px",
+                  borderRadius: "6px",
+                  border: "1px solid #cbd5e1",
+                  background: "#fff",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  color: "#0f172a",
+                }}
+              >
+                Clear Filters
+              </button>
+            </div>
+          ) : (
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
+                <thead>
+                  <tr style={{ borderBottom: "1px solid #e2e8f0", background: "#f8fafc" }}>
+                    <th style={{ padding: "12px 18px", fontSize: "12px", fontWeight: 600, color: "#64748b" }}>
+                      Template
+                    </th>
+                    <th style={{ padding: "12px 18px", fontSize: "12px", fontWeight: 600, color: "#64748b" }}>
+                      Print Dimensions
+                    </th>
+                    <th style={{ padding: "12px 18px", fontSize: "12px", fontWeight: 600, color: "#64748b" }}>
+                      Capabilities
+                    </th>
+                    <th style={{ padding: "12px 18px", fontSize: "12px", fontWeight: 600, color: "#64748b" }}>
+                      Assigned Products
+                    </th>
+                    <th style={{ padding: "12px 18px", fontSize: "12px", fontWeight: 600, color: "#64748b" }}>
+                      Updated
+                    </th>
+                    <th style={{ padding: "12px 18px", fontSize: "12px", fontWeight: 600, color: "#64748b", textAlign: "right" }}>
+                      Actions
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {filteredTemplates.map((tpl: any) => {
+                    const isAssigned = (tpl.products?.length || 0) > 0;
+                    return (
+                      <tr key={tpl.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                        {/* Template Details & Thumbnail */}
+                        <td style={{ padding: "14px 18px" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                            {getTemplateIcon(tpl.title)}
+                            <div>
+                              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                <Link
+                                  to={`/app/templates/${tpl.id}`}
+                                  style={{
+                                    color: "#0f172a",
+                                    textDecoration: "none",
+                                    fontSize: "14px",
+                                    fontWeight: 700,
+                                  }}
+                                >
+                                  {tpl.title}
+                                </Link>
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenRename(tpl.id, tpl.title)}
+                                  title="Rename template"
+                                  style={{
+                                    background: "none",
+                                    border: "none",
+                                    cursor: "pointer",
+                                    padding: "2px",
+                                    fontSize: "12px",
+                                    color: "#94a3b8",
+                                  }}
+                                >
+                                  ✏️
+                                </button>
+                              </div>
+                              <div style={{ fontSize: "11px", color: "#64748b", marginTop: "2px" }}>
+                                ID: {tpl.id.slice(0, 8)}...
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* Print Dimensions */}
+                        <td style={{ padding: "14px 18px", color: "#64748b", fontSize: "12px" }}>
+                          <span
+                            style={{
+                              background: "#f1f5f9",
+                              padding: "4px 8px",
+                              borderRadius: "4px",
+                              fontWeight: 600,
+                              color: "#334155",
+                              display: "inline-block",
+                            }}
+                          >
+                            {tpl.canvasWidth} × {tpl.canvasHeight} px ({tpl.printDpi} DPI)
+                          </span>
+                        </td>
+
+                        {/* Capabilities */}
+                        <td style={{ padding: "14px 18px", fontSize: "12px" }}>
+                          <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                            <span
+                              style={{
+                                background: "#eff6ff",
+                                border: "1px solid #bfdbfe",
+                                color: "#1d4ed8",
+                                padding: "2px 7px",
+                                borderRadius: "10px",
+                                fontSize: "11px",
+                                fontWeight: 600,
+                              }}
+                            >
+                              ✏️ Text
+                            </span>
+                            <span
+                              style={{
+                                background: "#fdf4ff",
+                                border: "1px solid #f5d0fe",
+                                color: "#9333ea",
+                                padding: "2px 7px",
+                                borderRadius: "10px",
+                                fontSize: "11px",
+                                fontWeight: 600,
+                              }}
+                            >
+                              📷 Photo
+                            </span>
+                          </div>
+                        </td>
+
+                        {/* Assigned Products Status */}
+                        <td style={{ padding: "14px 18px", fontSize: "12px" }}>
+                          {isAssigned ? (
+                            <Link
+                              to={`/app/templates/${tpl.id}`}
+                              style={{
+                                textDecoration: "none",
+                                background: "#ecfdf5",
+                                border: "1px solid #a7f3d0",
+                                color: "#065f46",
+                                padding: "4px 10px",
+                                borderRadius: "14px",
+                                fontWeight: 700,
+                                fontSize: "12px",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "6px",
+                              }}
+                            >
+                              <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#10b981" }} />
+                              {tpl.products.length} product{tpl.products.length > 1 ? "s" : ""} linked
+                            </Link>
+                          ) : (
+                            <span
+                              style={{
+                                background: "#f8fafc",
+                                border: "1px solid #e2e8f0",
+                                color: "#94a3b8",
+                                padding: "4px 10px",
+                                borderRadius: "14px",
+                                fontSize: "12px",
+                                fontWeight: 500,
+                              }}
+                            >
+                              ○ No products linked
+                            </span>
+                          )}
+                        </td>
+
+                        {/* Updated Date */}
+                        <td style={{ padding: "14px 18px", color: "#64748b", fontSize: "12px" }}>
+                          {new Date(tpl.updatedAt).toLocaleDateString()}
+                        </td>
+
+                        {/* Actions */}
+                        <td style={{ padding: "14px 18px", textAlign: "right" }}>
+                          <div style={{ display: "inline-flex", gap: "6px", alignItems: "center" }}>
+                            <Link
+                              to={`/app/templates/${tpl.id}`}
+                              style={{
+                                padding: "7px 14px",
+                                borderRadius: "6px",
+                                background: "#008060",
+                                color: "#fff",
+                                textDecoration: "none",
+                                fontSize: "12px",
+                                fontWeight: 700,
+                              }}
+                            >
+                              Assign &amp; Setup &rarr;
+                            </Link>
+                            <button
+                              type="button"
+                              onClick={() => handleDuplicate(tpl.id)}
+                              title="Duplicate template"
+                              style={{
+                                padding: "6px 10px",
+                                borderRadius: "6px",
+                                border: "1px solid #cbd5e1",
+                                background: "#fff",
+                                cursor: "pointer",
+                                fontSize: "12px",
+                                color: "#475569",
+                                fontWeight: 600,
+                              }}
+                            >
+                              Duplicate
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDeleteTarget({ id: tpl.id, title: tpl.title })}
+                              title="Delete template"
+                              style={{
+                                padding: "6px 10px",
+                                borderRadius: "6px",
+                                border: "1px solid #fecaca",
+                                background: "#fff5f5",
+                                cursor: "pointer",
+                                fontSize: "12px",
+                                color: "#dc2626",
+                                fontWeight: 600,
+                              }}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
