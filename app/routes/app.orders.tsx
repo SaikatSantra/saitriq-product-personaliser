@@ -6,8 +6,26 @@ import {
   listCustomizedOrders,
   createCustomizedOrder,
   updateCustomizedOrderStatus,
+  updateCustomizedOrderPreview,
 } from "../models/order.server";
 import { renderHighResPrintFile } from "../services/renderer.server";
+import { uploadToShopifyFiles } from "../services/shopifyFiles.server";
+
+export function normalizePreviewUrl(rawUrl?: string, shop?: string): string {
+  if (!rawUrl) return "";
+  const s = String(rawUrl).trim();
+  if (!s) return "";
+  if (s.startsWith("https://cdn.shopify.com") || s.startsWith("//cdn.shopify.com")) {
+    return s.startsWith("//") ? `https:${s}` : s;
+  }
+  if (s.startsWith("data:image")) return s;
+  const match = s.match(/(?:preview|previews)\/([a-zA-Z0-9_.-]+)/);
+  if (match && match[1]) {
+    return `/api/preview/${match[1]}`;
+  }
+  if (s.startsWith("http://") || s.startsWith("https://")) return s;
+  return shop ? `https://${shop}${s.startsWith("/") ? "" : "/"}${s}` : s;
+}
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session, admin } = await authenticate.admin(request);
@@ -64,12 +82,17 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         const isCustomized =
           attrMap["_customization_id"] ||
           attrMap["_customization_preview"] ||
+          attrMap["Front Preview"] ||
+          attrMap["Preview"] ||
           attrMap["Custom Design Preview"] ||
+          attrMap["Front Design Preview"] ||
           attrMap["Custom Design"] ||
           attrMap["_template_id"];
 
         if (isCustomized) {
           const frontPreview =
+            attrMap["Front Preview"] ||
+            attrMap["Preview"] ||
             attrMap["Front Design Preview"] ||
             attrMap["_customization_preview_front"] ||
             attrMap["Custom Design Preview"] ||
@@ -78,12 +101,28 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             "";
 
           const backPreview =
+            attrMap["Back Preview"] ||
             attrMap["Back Design Preview"] ||
             attrMap["_customization_preview_back"] ||
             "";
 
+          const frontUploadedImage =
+            attrMap["_uploaded_image_front"] ||
+            attrMap["Front Uploaded Photo"] ||
+            attrMap["Front Uploaded Image"] ||
+            "";
+
+          const backUploadedImage =
+            attrMap["_uploaded_image_back"] ||
+            attrMap["Back Uploaded Photo"] ||
+            attrMap["Back Uploaded Image"] ||
+            "";
+
           const uploadedImage =
+            frontUploadedImage ||
+            backUploadedImage ||
             attrMap["_uploaded_image"] ||
+            attrMap["Uploaded Photo"] ||
             attrMap["Uploaded Image"] ||
             attrMap["Custom Photo"] ||
             "";
@@ -99,6 +138,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             frontPreviewUrl: frontPreview,
             backPreviewUrl: backPreview,
             uploadedImageUrl: uploadedImage,
+            frontUploadedUrl: frontUploadedImage || uploadedImage,
+            backUploadedUrl: backUploadedImage,
             customerSelections: attrMap,
             createdAt: order.createdAt,
             financialStatus: order.displayFinancialStatus,
@@ -120,19 +161,40 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     dbMap.set(`${o.shopifyOrderId}_${o.shopifyLineItemId}`, o);
   });
 
-  // Merge live orders with DB records (auto-registering into DB if missing)
+  // Merge live orders with DB records (auto-registering and syncing with Shopify Files)
   const combinedOrders = await Promise.all(
     shopifyCustomizedOrders.map(async (so) => {
       const dbKey = `${so.numericOrderId}_${so.lineItemId}`;
       let record = dbMap.get(dbKey) || dbMap.get(`${so.shopifyOrderId}_${so.lineItemId}`);
 
-      if (!record && so.previewImageUrl) {
+      let resolvedPreview = record?.previewImageUrl || so.previewImageUrl;
+
+      // If not yet saved in Shopify Files, upload now and update DB
+      if (admin && resolvedPreview && !resolvedPreview.includes("cdn.shopify.com") && !resolvedPreview.startsWith("data:")) {
+        try {
+          const cdnUrl = await uploadToShopifyFiles(admin, {
+            imageSource: resolvedPreview,
+            filename: `order_${so.numericOrderId}_${so.lineItemId}_front.jpg`,
+            alt: `Order #${so.numericOrderId} Front Preview`,
+          });
+          if (cdnUrl) {
+            resolvedPreview = cdnUrl;
+            if (record) {
+              await updateCustomizedOrderPreview(record.id, shop, cdnUrl);
+            }
+          }
+        } catch (uploadErr) {
+          console.warn("[Orders Loader] Notice uploading to Shopify Files:", uploadErr);
+        }
+      }
+
+      if (!record && resolvedPreview) {
         try {
           record = await createCustomizedOrder(shop, {
             shopifyOrderId: so.numericOrderId,
             shopifyLineItemId: so.lineItemId,
             customerSelections: JSON.stringify(so.customerSelections),
-            previewImageUrl: so.previewImageUrl,
+            previewImageUrl: resolvedPreview,
           });
         } catch (createErr) {
           // ignore duplicate
@@ -141,6 +203,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
       return {
         ...so,
+        previewImageUrl: resolvedPreview,
+        frontPreviewUrl: resolvedPreview,
         dbId: record?.id || null,
         printFileUrl: record?.printFileUrl || null,
         renderStatus: record?.fulfillmentStatus || "pending",
@@ -158,8 +222,38 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         selections = JSON.parse(dbo.customerSelections || "{}");
       } catch (e) {}
 
+      const frontPreview =
+        dbo.previewImageUrl ||
+        selections["Front Preview"] ||
+        selections["Preview"] ||
+        selections["Front Design Preview"] ||
+        selections["_customization_preview_front"] ||
+        selections["_customization_preview"] ||
+        "";
+
+      const backPreview =
+        selections["Back Preview"] ||
+        selections["Back Design Preview"] ||
+        selections["_customization_preview_back"] ||
+        "";
+
+      const frontUploadedImage =
+        selections["_uploaded_image_front"] ||
+        selections["Front Uploaded Photo"] ||
+        selections["Front Uploaded Image"] ||
+        "";
+
+      const backUploadedImage =
+        selections["_uploaded_image_back"] ||
+        selections["Back Uploaded Photo"] ||
+        selections["Back Uploaded Image"] ||
+        "";
+
       const uploadedImage =
+        frontUploadedImage ||
+        backUploadedImage ||
         selections["_uploaded_image"] ||
+        selections["Uploaded Photo"] ||
         selections["Uploaded Image"] ||
         selections["Custom Photo"] ||
         "";
@@ -171,8 +265,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         lineItemId: dbo.shopifyLineItemId,
         productTitle: selections["_product_title"] || "Personalized Product",
         quantity: 1,
-        previewImageUrl: dbo.previewImageUrl,
+        previewImageUrl: frontPreview,
+        frontPreviewUrl: frontPreview,
+        backPreviewUrl: backPreview,
         uploadedImageUrl: uploadedImage,
+        frontUploadedUrl: frontUploadedImage || uploadedImage,
+        backUploadedUrl: backUploadedImage,
         customerSelections: selections,
         createdAt: dbo.createdAt.toISOString(),
         financialStatus: "PAID",
@@ -385,12 +483,20 @@ export default function CustomizedOrdersPage() {
                               border: "1px solid #d4d6d8",
                               background: "#fafafa",
                             }}
-                            onClick={() => setActiveModalImage(o.frontPreviewUrl || o.previewImageUrl)}
+                            onClick={() => setActiveModalImage(normalizePreviewUrl(o.frontPreviewUrl || o.previewImageUrl, shop))}
                             title="Click to view Front Design Preview"
                           >
                             <img
-                              src={o.frontPreviewUrl || o.previewImageUrl}
+                              src={normalizePreviewUrl(o.frontPreviewUrl || o.previewImageUrl, shop)}
                               alt="Front Preview"
+                              onError={(e) => {
+                                const img = e.currentTarget;
+                                const raw = o.frontPreviewUrl || o.previewImageUrl;
+                                const match = raw?.match(/(?:preview|previews)\/([a-zA-Z0-9_.-]+)/);
+                                if (match && match[1] && !img.src.includes(`/api/preview/${match[1]}`)) {
+                                  img.src = `/api/preview/${match[1]}`;
+                                }
+                              }}
                               style={{
                                 width: "100%",
                                 height: "100%",
@@ -428,12 +534,19 @@ export default function CustomizedOrdersPage() {
                               border: "1px solid #d4d6d8",
                               background: "#fafafa",
                             }}
-                            onClick={() => setActiveModalImage(o.backPreviewUrl)}
+                            onClick={() => setActiveModalImage(normalizePreviewUrl(o.backPreviewUrl, shop))}
                             title="Click to view Back Design Preview"
                           >
                             <img
-                              src={o.backPreviewUrl}
+                              src={normalizePreviewUrl(o.backPreviewUrl, shop)}
                               alt="Back Preview"
+                              onError={(e) => {
+                                const img = e.currentTarget;
+                                const match = o.backPreviewUrl?.match(/(?:preview|previews)\/([a-zA-Z0-9_.-]+)/);
+                                if (match && match[1] && !img.src.includes(`/api/preview/${match[1]}`)) {
+                                  img.src = `/api/preview/${match[1]}`;
+                                }
+                              }}
                               style={{
                                 width: "100%",
                                 height: "100%",
@@ -458,8 +571,8 @@ export default function CustomizedOrdersPage() {
                           </div>
                         ) : null}
 
-                        {/* Customer Raw Upload */}
-                        {o.uploadedImageUrl ? (
+                        {/* Customer Raw Upload (Front / Main) */}
+                        {(o.frontUploadedUrl || o.uploadedImageUrl) ? (
                           <div
                             style={{
                               position: "relative",
@@ -471,12 +584,20 @@ export default function CustomizedOrdersPage() {
                               border: "2px solid #008060",
                               background: "#f0fdf4",
                             }}
-                            onClick={() => setActiveModalImage(o.uploadedImageUrl)}
+                            onClick={() => setActiveModalImage(normalizePreviewUrl(o.frontUploadedUrl || o.uploadedImageUrl, shop))}
                             title="Click to view Customer's Original Uploaded Photo"
                           >
                             <img
-                              src={o.uploadedImageUrl}
+                              src={normalizePreviewUrl(o.frontUploadedUrl || o.uploadedImageUrl, shop)}
                               alt="Uploaded Logo / Photo"
+                              onError={(e) => {
+                                const img = e.currentTarget;
+                                const raw = o.frontUploadedUrl || o.uploadedImageUrl;
+                                const match = raw?.match(/(?:preview|previews)\/([a-zA-Z0-9_.-]+)/);
+                                if (match && match[1] && !img.src.includes(`/api/preview/${match[1]}`)) {
+                                  img.src = `/api/preview/${match[1]}`;
+                                }
+                              }}
                               style={{
                                 width: "100%",
                                 height: "100%",
@@ -496,7 +617,57 @@ export default function CustomizedOrdersPage() {
                                 fontWeight: "bold",
                               }}
                             >
-                              RAW
+                              {o.backUploadedUrl ? "RAW F" : "RAW"}
+                            </div>
+                          </div>
+                        ) : null}
+
+                        {/* Customer Back Raw Upload (if uploaded separately on Back) */}
+                        {o.backUploadedUrl && o.backUploadedUrl !== o.frontUploadedUrl ? (
+                          <div
+                            style={{
+                              position: "relative",
+                              cursor: "pointer",
+                              width: "56px",
+                              height: "56px",
+                              borderRadius: "6px",
+                              overflow: "hidden",
+                              border: "2px solid #008060",
+                              background: "#f0fdf4",
+                            }}
+                            onClick={() => setActiveModalImage(normalizePreviewUrl(o.backUploadedUrl, shop))}
+                            title="Click to view Customer's Back Uploaded Photo"
+                          >
+                            <img
+                              src={normalizePreviewUrl(o.backUploadedUrl, shop)}
+                              alt="Back Uploaded Logo / Photo"
+                              onError={(e) => {
+                                const img = e.currentTarget;
+                                const match = o.backUploadedUrl?.match(/(?:preview|previews)\/([a-zA-Z0-9_.-]+)/);
+                                if (match && match[1] && !img.src.includes(`/api/preview/${match[1]}`)) {
+                                  img.src = `/api/preview/${match[1]}`;
+                                }
+                              }}
+                              style={{
+                                width: "100%",
+                                height: "100%",
+                                objectFit: "contain",
+                              }}
+                            />
+                            <div
+                              style={{
+                                position: "absolute",
+                                top: "2px",
+                                left: "2px",
+                                background: "#008060",
+                                color: "#fff",
+                                fontSize: "8px",
+                                padding: "1px 3px",
+                                borderRadius: "2px",
+                                fontWeight: "bold",
+                              }}
+                            >
+                              RAW B
                             </div>
                           </div>
                         ) : null}
@@ -577,7 +748,7 @@ export default function CustomizedOrdersPage() {
                                   {key}:
                                 </span>
                                 <a
-                                  href={strVal}
+                                  href={normalizePreviewUrl(strVal, shop)}
                                   target="_blank"
                                   rel="noreferrer"
                                   download="customer_uploaded_image"
@@ -784,8 +955,15 @@ export default function CustomizedOrdersPage() {
               </button>
             </div>
             <img
-              src={activeModalImage}
+              src={normalizePreviewUrl(activeModalImage, shop)}
               alt="High-Res Design"
+              onError={(e) => {
+                const img = e.currentTarget;
+                const match = activeModalImage?.match(/(?:preview|previews)\/([a-zA-Z0-9_.-]+)/);
+                if (match && match[1] && !img.src.includes(`/api/preview/${match[1]}`)) {
+                  img.src = `/api/preview/${match[1]}`;
+                }
+              }}
               style={{
                 maxWidth: "100%",
                 maxHeight: "500px",
@@ -804,7 +982,7 @@ export default function CustomizedOrdersPage() {
               }}
             >
               <a
-                href={activeModalImage}
+                href={normalizePreviewUrl(activeModalImage, shop)}
                 target="_blank"
                 rel="noreferrer"
                 download="custom-design-preview.jpg"

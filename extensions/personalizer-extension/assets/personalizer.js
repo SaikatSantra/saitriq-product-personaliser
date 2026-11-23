@@ -14,13 +14,45 @@
       this.isLoading = false;
       this.pendingOpen = false;
       this.activeSide = "front";
+      this._sideLoadSeq = 0;
       this.sidesData = { front: null, back: null };
+      this.templateUnderlays = { front: null, back: null };
       this.sideUnderlays = { front: null, back: null };
       this.customerUploadedImageDataUrls = { front: null, back: null };
+      this.customerUploadedImageFileNames = { front: null, back: null };
       this.customerUploadedImageDataUrl = null;
+      this.locales = {};
+    }
+
+    t(key, fallback = "") {
+      const val = this.locales?.[key];
+      if (val !== undefined && val !== null && String(val).trim() !== "" && !String(val).includes("translation missing:")) {
+        return String(val);
+      }
+      return fallback;
     }
 
     async connectedCallback() {
+      const embedEl = document.getElementById("saitriq-personalizer-embed");
+      this.isDesignMode = this.getAttribute("data-design-mode") === "true" || window.Shopify?.designMode === true;
+      const isAppActive = Boolean(embedEl) || this.isDesignMode;
+
+      if (!isAppActive) {
+        this.style.display = "none";
+        return;
+      }
+      this.style.display = "";
+
+      this.locales = {};
+      const localeScript = this.querySelector(".saitriq-locales-json") || document.querySelector(".saitriq-locales-json");
+      if (localeScript) {
+        try {
+          this.locales = JSON.parse(localeScript.textContent || "{}");
+        } catch (e) {
+          console.warn("[Saitriq] Error parsing locales JSON:", e);
+        }
+      }
+
       this.productId = this.getAttribute("data-product-id") || "";
       this.productTitle = this.getAttribute("data-product-title") || "";
       this.productImage = this.getAttribute("data-product-image") || "";
@@ -30,7 +62,6 @@
       this.buttonText = this.getAttribute("data-button-text") || "🎨 Customize This Product";
       this.primaryColor = this.getAttribute("data-primary-color") || "#008060";
       this.autoOpen = this.getAttribute("data-auto-open") === "true";
-      this.isDesignMode = this.getAttribute("data-design-mode") === "true" || window.Shopify?.designMode === true;
 
       this.variantsData = null;
       this.activeSelectedVariantId = null;
@@ -65,12 +96,16 @@
       window.addEventListener("popstate", onVariantChange);
 
       this.style.setProperty("--saitriq-primary", this.primaryColor);
+      document.documentElement.style.setProperty("--saitriq-primary", this.primaryColor);
 
       // Bind to existing SSR button or create if missing
       this.btn = this.querySelector(".saitriq-customize-btn");
       if (!this.btn) {
         this.renderTriggerButton();
         this.btn = this.querySelector(".saitriq-customize-btn");
+      } else {
+        this.btn.textContent = this.buttonText;
+        this.btn.style.backgroundColor = this.primaryColor;
       }
 
       if (this.btn) {
@@ -177,49 +212,73 @@
 
     resolveSideImage(side, variant) {
       const activeVariant = variant || this.getSelectedVariant();
-      const colorOption = activeVariant?.options ? String(activeVariant.options[0] || "").toLowerCase() : "";
-      const images = (this.variantsData && Array.isArray(this.variantsData.images)) ? this.variantsData.images : [];
-
-      // 1. Check if template explicitly defined an underlay for this side
-      const sideData = this.sidesData?.[side];
-      if (sideData && Array.isArray(sideData.objects)) {
-        const templateUnderlay = sideData.objects.find((o) => {
-          const type = (o.type || "").toLowerCase();
-          const name = (o.name || "").toLowerCase();
-          const customType = (o.customType || "").toLowerCase();
-          return (
-            type === "image" &&
-            (customType === "background_mockup" || name.includes("mockup") || name.includes("underlay")) &&
-            name !== "Product Base Image"
-          );
+      let colorOption = "";
+      if (activeVariant && Array.isArray(activeVariant.options)) {
+        const opts = this.variantsData?.options || [];
+        const colorIdx = opts.findIndex((o) => {
+          const n = String(o.name || "").toLowerCase();
+          return n.includes("color") || n.includes("colour");
         });
-        if (templateUnderlay && templateUnderlay.src) {
-          return this.getImageUrl(templateUnderlay.src);
+        if (colorIdx !== -1 && activeVariant.options[colorIdx]) {
+          colorOption = String(activeVariant.options[colorIdx]).toLowerCase().trim();
+        } else {
+          const found = activeVariant.options.find((val) => {
+            const h = this.getColorHex(val);
+            return h !== "#6b7280" && h !== "#9ca3af";
+          });
+          colorOption = String(found || activeVariant.options[0] || "").toLowerCase().trim();
         }
       }
 
-      // 2. Front Side Resolution
+      const images = (this.variantsData && Array.isArray(this.variantsData.images)) ? this.variantsData.images : [];
+      const templateUnderlay = this.templateUnderlays?.[side] || "";
+
+      // Collect URLs assigned directly as variant featured images (typically front views of each color)
+      const variantFeaturedUrls = new Set(
+        (this.variantsData?.variants || [])
+          .map((v) => this.getImageUrl(v.image))
+          .filter(Boolean)
+      );
+
+      // Collect all known color names from variants to detect and prevent cross-color fallbacks
+      const allColors = Array.from(
+        new Set(
+          (this.variantsData?.variants || [])
+            .map((v) => {
+              if (!Array.isArray(v.options)) return "";
+              const opts = this.variantsData?.options || [];
+              const cIdx = opts.findIndex((o) => {
+                const n = String(o.name || "").toLowerCase();
+                return n.includes("color") || n.includes("colour");
+              });
+              return String(cIdx !== -1 ? v.options[cIdx] : v.options[0] || "").toLowerCase().trim();
+            })
+            .filter(Boolean)
+        )
+      );
+      const otherColors = allColors.filter((c) => c !== colorOption);
+
+      // 1. Front Side Resolution
       if (side === "front") {
         if (activeVariant && activeVariant.image) {
           return this.getImageUrl(activeVariant.image);
         }
-        if (images.length > 0) {
-          if (colorOption) {
-            const match = images.find((img) => {
-              const url = this.getImageUrl(img).toLowerCase();
-              const alt = this.getImageAlt(img);
-              return (url.includes(colorOption) || alt.includes(colorOption)) && !alt.includes("back") && !url.includes("back");
-            });
-            if (match) return this.getImageUrl(match);
-          }
-          return this.getImageUrl(images[0]);
+        if (images.length > 0 && colorOption) {
+          const match = images.find((img) => {
+            const url = this.getImageUrl(img).toLowerCase();
+            const alt = this.getImageAlt(img);
+            return (url.includes(colorOption) || alt.includes(colorOption)) && !alt.includes("back") && !url.includes("back");
+          });
+          if (match) return this.getImageUrl(match);
         }
+        if (templateUnderlay) return templateUnderlay;
+        if (images.length > 0) return this.getImageUrl(images[0]);
         return this.detectPageProductImage() || "";
       }
 
-      // 3. Back Side Resolution
+      // 2. Back Side Resolution
       if (images.length > 0) {
-        // A. Search image matching variant color AND "back" or "rear"
+        // A. Search image matching variant color AND ("back" or "rear")
         if (colorOption) {
           const matchBack = images.find((img) => {
             const url = this.getImageUrl(img).toLowerCase();
@@ -232,32 +291,65 @@
           if (matchBack) return this.getImageUrl(matchBack);
         }
 
-        // B. Search any image with "back" or "rear" in alt or filename
-        const anyBack = images.find((img) => {
-          const url = this.getImageUrl(img).toLowerCase();
-          const alt = this.getImageAlt(img);
-          return alt.includes("back") || url.includes("back") || alt.includes("rear") || url.includes("rear");
-        });
-        if (anyBack) return this.getImageUrl(anyBack);
-
-        // C. Standard apparel pairing: If variant's front image is at index k, check if k+1 is back image
+        // B. Paired gallery image right after variant's featured image (only if NOT another variant's front image)
         if (activeVariant && activeVariant.image) {
           const vUrl = this.getImageUrl(activeVariant.image);
           const vIdx = images.findIndex((img) => this.getImageUrl(img) === vUrl);
           if (vIdx !== -1 && vIdx + 1 < images.length) {
-            return this.getImageUrl(images[vIdx + 1]);
+            const nextImg = images[vIdx + 1];
+            const nextUrl = this.getImageUrl(nextImg);
+            const nextAlt = this.getImageAlt(nextImg);
+            if (!variantFeaturedUrls.has(nextUrl)) {
+              // Ensure this adjacent image does not explicitly belong to another color
+              const conflictsWithOther = otherColors.some(
+                (c) => nextUrl.toLowerCase().includes(c) || nextAlt.includes(c)
+              );
+              if (!conflictsWithOther) {
+                return nextUrl;
+              }
+            }
           }
         }
 
-        // D. Fallback: If gallery has at least 2 images, image 1 is back view
-        if (images.length > 1) {
-          return this.getImageUrl(images[1]);
+        // C. Admin-uploaded Back Mockup Underlay from Template Studio
+        if (templateUnderlay) {
+          return templateUnderlay;
         }
 
-        // E. Fallback to image 0
+        // D. Non-conflicting gallery image explicitly tagged "back" or "rear"
+        // (Only safe if it does NOT mention a different color than the active color)
+        const safeBack = images.find((img) => {
+          const url = this.getImageUrl(img).toLowerCase();
+          const alt = this.getImageAlt(img);
+          const isBack = alt.includes("back") || url.includes("back") || alt.includes("rear") || url.includes("rear");
+          if (!isBack) return false;
+          // Reject if image belongs to another color (e.g. Black Back when Blue is active)
+          const conflicts = otherColors.some((c) => url.includes(c) || alt.includes(c));
+          return !conflicts;
+        });
+        if (safeBack) return this.getImageUrl(safeBack);
+
+        // E. Non-variant second gallery image ONLY if it doesn't conflict with another color
+        if (images.length > 1) {
+          const img1 = images[1];
+          const img1Url = this.getImageUrl(img1);
+          const img1Alt = this.getImageAlt(img1);
+          if (!variantFeaturedUrls.has(img1Url)) {
+            const conflicts = otherColors.some((c) => img1Url.toLowerCase().includes(c) || img1Alt.includes(c));
+            if (!conflicts) {
+              return img1Url;
+            }
+          }
+        }
+
+        // F. Final fallback: keep the selected variant's color image so the selected color is never replaced with an incorrect color
+        if (activeVariant && activeVariant.image) {
+          return this.getImageUrl(activeVariant.image);
+        }
         return this.getImageUrl(images[0]);
       }
 
+      if (templateUnderlay) return templateUnderlay;
       return this.detectPageProductImage() || "";
     }
 
@@ -443,8 +535,8 @@
         <div class="saitriq-modal-window">
           <div class="saitriq-modal-header">
             <div class="saitriq-header-titles">
-              <h3>Customize Your Design</h3>
-              <p class="saitriq-modal-subtitle">${this.productTitle ? this.productTitle + " • " : ""}Personalize text, upload photos & preview live</p>
+              <h3>${this.t("modal_title", "Customize Your Design")}</h3>
+              <p class="saitriq-modal-subtitle">${this.productTitle ? this.productTitle + " • " : ""}${this.t("modal_subtitle", "Personalize text, upload photos & preview live")}</p>
             </div>
             <button type="button" class="saitriq-close-btn" aria-label="Close">&times;</button>
           </div>
@@ -456,20 +548,16 @@
               <div class="saitriq-side-switcher">
                 <button type="button" class="saitriq-side-tab is-active" data-side="front">
                   <span class="saitriq-side-tab-icon">👕</span>
-                  <span>Front Side</span>
+                  <span>${this.t("front_side", "Front Side")}</span>
                 </button>
                 <button type="button" class="saitriq-side-tab" data-side="back">
                   <span class="saitriq-side-tab-icon">🔄</span>
-                  <span>Back Side</span>
+                  <span>${this.t("back_side", "Back Side")}</span>
                 </button>
               </div>
 
               <div class="saitriq-canvas-stage">
                 <canvas id="saitriq-storefront-canvas"></canvas>
-              </div>
-              <div class="saitriq-canvas-badge">
-                <span class="saitriq-pulse-dot"></span>
-                <span id="saitriq-canvas-badge-text">Live 300 DPI Studio Preview • Front</span>
               </div>
             </div>
 
@@ -484,15 +572,14 @@
           <!-- Footer Actions -->
           <div class="saitriq-modal-footer">
             <div class="saitriq-preview-info">
-              <span class="saitriq-pulse-dot"></span>
-              <span>High-Resolution Real-time Render</span>
+             
             </div>
             <div style="display: flex; gap: 10px; align-items: center;">
               <button type="button" class="saitriq-close-btn-secondary">
-                Cancel
+                ${this.t("cancel", "Cancel")}
               </button>
               <button type="button" class="saitriq-submit-cart-btn">
-                <span>Add to Cart with Design</span>
+                <span>${this.t("add_to_cart", "Add to Cart with Design")}</span>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
               </button>
             </div>
@@ -548,7 +635,7 @@
       });
     }
 
-    async addBaseProductImage(imageUrl, canvasW, canvasH) {
+    async addBaseProductImage(imageUrl, canvasW, canvasH, expectedSeq = null) {
       if (!imageUrl || !this.fabricCanvas) return;
       const ImageClass = window.fabric.FabricImage || window.fabric.Image;
 
@@ -557,13 +644,12 @@
         cleanUrl = window.location.protocol + cleanUrl;
       }
 
-      // Add cache-busting parameter to bypass browser's non-CORS image cache
-      const corsUrl = cleanUrl + (cleanUrl.includes("?") ? "&" : "?") + "saitriq_cors=" + Date.now();
+      const isDataOrBlob = cleanUrl.startsWith("data:") || cleanUrl.startsWith("blob:");
 
       const tryLoadImage = (src, withCors) => {
         return new Promise((resolve) => {
           const img = new Image();
-          if (withCors) {
+          if (withCors && !isDataOrBlob) {
             img.crossOrigin = "anonymous";
           }
           img.onload = () => {
@@ -575,32 +661,41 @@
         });
       };
 
-      // 1. Attempt load with CORS and cache buster
-      let loadedImg = await tryLoadImage(corsUrl, true);
-
-      // 2. Attempt load with direct URL with CORS
-      if (!loadedImg) {
-        loadedImg = await tryLoadImage(cleanUrl, true);
-      }
-
-      // 3. Fallback without CORS to ensure the product mockup is ALWAYS rendered on the canvas
-      if (!loadedImg) {
-        console.warn("[Saitriq] CORS load failed for base image, loading non-CORS display:", cleanUrl);
+      let loadedImg = null;
+      if (isDataOrBlob) {
         loadedImg = await tryLoadImage(cleanUrl, false);
+      } else {
+        // Add cache-busting parameter to bypass browser's non-CORS image cache
+        const corsUrl = cleanUrl + (cleanUrl.includes("?") ? "&" : "?") + "saitriq_cors=" + Date.now();
+        // 1. Attempt load with CORS and cache buster
+        loadedImg = await tryLoadImage(corsUrl, true);
+        // 2. Attempt load with direct URL with CORS
+        if (!loadedImg) {
+          loadedImg = await tryLoadImage(cleanUrl, true);
+        }
+        // 3. Fallback without CORS to ensure the product mockup is ALWAYS rendered on the canvas
+        if (!loadedImg) {
+          console.warn("[Saitriq] CORS load failed for base image, loading non-CORS display:", cleanUrl);
+          loadedImg = await tryLoadImage(cleanUrl, false);
+        }
       }
 
-      if (!loadedImg || !loadedImg.width || !loadedImg.height) {
+      // Abort if user toggled to another side while this image was downloading
+      if (expectedSeq && expectedSeq !== this._sideLoadSeq) {
+        return;
+      }
+
+      if (!loadedImg || !loadedImg.width || !loadedImg.height || !this.fabricCanvas) {
         console.error("[Saitriq] Could not load base image from:", cleanUrl);
         return;
       }
 
-      // Remove any previously added base image or unclassified background image
+      // Remove only previously added base image / template mockup underlays (preserve customer photos)
       const existing = this.fabricCanvas.getObjects().filter(
         (o) =>
           o.name === "Product Base Image" ||
-          o.name?.includes("Mockup") ||
-          o.customType === "background_mockup" ||
-          (o.type?.toLowerCase() === "image" && !o.isCustomerEditable && o.name !== "Customer Uploaded Image")
+          o.name === "Mockup Underlay" ||
+          o.customType === "background_mockup"
       );
       existing.forEach((o) => this.fabricCanvas.remove(o));
 
@@ -630,6 +725,7 @@
         this.fabricCanvas.add(baseImg);
         this.fabricCanvas.sendObjectToBack(baseImg);
       }
+      if (typeof baseImg.setCoords === "function") baseImg.setCoords();
 
       if (this.fabricCanvas.requestRenderAll) {
         this.fabricCanvas.requestRenderAll();
@@ -655,15 +751,15 @@
 
       const tpl = this.templateData || this.getDefaultPreviewTemplate();
       const viewportEl = document.querySelector(".saitriq-canvas-viewport");
-      let availW = 460;
-      let availH = 460;
+      let availW = 420;
+      let availH = 420;
       if (viewportEl) {
         const rect = viewportEl.getBoundingClientRect();
-        if (rect.width > 0) availW = rect.width - 48;
-        if (rect.height > 0) availH = rect.height - 76;
+        if (rect.width > 0) availW = rect.width - 32;
+        if (rect.height > 0) availH = rect.height - 56;
       }
       const maxAvail = Math.min(availW, availH);
-      const targetWidth = Math.min(500, Math.max(300, maxAvail > 0 ? maxAvail : 460));
+      const targetWidth = Math.min(460, Math.max(260, maxAvail > 0 ? maxAvail : 420));
       const canvasW = tpl.canvasWidth || 1200;
       const canvasH = tpl.canvasHeight || 1200;
       const scale = targetWidth / canvasW;
@@ -680,15 +776,60 @@
 
       this.fabricCanvas.setZoom(scale);
 
+      // Keyboard Delete / Backspace handler to remove selected customer photo
+      if (!this._hasDeleteKeyBound) {
+        this._hasDeleteKeyBound = true;
+        window.addEventListener("keydown", (e) => {
+          if (e.key !== "Delete" && e.key !== "Backspace") return;
+          const activeTag = document.activeElement?.tagName;
+          if (activeTag === "INPUT" || activeTag === "TEXTAREA") return;
+          const activeObj = this.fabricCanvas?.getActiveObject();
+          if (activeObj && (activeObj.name === "Customer Uploaded Image" || activeObj.customType === "customer_upload")) {
+            const rmBtn = document.querySelector(".saitriq-upload-remove-btn");
+            if (rmBtn) {
+              rmBtn.click();
+            } else {
+              this.fabricCanvas.remove(activeObj);
+              this.fabricCanvas.requestRenderAll();
+            }
+          }
+        });
+      }
+
       // 1. Prepare multi-side template layers
       let rawLayers = tpl.layers;
       if (typeof rawLayers === "string") {
         try { rawLayers = JSON.parse(rawLayers); } catch (e) {}
       }
 
+      const isUnderlayObj = (o) => {
+        if (!o) return false;
+        const type = (o.type || "").toLowerCase();
+        const name = (o.name || "").toLowerCase();
+        const customType = (o.customType || "").toLowerCase();
+        return (
+          type === "image" &&
+          (customType === "background_mockup" || name.includes("mockup") || name.includes("underlay") || name === "product base image")
+        );
+      };
+
+      const splitUnderlayAndLayers = (sideObj) => {
+        const objs = Array.isArray(sideObj?.objects) ? sideObj.objects : [];
+        const underlay = objs.find(isUnderlayObj);
+        const designObjs = objs.filter((o) => !isUnderlayObj(o));
+        return {
+          underlaySrc: underlay?.src ? this.getImageUrl(underlay.src) : "",
+          data: { ...(sideObj || {}), objects: designObjs },
+        };
+      };
+
       if (rawLayers && rawLayers.sides) {
-        this.sidesData.front = rawLayers.sides.front || { objects: [] };
-        this.sidesData.back = rawLayers.sides.back || { objects: [] };
+        const frontParsed = splitUnderlayAndLayers(rawLayers.sides.front || { objects: [] });
+        const backParsed = splitUnderlayAndLayers(rawLayers.sides.back || { objects: [] });
+        this.templateUnderlays.front = frontParsed.underlaySrc;
+        this.templateUnderlays.back = backParsed.underlaySrc;
+        this.sidesData.front = frontParsed.data;
+        this.sidesData.back = backParsed.data;
       } else {
         let frontObjs = [];
         if (Array.isArray(rawLayers?.objects)) {
@@ -696,9 +837,18 @@
         } else if (Array.isArray(rawLayers)) {
           frontObjs = rawLayers;
         }
-        this.sidesData.front = { objects: frontObjs };
+        const frontParsed = splitUnderlayAndLayers({ objects: frontObjs });
+        this.templateUnderlays.front = frontParsed.underlaySrc;
+        this.templateUnderlays.back = "";
+        this.sidesData.front = frontParsed.data;
         this.sidesData.back = { objects: [] };
       }
+
+      const activeVariant = this.getSelectedVariant();
+      this.sideUnderlays = {
+        front: this.resolveSideImage("front", activeVariant),
+        back: this.resolveSideImage("back", activeVariant),
+      };
 
       this.activeSide = "front";
       await this.loadSideIntoCanvas("front");
@@ -723,60 +873,71 @@
           (o) =>
             o.name !== "Product Base Image" &&
             o.customType !== "background_mockup" &&
-            !o.name?.toLowerCase().includes("mockup")
+            o.name !== "Mockup Underlay"
         );
       }
       return raw;
     }
 
-    async loadSideIntoCanvas(side) {
+    async loadSideIntoCanvas(side, { skipSeqCheck = false } = {}) {
       if (!this.fabricCanvas) return;
+      const loadSeq = skipSeqCheck ? null : ++this._sideLoadSeq;
 
       let sideData = this.sidesData[side];
       if (!sideData || !Array.isArray(sideData.objects)) {
         sideData = { objects: [] };
       }
 
-      // Normalise object types for Fabric 7
-      sideData.objects.forEach((o) => {
-        if (o && o.type) {
-          const lower = o.type.toLowerCase();
-          if (lower === "image") o.type = "Image";
-          else if (lower === "rect") o.type = "Rect";
-          else if (lower === "i-text" || lower === "itext") o.type = "IText";
-          else if (lower === "text") o.type = "Text";
-        }
-      });
+      // Clone objects and normalize types + CORS for Fabric 7
+      const cleanObjects = sideData.objects
+        .filter(
+          (o) =>
+            o &&
+            o.name !== "Product Base Image" &&
+            o.customType !== "background_mockup" &&
+            o.name !== "Mockup Underlay"
+        )
+        .map((o) => {
+          const copy = { ...o };
+          if (copy.type) {
+            const lower = copy.type.toLowerCase();
+            if (lower === "image") {
+              copy.type = "Image";
+              if (copy.src && String(copy.src).startsWith("http")) {
+                copy.crossOrigin = "anonymous";
+              }
+            } else if (lower === "rect") copy.type = "Rect";
+            else if (lower === "i-text" || lower === "itext") copy.type = "IText";
+            else if (lower === "text") copy.type = "Text";
+          }
+          return copy;
+        });
 
-      // Clear existing canvas objects
+      // 1. Load customer design layers FIRST (since loadFromJSON clears the entire canvas)
       this.fabricCanvas.clear();
-      this.fabricCanvas.backgroundColor = "#ffffff";
-
-      // 1. Resolve and load the base underlay image for this side FIRST
-      const activeVariant = this.getSelectedVariant();
-      const sideUnderlay = this.sideUnderlays?.[side] || this.resolveSideImage(side, activeVariant);
-      if (sideUnderlay) {
-        await this.addBaseProductImage(sideUnderlay, this.canvasW, this.canvasH);
-      }
-
-      // 2. Load customer design layers (text, custom photos) on top of underlay
-      try {
-        if (sideData.objects.length > 0) {
-          const res = this.fabricCanvas.loadFromJSON(sideData);
+      if (cleanObjects.length > 0) {
+        try {
+          const res = this.fabricCanvas.loadFromJSON({ ...sideData, objects: cleanObjects });
           if (res && typeof res.then === "function") {
             await res;
           }
-          // Ensure base underlay stays at bottom (index 0)
-          const baseImg = this.fabricCanvas.getObjects().find(
-            (o) => o.name === "Product Base Image" || o.customType === "background_mockup"
-          );
-          if (baseImg) {
-            this.fabricCanvas.sendObjectToBack(baseImg);
-          }
+        } catch (err) {
+          console.error("[Saitriq] Error loading side layers:", err);
         }
-      } catch (err) {
-        console.error("[Saitriq] Error loading side layers:", err);
       }
+
+      if (loadSeq && loadSeq !== this._sideLoadSeq) return;
+
+      this.fabricCanvas.backgroundColor = "#ffffff";
+
+      // 2. Load the side's base product underlay image SECOND (inserts cleanly at bottom index 0)
+      const activeVariant = this.getSelectedVariant();
+      const sideUnderlay = this.sideUnderlays?.[side] || this.resolveSideImage(side, activeVariant);
+      if (sideUnderlay) {
+        await this.addBaseProductImage(sideUnderlay, this.canvasW, this.canvasH, loadSeq);
+      }
+
+      if (loadSeq && loadSeq !== this._sideLoadSeq) return;
 
       if (this.fabricCanvas.requestRenderAll) {
         this.fabricCanvas.requestRenderAll();
@@ -806,11 +967,6 @@
             tab.classList.remove("is-active");
           }
         });
-
-        const badgeText = modal.querySelector("#saitriq-canvas-badge-text");
-        if (badgeText) {
-          badgeText.textContent = `Live 300 DPI Studio Preview • ${targetSide === "front" ? "Front" : "Back"}`;
-        }
       }
 
       // 3. Load target side into canvas
@@ -904,7 +1060,7 @@
         optionsCard.innerHTML = `
           <div class="saitriq-card-header">
             <span class="saitriq-card-icon">🎨</span>
-            <span class="saitriq-card-title">Product Options</span>
+            <span class="saitriq-card-title">${this.t("product_options", "Product Options")}</span>
           </div>
           <div class="saitriq-card-body" id="saitriq-options-body"></div>
         `;
@@ -1051,7 +1207,7 @@
         photoCard.innerHTML = `
           <div class="saitriq-card-header">
             <span class="saitriq-card-icon">📷</span>
-            <span class="saitriq-card-title">${targetObj?.optionLabel || "Upload Photo or Logo"}</span>
+            <span class="saitriq-card-title">${targetObj?.optionLabel || this.t("upload_title", "Upload Photo or Logo")}</span>
           </div>
           <div class="saitriq-card-body">
             <div class="saitriq-upload-dropzone">
@@ -1060,8 +1216,8 @@
                 <polyline points="17 8 12 3 7 8"/>
                 <line x1="12" y1="3" x2="12" y2="15"/>
               </svg>
-              <p class="saitriq-upload-main-text"><strong>Click to browse</strong> or drag & drop</p>
-              <p class="saitriq-upload-sub-text">High-res PNG, JPG, or WEBP</p>
+              <p class="saitriq-upload-main-text"><strong>${this.t("upload_browse", "Click to browse")}</strong> ${this.t("upload_or_drag", "or drag & drop")}</p>
+              <p class="saitriq-upload-sub-text">${this.t("upload_hint", "High-res PNG, JPG, or WEBP")}</p>
               <input type="file" accept="image/*" style="display: none;" />
             </div>
           </div>
@@ -1070,14 +1226,129 @@
         const dropzone = photoCard.querySelector(".saitriq-upload-dropzone");
         const fileInput = photoCard.querySelector("input[type='file']");
 
+        const emptyDropzoneMarkup = `
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/>
+            <line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+          <p class="saitriq-upload-main-text"><strong>${this.t("upload_browse", "Click to browse")}</strong> ${this.t("upload_or_drag", "or drag & drop")}</p>
+          <p class="saitriq-upload-sub-text">${this.t("upload_hint", "High-res PNG, JPG, or WEBP")}</p>
+          <input type="file" accept="image/*" style="display: none;" />
+        `;
+
+        const bindEmptyDropzoneInput = (dz) => {
+          const inp = dz.querySelector("input[type='file']");
+          if (inp) {
+            inp.addEventListener("change", (e) => {
+              const file = e.target.files?.[0];
+              if (file) handleFile(file);
+            });
+          }
+        };
+
+        const removeUploadedImage = () => {
+          const uploadSide = this.activeSide;
+          // 1. Remove customer image object from canvas
+          const existingImgs = this.fabricCanvas
+            .getObjects()
+            .filter((o) => o.name === "Customer Uploaded Image" || o.customType === "customer_upload");
+          existingImgs.forEach((img) => this.fabricCanvas.remove(img));
+
+          // 2. Clear state in memory
+          if (this.customerUploadedImageDataUrls) {
+            this.customerUploadedImageDataUrls[uploadSide] = null;
+          }
+          if (this.customerUploadedImageFileNames) {
+            this.customerUploadedImageFileNames[uploadSide] = null;
+          }
+          if (uploadSide === "front" || !this.customerUploadedImageDataUrls?.front) {
+            this.customerUploadedImageDataUrl = null;
+            this.customerUploadedImageFileName = null;
+          }
+
+          // 3. Serialize and render
+          this.sidesData[uploadSide] = this.serializeCanvasObjects();
+          this.fabricCanvas.discardActiveObject();
+          if (this.fabricCanvas.requestRenderAll) {
+            this.fabricCanvas.requestRenderAll();
+          } else {
+            this.fabricCanvas.renderAll();
+          }
+
+          // 4. Reset dropzone to empty state
+          dropzone.innerHTML = emptyDropzoneMarkup;
+          bindEmptyDropzoneInput(dropzone);
+        };
+
+        const bindDropzoneChange = (dz, onSelect) => {
+          const inp = dz.querySelector("input[type='file']");
+          const chBtn = dz.querySelector(".saitriq-upload-change-btn");
+          const rmBtn = dz.querySelector(".saitriq-upload-remove-btn");
+          const delBadge = dz.querySelector(".saitriq-upload-thumb-del");
+
+          if (chBtn && inp) {
+            chBtn.addEventListener("click", (evt) => {
+              evt.stopPropagation();
+              inp.click();
+            });
+          }
+          if (rmBtn) {
+            rmBtn.addEventListener("click", (evt) => {
+              evt.stopPropagation();
+              removeUploadedImage();
+            });
+          }
+          if (delBadge) {
+            delBadge.addEventListener("click", (evt) => {
+              evt.stopPropagation();
+              removeUploadedImage();
+            });
+          }
+          if (inp) {
+            inp.addEventListener("change", (evt) => {
+              const f = evt.target.files?.[0];
+              if (f) onSelect(f);
+            });
+          }
+        };
+
+        const renderUploadedThumbnail = (dz, dataUrl, fileName, onSelect) => {
+          dz.innerHTML = `
+            <div class="saitriq-upload-preview">
+              <div class="saitriq-upload-thumb-wrap">
+                <img src="${dataUrl}" class="saitriq-upload-thumb" alt="Preview" />
+                <button type="button" class="saitriq-upload-thumb-del" title="${this.t("remove_photo", "Remove photo")}">&times;</button>
+              </div>
+              <div class="saitriq-upload-info">
+                <span class="saitriq-upload-name">${fileName || this.t("uploaded_photo", "Uploaded Photo")}</span>
+                <span class="saitriq-upload-status">✓ ${this.activeSide === "back" ? this.t("added_to_back_canvas", "Added to Back canvas") : this.t("added_to_front_canvas", "Added to Front canvas")}</span>
+              </div>
+              <div class="saitriq-upload-actions">
+                <button type="button" class="saitriq-upload-change-btn">${this.t("change_photo", "Change")}</button>
+                <button type="button" class="saitriq-upload-remove-btn" title="${this.t("remove_photo", "Remove")}">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                  <span>${this.t("remove_photo", "Remove")}</span>
+                </button>
+              </div>
+            </div>
+            <input type="file" accept="image/*" style="display: none;" />
+          `;
+          bindDropzoneChange(dz, onSelect);
+        };
+
         const handleFile = (file) => {
           if (!file) return;
+          const uploadSide = this.activeSide;
           const reader = new FileReader();
           reader.onload = (fEvent) => {
             const dataUrl = fEvent.target?.result;
             this.customerUploadedImageDataUrl = dataUrl;
             if (this.customerUploadedImageDataUrls) {
-              this.customerUploadedImageDataUrls[this.activeSide] = dataUrl;
+              this.customerUploadedImageDataUrls[uploadSide] = dataUrl;
+            }
+            if (this.customerUploadedImageFileNames) {
+              this.customerUploadedImageFileNames[uploadSide] = file.name;
             }
             this.customerUploadedImageFileName = file.name;
             const imgEl = new Image();
@@ -1097,6 +1368,7 @@
                 scaleX: bestScale,
                 scaleY: bestScale,
                 selectable: true,
+                isCustomerEditable: true,
                 name: "Customer Uploaded Image",
               });
 
@@ -1116,34 +1388,34 @@
                 this.fabricCanvas.renderAll();
               }
 
-              // Update dropzone UI with thumbnail
-              dropzone.innerHTML = `
-                <div class="saitriq-upload-preview">
-                  <img src="${dataUrl}" class="saitriq-upload-thumb" alt="Preview" />
-                  <div class="saitriq-upload-info">
-                    <span class="saitriq-upload-name">${file.name}</span>
-                    <span class="saitriq-upload-status">✓ Added to canvas</span>
-                  </div>
-                  <button type="button" class="saitriq-upload-change-btn">Change</button>
-                </div>
-                <input type="file" accept="image/*" style="display: none;" />
-              `;
-              const newFileInput = dropzone.querySelector("input");
-              const changeBtn = dropzone.querySelector(".saitriq-upload-change-btn");
-              changeBtn.addEventListener("click", (evt) => {
-                evt.stopPropagation();
-                newFileInput.click();
-              });
-              newFileInput.addEventListener("change", (evt) => {
-                const f = evt.target.files?.[0];
-                if (f) handleFile(f);
-              });
+              renderUploadedThumbnail(dropzone, dataUrl, file.name, handleFile);
             };
           };
           reader.readAsDataURL(file);
         };
 
-        dropzone.addEventListener("click", () => fileInput.click());
+        // Restore thumbnail if user already uploaded an image for this side
+        const existingSideUpload = this.customerUploadedImageDataUrls?.[this.activeSide];
+        if (existingSideUpload) {
+          renderUploadedThumbnail(
+            dropzone,
+            existingSideUpload,
+            this.customerUploadedImageFileNames?.[this.activeSide] || "Uploaded Photo",
+            handleFile
+          );
+        }
+
+        dropzone.addEventListener("click", (e) => {
+          if (
+            e.target.closest(".saitriq-upload-change-btn") ||
+            e.target.closest(".saitriq-upload-remove-btn") ||
+            e.target.closest(".saitriq-upload-thumb-del")
+          ) {
+            return;
+          }
+          const curInput = dropzone.querySelector("input[type='file']");
+          if (curInput) curInput.click();
+        });
         fileInput.addEventListener("change", (e) => {
           const file = e.target.files?.[0];
           if (file) handleFile(file);
@@ -1184,42 +1456,60 @@
 
       const renderTextControl = (obj, idx) => {
         hasTextControl = true;
+        const currentAlign = obj.textAlign || "left";
         const textCard = document.createElement("div");
         textCard.className = "saitriq-control-card";
         textCard.innerHTML = `
           <div class="saitriq-card-header">
             <span class="saitriq-card-icon">✏️</span>
-            <span class="saitriq-card-title">${obj.optionLabel || `Custom Text ${idx > 1 ? idx : ""}`}</span>
+            <span class="saitriq-card-title">${obj.optionLabel || `${this.t("custom_text_title", "Custom Text")} ${idx > 1 ? idx : ""}`}</span>
           </div>
           <div class="saitriq-card-body">
-            <div>
-              <label class="saitriq-sublabel">Your Message / Text</label>
-              <input type="text" class="saitriq-text-input" value="${obj.text || ""}" placeholder="Enter your custom text..." />
-            </div>
-            
-            <div>
-              <label class="saitriq-sublabel">Font Family</label>
-              <select class="saitriq-select-input">
-                <option value="Roboto">Roboto (Clean Modern)</option>
-                <option value="Montserrat">Montserrat (Geometric Sans)</option>
-                <option value="Playfair Display">Playfair Display (Luxury Serif)</option>
-                <option value="Pacifico">Pacifico (Handwritten Script)</option>
-                <option value="Oswald">Oswald (Bold Headline)</option>
-                <option value="Courier New">Courier New (Vintage Monospace)</option>
-              </select>
+            <div class="saitriq-text-controls-row">
+              <div class="saitriq-text-col">
+                <div class="saitriq-sublabel-row">
+                  <label class="saitriq-sublabel">${this.t("your_message", "Your Message / Text")}</label>
+                </div>
+                <textarea class="saitriq-textarea-input" rows="2" placeholder="${this.t("text_placeholder", "Line 1\nLine 2...").replace(/"/g, '&quot;')}">${obj.text || ""}</textarea>
+              </div>
+
+              <div class="saitriq-font-col">
+                <div class="saitriq-sublabel-row">
+                  <label class="saitriq-sublabel">${this.t("font_family", "Font Family")}</label>
+                  <div class="saitriq-align-btn-group" title="Text Alignment">
+                    <button type="button" class="saitriq-align-btn ${currentAlign === "left" ? "is-active" : ""}" data-align="left" title="${this.t("align_left", "Align Left")}">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="15" y2="12"/><line x1="3" y1="18" x2="18" y2="18"/></svg>
+                    </button>
+                    <button type="button" class="saitriq-align-btn ${currentAlign === "center" ? "is-active" : ""}" data-align="center" title="${this.t("align_center", "Align Center")}">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="6" y1="12" x2="18" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>
+                    </button>
+                    <button type="button" class="saitriq-align-btn ${currentAlign === "right" ? "is-active" : ""}" data-align="right" title="${this.t("align_right", "Align Right")}">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="9" y1="12" x2="21" y2="12"/><line x1="6" y1="18" x2="21" y2="18"/></svg>
+                    </button>
+                  </div>
+                </div>
+                <select class="saitriq-select-input">
+                  <option value="Roboto">Roboto (Clean Modern)</option>
+                  <option value="Montserrat">Montserrat (Geometric Sans)</option>
+                  <option value="Playfair Display">Playfair Display (Luxury Serif)</option>
+                  <option value="Pacifico">Pacifico (Handwritten Script)</option>
+                  <option value="Oswald">Oswald (Bold Headline)</option>
+                  <option value="Courier New">Courier New (Vintage Monospace)</option>
+                </select>
+              </div>
             </div>
 
             <div>
-              <label class="saitriq-sublabel">Print Ink Color</label>
+              <label class="saitriq-sublabel">${this.t("print_ink_color", "Print Ink Color")}</label>
               <div class="saitriq-swatches-grid"></div>
             </div>
           </div>
         `;
 
-        const input = textCard.querySelector(".saitriq-text-input");
-        if (obj.maxCharacters) input.maxLength = obj.maxCharacters;
+        const textarea = textCard.querySelector(".saitriq-textarea-input");
+        if (obj.maxCharacters) textarea.maxLength = obj.maxCharacters;
 
-        input.addEventListener("input", (e) => {
+        textarea.addEventListener("input", (e) => {
           obj.set("text", e.target.value);
           if (this.fabricCanvas.requestRenderAll) {
             this.fabricCanvas.requestRenderAll();
@@ -1238,6 +1528,21 @@
           } else {
             this.fabricCanvas.renderAll();
           }
+        });
+
+        const alignBtns = textCard.querySelectorAll(".saitriq-align-btn");
+        alignBtns.forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const align = btn.getAttribute("data-align");
+            alignBtns.forEach((b) => b.classList.remove("is-active"));
+            btn.classList.add("is-active");
+            obj.set("textAlign", align);
+            if (this.fabricCanvas.requestRenderAll) {
+              this.fabricCanvas.requestRenderAll();
+            } else {
+              this.fabricCanvas.renderAll();
+            }
+          });
         });
 
         const swatchesContainer = textCard.querySelector(".saitriq-swatches-grid");
@@ -1271,7 +1576,7 @@
         const customColorPicker = document.createElement("input");
         customColorPicker.type = "color";
         customColorPicker.className = "saitriq-custom-color-picker";
-        customColorPicker.title = "Pick custom color";
+        customColorPicker.title = this.t("pick_custom_color", "Pick custom color");
         customColorPicker.value = currentFill.startsWith("#") ? currentFill : "#111111";
         customColorPicker.addEventListener("input", (e) => {
           const chosen = e.target.value;
@@ -1294,6 +1599,7 @@
 
       // Fallback: If no editable text controls exist, provide Add Custom Text card
       if (!hasTextControl) {
+        let selectedAlign = "left";
         const textCard = document.createElement("div");
         textCard.className = "saitriq-control-card";
         textCard.innerHTML = `
@@ -1302,21 +1608,38 @@
             <span class="saitriq-card-title">Add Custom Text</span>
           </div>
           <div class="saitriq-card-body">
-            <div>
-              <label class="saitriq-sublabel">Your Message / Text</label>
-              <input type="text" class="saitriq-text-input" placeholder="Type your custom text here..." />
-            </div>
-            
-            <div>
-              <label class="saitriq-sublabel">Font Family</label>
-              <select class="saitriq-select-input">
-                <option value="Roboto">Roboto (Clean Modern)</option>
-                <option value="Montserrat">Montserrat (Geometric Sans)</option>
-                <option value="Playfair Display">Playfair Display (Luxury Serif)</option>
-                <option value="Pacifico">Pacifico (Handwritten Script)</option>
-                <option value="Oswald">Oswald (Bold Headline)</option>
-                <option value="Courier New">Courier New (Vintage Monospace)</option>
-              </select>
+            <div class="saitriq-text-controls-row">
+              <div class="saitriq-text-col">
+                <div class="saitriq-sublabel-row">
+                  <label class="saitriq-sublabel">Your Message / Text</label>
+                </div>
+                <textarea class="saitriq-textarea-input" rows="2" placeholder="Line 1&#10;Line 2..."></textarea>
+              </div>
+
+              <div class="saitriq-font-col">
+                <div class="saitriq-sublabel-row">
+                  <label class="saitriq-sublabel">Font Family</label>
+                  <div class="saitriq-align-btn-group" title="Text Alignment">
+                    <button type="button" class="saitriq-align-btn is-active" data-align="left" title="Align Left">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="15" y2="12"/><line x1="3" y1="18" x2="18" y2="18"/></svg>
+                    </button>
+                    <button type="button" class="saitriq-align-btn" data-align="center" title="Align Center">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="6" y1="12" x2="18" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>
+                    </button>
+                    <button type="button" class="saitriq-align-btn" data-align="right" title="Align Right">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="9" y1="12" x2="21" y2="12"/><line x1="6" y1="18" x2="21" y2="18"/></svg>
+                    </button>
+                  </div>
+                </div>
+                <select class="saitriq-select-input">
+                  <option value="Roboto">Roboto (Clean Modern)</option>
+                  <option value="Montserrat">Montserrat (Geometric Sans)</option>
+                  <option value="Playfair Display">Playfair Display (Luxury Serif)</option>
+                  <option value="Pacifico">Pacifico (Handwritten Script)</option>
+                  <option value="Oswald">Oswald (Bold Headline)</option>
+                  <option value="Courier New">Courier New (Vintage Monospace)</option>
+                </select>
+              </div>
             </div>
 
             <div>
@@ -1326,15 +1649,30 @@
           </div>
         `;
 
-        const input = textCard.querySelector(".saitriq-text-input");
+        const textarea = textCard.querySelector(".saitriq-textarea-input");
         const fontSelect = textCard.querySelector(".saitriq-select-input");
         const swatchesContainer = textCard.querySelector(".saitriq-swatches-grid");
 
         let activeAddedText = null;
+        let selectedFallbackColor = "#111111";
 
-        input.addEventListener("input", (e) => {
+        textarea.addEventListener("input", (e) => {
           const val = e.target.value;
           const ITextClass = window.fabric.IText || window.fabric.Text;
+          if (!val) {
+            if (activeAddedText) {
+              this.fabricCanvas.remove(activeAddedText);
+              activeAddedText = null;
+              this.fabricCanvas.discardActiveObject();
+              if (this.fabricCanvas.requestRenderAll) {
+                this.fabricCanvas.requestRenderAll();
+              } else {
+                this.fabricCanvas.renderAll();
+              }
+            }
+            return;
+          }
+
           if (!activeAddedText) {
             const targetLeft = printRect ? printRect.left : 600;
             const targetTop = printRect ? (printRect.top - 80) : 480;
@@ -1344,8 +1682,10 @@
               originX: "center",
               originY: "center",
               fontFamily: fontSelect.value || "Roboto",
+              textAlign: selectedAlign,
               fontSize: 48,
-              fill: "#111111",
+              fill: selectedFallbackColor,
+              isCustomerEditable: true,
               name: "Customer Text",
               optionLabel: "Custom Text",
             });
@@ -1372,6 +1712,24 @@
           }
         });
 
+        const alignBtns = textCard.querySelectorAll(".saitriq-align-btn");
+        alignBtns.forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const align = btn.getAttribute("data-align");
+            alignBtns.forEach((b) => b.classList.remove("is-active"));
+            btn.classList.add("is-active");
+            selectedAlign = align;
+            if (activeAddedText) {
+              activeAddedText.set("textAlign", align);
+              if (this.fabricCanvas.requestRenderAll) {
+                this.fabricCanvas.requestRenderAll();
+              } else {
+                this.fabricCanvas.renderAll();
+              }
+            }
+          });
+        });
+
         const colors = ["#111111", "#ffffff", "#dc2626", "#2563eb", "#008060", "#f59e0b", "#9333ea", "#6b7280"];
         colors.forEach((col) => {
           const swatch = document.createElement("button");
@@ -1382,6 +1740,7 @@
           if (col === "#111111") swatch.classList.add("is-active");
 
           swatch.addEventListener("click", () => {
+            selectedFallbackColor = col;
             if (activeAddedText) {
               activeAddedText.set("fill", col);
               if (this.fabricCanvas.requestRenderAll) {
@@ -1404,6 +1763,7 @@
         customColorPicker.value = "#111111";
         customColorPicker.addEventListener("input", (e) => {
           const chosen = e.target.value;
+          selectedFallbackColor = chosen;
           if (activeAddedText) {
             activeAddedText.set("fill", chosen);
             if (this.fabricCanvas.requestRenderAll) {
@@ -1449,7 +1809,7 @@
       const submitBtn = document.querySelector(".saitriq-submit-cart-btn");
       if (submitBtn) {
         submitBtn.disabled = true;
-        submitBtn.textContent = "Processing Design...";
+        submitBtn.textContent = this.t("processing_design", "Processing Design...");
       }
 
       try {
@@ -1464,25 +1824,27 @@
 
         this.sidesData[this.activeSide] = this.serializeCanvasObjects();
 
-        // 2. Helper to export snapshot of a side
+        // 2. Helper to export snapshot of a side cleanly
         const exportSideSnapshot = async (side) => {
           if (this.activeSide !== side) {
-            await this.loadSideIntoCanvas(side);
-            this.fabricCanvas.discardActiveObject();
-            if (this.fabricCanvas.requestRenderAll) {
-              this.fabricCanvas.requestRenderAll();
-            } else {
-              this.fabricCanvas.renderAll();
-            }
-            await new Promise((r) => setTimeout(r, 80));
+            this.activeSide = side;
+            await this.loadSideIntoCanvas(side, { skipSeqCheck: true });
           }
+          this.fabricCanvas.discardActiveObject();
+          if (this.fabricCanvas.requestRenderAll) {
+            this.fabricCanvas.requestRenderAll();
+          } else {
+            this.fabricCanvas.renderAll();
+          }
+          // Allow images/fonts to finish painting onto the 2D context
+          await new Promise((r) => setTimeout(r, 120));
 
           let dataUrl = "";
           try {
             const exportMultiplier = Math.max(1, 600 / (this.fabricCanvas.width || 460));
             dataUrl = this.fabricCanvas.toDataURL({
               format: "jpeg",
-              quality: 0.88,
+              quality: 0.85,
               multiplier: exportMultiplier,
             });
           } catch (exportErr) {
@@ -1509,8 +1871,8 @@
 
         // Restore user's current side in canvas
         if (this.activeSide !== initialSide) {
-          await this.loadSideIntoCanvas(initialSide);
           this.activeSide = initialSide;
+          await this.loadSideIntoCanvas(initialSide, { skipSeqCheck: true });
         }
 
         const frontPreviewDataUrl = initialSide === "front" ? snapshotCurrent : snapshotOther;
@@ -1520,127 +1882,137 @@
         const resolvedTemplateId =
           this.templateData?.id || (this.productId ? `tpl-${this.productId}` : "custom-template");
 
-        // 3. Upload Front Preview
-        let finalFrontUrl = frontPreviewDataUrl;
-        if (frontPreviewDataUrl) {
-          try {
-            if (submitBtn) submitBtn.textContent = "Uploading Front Design...";
-            const uploadRes = await fetch("/apps/personalizer/upload", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                customizationId: customizationId + "_front",
-                image: frontPreviewDataUrl,
-                shop: this.shopDomain || window.Shopify?.shop || "",
-              }),
-            });
-            if (uploadRes.ok) {
-              const uploadJson = await uploadRes.json();
-              if (uploadJson.previewUrl || uploadJson.directUrl) {
-                finalFrontUrl = uploadJson.previewUrl || uploadJson.directUrl;
-              }
-            }
-          } catch (uploadErr) {
-            console.warn("[Saitriq] Front preview upload notice:", uploadErr);
+        const shopDomain = (this.shop || window.Shopify?.shop || window.location.hostname || "")
+          .replace(/^https?:\/\//, "")
+          .replace(/\/.*$/, "")
+          .trim();
+
+        const uploadAsset = async (idSuffix, imageData) => {
+          if (!imageData || !String(imageData).startsWith("data:image")) return imageData || "";
+          const endpoints = ["/apps/personalizer/upload"];
+          if (this.appUrl) {
+            endpoints.push(`${this.appUrl.replace(/\/$/, "")}/api/storefront/upload`);
           }
+          for (const ep of endpoints) {
+            try {
+              const res = await fetch(ep, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  customizationId: `${customizationId}_${idSuffix}`,
+                  image: imageData,
+                  shop: shopDomain,
+                }),
+              });
+              if (res.ok) {
+                const json = await res.json();
+                if (json.previewUrl || json.directUrl) {
+                  return json.previewUrl || json.directUrl;
+                }
+              }
+            } catch (err) {
+              console.warn("[Saitriq] Upload notice for", idSuffix, err);
+            }
+          }
+          return imageData;
+        };
+
+        // 3. Upload Front & Back Design Previews
+        if (submitBtn) submitBtn.textContent = this.t("uploading_front_design", "Uploading Front Design...");
+        const finalFrontUrl = frontPreviewDataUrl ? await uploadAsset("front", frontPreviewDataUrl) : "";
+
+        if (submitBtn) submitBtn.textContent = this.t("uploading_back_design", "Uploading Back Design...");
+        const finalBackUrl = backPreviewDataUrl ? await uploadAsset("back", backPreviewDataUrl) : "";
+
+        // 4. Upload customer's raw uploaded images independently for Front and Back
+        let finalFrontUploadedUrl = "";
+        let finalBackUploadedUrl = "";
+        const rawFrontPhoto = this.customerUploadedImageDataUrls?.front || null;
+        const rawBackPhoto = this.customerUploadedImageDataUrls?.back || null;
+
+        if (rawFrontPhoto) {
+          if (submitBtn) submitBtn.textContent = this.t("uploading_front_photo", "Uploading Front Photo...");
+          finalFrontUploadedUrl = await uploadAsset("upload_front", rawFrontPhoto);
+        }
+        if (rawBackPhoto) {
+          if (submitBtn) submitBtn.textContent = this.t("uploading_back_photo", "Uploading Back Photo...");
+          finalBackUploadedUrl = await uploadAsset("upload_back", rawBackPhoto);
+        }
+        if (!rawFrontPhoto && !rawBackPhoto && this.customerUploadedImageDataUrl) {
+          if (submitBtn) submitBtn.textContent = this.t("uploading_photo", "Uploading Photo...");
+          finalFrontUploadedUrl = await uploadAsset("upload", this.customerUploadedImageDataUrl);
         }
 
-        // 4. Upload Back Preview
-        let finalBackUrl = backPreviewDataUrl;
-        if (backPreviewDataUrl) {
-          try {
-            if (submitBtn) submitBtn.textContent = "Uploading Back Design...";
-            const uploadRes = await fetch("/apps/personalizer/upload", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                customizationId: customizationId + "_back",
-                image: backPreviewDataUrl,
-                shop: this.shopDomain || window.Shopify?.shop || "",
-              }),
-            });
-            if (uploadRes.ok) {
-              const uploadJson = await uploadRes.json();
-              if (uploadJson.previewUrl || uploadJson.directUrl) {
-                finalBackUrl = uploadJson.previewUrl || uploadJson.directUrl;
-              }
-            }
-          } catch (uploadErr) {
-            console.warn("[Saitriq] Back preview upload notice:", uploadErr);
-          }
-        }
+        const finalUploadedImageUrl = finalFrontUploadedUrl || finalBackUploadedUrl || "";
 
-        // 5. Upload customer's raw uploaded image (if customer uploaded one)
-        let finalUploadedImageUrl = "";
-        const rawPhoto =
-          this.customerUploadedImageDataUrls?.front ||
-          this.customerUploadedImageDataUrls?.back ||
-          this.customerUploadedImageDataUrl;
+        if (submitBtn) submitBtn.textContent = this.t("adding_to_cart", "Adding to Cart...");
 
-        if (rawPhoto) {
-          try {
-            if (submitBtn) submitBtn.textContent = "Uploading Photo...";
-            const uploadCustRes = await fetch("/apps/personalizer/upload", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                customizationId: customizationId + "_upload",
-                image: rawPhoto,
-                shop: this.shopDomain || window.Shopify?.shop || "",
-              }),
-            });
-            if (uploadCustRes.ok) {
-              const uploadCustJson = await uploadCustRes.json();
-              if (uploadCustJson.previewUrl || uploadCustJson.directUrl) {
-                finalUploadedImageUrl = uploadCustJson.previewUrl || uploadCustJson.directUrl;
-              }
-            }
-          } catch (uploadCustErr) {
-            console.warn("[Saitriq] Raw customer image upload notice:", uploadCustErr);
-            finalUploadedImageUrl = rawPhoto;
-          }
-        }
-
-        if (submitBtn) submitBtn.textContent = "Adding to Cart...";
-
-        // 6. Gather customer inputs for line item properties
+        // 5. Gather customer inputs (Clean single-source properties without duplicates)
+        const hasBackSide = Boolean(finalBackUrl && this.sidesData.back?.objects?.length > 0);
         const properties = {
           _customization_id: customizationId,
           _template_id: resolvedTemplateId,
+          _product_title: this.productTitle || "",
           _customization_preview: finalFrontUrl,
-          _customization_preview_front: finalFrontUrl,
-          _customization_preview_back: finalBackUrl,
-          "Custom Design Preview": finalFrontUrl,
-          "Front Design Preview": finalFrontUrl,
-          "Back Design Preview": finalBackUrl,
-          "Custom Design": "Front & Back Personalization ✨",
         };
 
-        if (finalUploadedImageUrl) {
-          properties["_uploaded_image"] = finalUploadedImageUrl;
-          properties["Uploaded Image"] = finalUploadedImageUrl;
+        if (hasBackSide) {
+          properties._customization_preview_front = finalFrontUrl;
+          properties._customization_preview_back = finalBackUrl;
+          properties["Front Preview"] = finalFrontUrl;
+          properties["Back Preview"] = finalBackUrl;
+        } else {
+          properties["Preview"] = finalFrontUrl;
         }
 
-        // Extract custom text from Front and Back side objects
-        const extractTexts = (sideObjects, sideLabel) => {
+        if (finalFrontUploadedUrl && finalBackUploadedUrl) {
+          properties._uploaded_image_front = finalFrontUploadedUrl;
+          properties._uploaded_image_back = finalBackUploadedUrl;
+          properties["Front Uploaded Photo"] = finalFrontUploadedUrl;
+          properties["Back Uploaded Photo"] = finalBackUploadedUrl;
+        } else if (finalFrontUploadedUrl) {
+          properties._uploaded_image = finalFrontUploadedUrl;
+          properties["Uploaded Photo"] = finalFrontUploadedUrl;
+        } else if (finalBackUploadedUrl) {
+          properties._uploaded_image = finalBackUploadedUrl;
+          properties["Uploaded Photo"] = finalBackUploadedUrl;
+        }
+
+        // Extract Text, Font Family, and Text Color from BOTH Front and Back side objects
+        const extractSideParams = (sideObjects, sideLabel) => {
           if (!Array.isArray(sideObjects)) return;
-          sideObjects.forEach((obj, idx) => {
+          let textCounter = 0;
+          sideObjects.forEach((obj) => {
             const type = (obj.type || "").toLowerCase();
             if (
               (type.includes("text") || obj.text !== undefined) &&
               !obj.name?.toLowerCase().includes("mockup") &&
               !obj.name?.toLowerCase().includes("base")
             ) {
-              const label = `${sideLabel} Text` + (idx > 0 ? ` ${idx + 1}` : "");
-              if (obj.text && String(obj.text).trim()) {
-                properties[label] = String(obj.text).trim();
+              const cleanText = obj.text ? String(obj.text).trim() : "";
+              if (!cleanText) return;
+              textCounter++;
+              const suffix = textCounter > 1 ? ` ${textCounter}` : "";
+              properties[`${sideLabel} Text${suffix}`] = cleanText;
+              if (obj.fontFamily) {
+                properties[`${sideLabel} Font${suffix}`] = String(obj.fontFamily);
+              }
+              if (obj.fill) {
+                properties[`${sideLabel} Color${suffix}`] = String(obj.fill);
               }
             }
           });
         };
 
-        extractTexts(this.sidesData.front?.objects, "Front");
-        extractTexts(this.sidesData.back?.objects, "Back");
+        extractSideParams(this.sidesData.front?.objects, "Front");
+        extractSideParams(this.sidesData.back?.objects, "Back");
+
+        // Remove any empty property values so Shopify stores all populated params cleanly
+        Object.keys(properties).forEach((k) => {
+          if (properties[k] === undefined || properties[k] === null || properties[k] === "") {
+            delete properties[k];
+          }
+        });
 
         // 7. Find variant ID from the active Shopify product form or personalizer selection
         let variantId = this.activeSelectedVariantId || null;
@@ -1657,10 +2029,10 @@
         }
 
         if (!variantId) {
-          alert("Could not detect active product variant. Please select a variant on the product page.");
+          alert(this.t("error_select_variant", "Could not detect active product variant. Please select a variant on the product page."));
           if (submitBtn) {
             submitBtn.disabled = false;
-            submitBtn.textContent = "Add to Cart with Design";
+            submitBtn.textContent = this.t("add_to_cart", "Add to Cart with Design");
           }
           return;
         }
@@ -1700,18 +2072,18 @@
           window.location.href = "/cart";
         } else {
           const errData = await cartResponse.json().catch(() => ({}));
-          alert("Failed to add to cart: " + (errData.description || "Please try again."));
+          alert(errData.description || this.t("error_add_to_cart", "Could not add customized item to cart. Please try again."));
           if (submitBtn) {
             submitBtn.disabled = false;
-            submitBtn.textContent = "Add to Cart with Design";
+            submitBtn.textContent = this.t("add_to_cart", "Add to Cart with Design");
           }
         }
       } catch (err) {
         console.error("[Saitriq] Error adding to cart:", err);
-        alert("An error occurred while preparing your custom design.");
+        alert(this.t("error_add_to_cart", "Could not add customized item to cart. Please try again."));
         if (submitBtn) {
           submitBtn.disabled = false;
-          submitBtn.textContent = "Add to Cart with Design";
+          submitBtn.textContent = this.t("add_to_cart", "Add to Cart with Design");
         }
       }
     }
@@ -1795,7 +2167,9 @@
   }
 
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", initCartPreviewEnhancer);
+    document.addEventListener("DOMContentLoaded", () => {
+      initCartPreviewEnhancer();
+    });
   } else {
     initCartPreviewEnhancer();
   }

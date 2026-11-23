@@ -56,3 +56,19 @@ export async function updateCustomizedOrderStatus(
     },
   });
 }
+
+export async function updateCustomizedOrderPreview(
+  id: string,
+  shopifyDomain: string,
+  previewImageUrl: string,
+  customerSelections?: string,
+) {
+  const shop = await ensureShop(shopifyDomain);
+  return await prisma.customizedOrder.updateMany({
+    where: { id, shopId: shop.id },
+    data: {
+      previewImageUrl,
+      ...(customerSelections ? { customerSelections } : {}),
+    },
+  });
+}

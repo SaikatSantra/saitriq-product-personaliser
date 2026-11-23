@@ -1,0 +1,20 @@
+{% comment %}
+  Saitriq Product Personalizer - App Embed
+  Enables the product customization studio across the storefront when toggled ON in Theme Settings > App Embeds.
+{% endcomment %}
+
+<div
+  id="saitriq-personalizer-embed"
+  data-enabled="true"
+  style="display: none;"
+></div>
+
+{% schema %}
+{
+  "name": "Product Personalizer",
+  "target": "body",
+  "stylesheet": "personalizer.css",
+  "javascript": "personalizer.js",
+  "settings": []
+}
+{% endschema %}

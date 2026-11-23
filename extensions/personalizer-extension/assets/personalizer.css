@@ -62,10 +62,10 @@
 .saitriq-modal-window {
   background: #ffffff;
   width: 100%;
-  max-width: 1080px;
-  height: 680px;
-  max-height: calc(100vh - 40px);
-  border-radius: 16px;
+  max-width: 960px;
+  height: 600px;
+  max-height: calc(100vh - 32px);
+  border-radius: 12px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -80,7 +80,7 @@
 
 /* Modal Header */
 .saitriq-modal-header {
-  padding: 16px 24px;
+  padding: 10px 18px;
   border-bottom: 1px solid #e2e8f0;
   display: flex;
   align-items: center;
@@ -91,12 +91,12 @@
 .saitriq-header-titles {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
 }
 
 .saitriq-modal-header h3 {
   margin: 0;
-  font-size: 18px;
+  font-size: 15px;
   font-weight: 700;
   color: #0f172a;
   letter-spacing: -0.01em;
@@ -104,7 +104,7 @@
 
 .saitriq-modal-subtitle {
   margin: 0;
-  font-size: 13px;
+  font-size: 11px;
   color: #64748b;
   font-weight: 400;
 }
@@ -112,10 +112,10 @@
 .saitriq-close-btn {
   background: #f1f5f9;
   border: none;
-  width: 32px;
-  height: 32px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
-  font-size: 18px;
+  font-size: 16px;
   line-height: 1;
   cursor: pointer;
   color: #64748b;
@@ -134,10 +134,10 @@
 /* Modal Body: Split Canvas & Controls */
 .saitriq-modal-body {
   display: grid;
-  grid-template-columns: 52% 48%;
+  grid-template-columns: 50% 50%;
   flex: 1;
   overflow: hidden;
-  height: calc(100% - 65px - 70px);
+  height: calc(100% - 47px - 53px);
 }
 
 /* Left Canvas Stage */
@@ -145,7 +145,7 @@
   background-color: #f8fafc;
   background-image: radial-gradient(#e2e8f0 1.2px, transparent 1.2px);
   background-size: 20px 20px;
-  padding: 16px 24px 20px;
+  padding: 10px 16px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -160,13 +160,13 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 4px;
   background: #ffffff;
-  padding: 4px;
-  border-radius: 30px;
+  padding: 3px;
+  border-radius: 20px;
   border: 1px solid #e2e8f0;
-  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
-  margin-bottom: 12px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
+  margin-bottom: 8px;
   z-index: 10;
   flex-shrink: 0;
 }
@@ -174,13 +174,13 @@
 .saitriq-side-tab {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 7px 18px;
-  border-radius: 24px;
+  gap: 4px;
+  padding: 4px 14px;
+  border-radius: 16px;
   border: none;
   background: transparent;
   color: #64748b;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
@@ -195,19 +195,19 @@
 .saitriq-side-tab.is-active {
   background: #0f172a;
   color: #ffffff;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.2);
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.18);
 }
 
 .saitriq-side-tab-icon {
-  font-size: 14px;
+  font-size: 12px;
   line-height: 1;
 }
 
 .saitriq-canvas-stage {
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.06), 0 4px 6px -4px rgba(0, 0, 0, 0.03);
   background: #ffffff;
   line-height: 0;
-  border-radius: 12px;
+  border-radius: 10px;
   border: 1px solid #e2e8f0;
   overflow: hidden;
   position: relative;
@@ -215,39 +215,22 @@
 }
 
 .saitriq-canvas-stage:hover {
-  box-shadow: 0 25px 30px -5px rgba(0, 0, 0, 0.12), 0 10px 12px -6px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 14px 20px -3px rgba(0, 0, 0, 0.09), 0 6px 8px -4px rgba(0, 0, 0, 0.04);
 }
 
-.saitriq-canvas-badge {
-  position: absolute;
-  bottom: 14px;
-  background: rgba(255, 255, 255, 0.92);
-  backdrop-filter: blur(4px);
-  border: 1px solid #e2e8f0;
-  padding: 4px 12px;
-  border-radius: 20px;
-  font-size: 11px;
-  font-weight: 600;
-  color: #475569;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
-  pointer-events: none;
-}
 
 /* Right Controls Area */
 .saitriq-controls-panel {
-  padding: 20px 24px;
+  padding: 12px 16px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 10px;
   background: #ffffff;
 }
 
 .saitriq-controls-panel::-webkit-scrollbar {
-  width: 6px;
+  width: 5px;
 }
 .saitriq-controls-panel::-webkit-scrollbar-track {
   background: transparent;
@@ -264,12 +247,12 @@
 .saitriq-control-card {
   background: #ffffff;
   border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 16px;
+  border-radius: 8px;
+  padding: 10px 12px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+  gap: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
   transition: border-color 0.15s ease;
 }
 
@@ -280,16 +263,16 @@
 .saitriq-card-header {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .saitriq-card-icon {
-  font-size: 16px;
+  font-size: 14px;
   line-height: 1;
 }
 
 .saitriq-card-title {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
   color: #0f172a;
 }
@@ -297,22 +280,22 @@
 .saitriq-card-body {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
 }
 
 /* Variant & Option Group Styling */
 .saitriq-option-section {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
 }
 
 .saitriq-option-title {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   color: #64748b;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.04em;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -328,19 +311,19 @@
 .saitriq-color-pills-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
 }
 
 .saitriq-color-pill {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 14px;
-  border-radius: 8px;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 6px;
   border: 1px solid #cbd5e1;
   background: #ffffff;
   color: #1e293b;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -356,12 +339,12 @@
   background: #f0fdf4;
   color: var(--saitriq-primary, #008060);
   font-weight: 600;
-  padding: 5px 13px;
+  padding: 3px 9px;
 }
 
 .saitriq-color-dot {
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
   display: inline-block;
   flex-shrink: 0;
@@ -372,17 +355,17 @@
 .saitriq-size-pills-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px;
 }
 
 .saitriq-size-pill {
-  min-width: 44px;
-  padding: 6px 12px;
-  border-radius: 6px;
+  min-width: 36px;
+  padding: 4px 8px;
+  border-radius: 5px;
   border: 1px solid #cbd5e1;
   background: #ffffff;
   color: #1e293b;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
   text-align: center;
   cursor: pointer;
@@ -399,7 +382,7 @@
   background: #f0fdf4;
   color: var(--saitriq-primary, #008060);
   font-weight: 600;
-  padding: 5px 11px;
+  padding: 3px 7px;
 }
 
 /* Input Wrappers & Elements */
@@ -409,54 +392,138 @@
   align-items: center;
 }
 
-.saitriq-text-input {
+/* One-line Side-by-Side Text & Font Row */
+.saitriq-text-controls-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.saitriq-text-col,
+.saitriq-font-col {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.saitriq-sublabel-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 18px;
+}
+
+/* Compact Multi-line Textarea */
+.saitriq-textarea-input {
   width: 100%;
-  padding: 10px 14px;
+  height: 52px;
+  min-height: 52px;
+  max-height: 90px;
+  padding: 6px 9px;
   border: 1px solid #d1d5db;
-  border-radius: 8px;
-  font-size: 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: inherit;
   color: #1f2937;
   background: #ffffff;
   box-sizing: border-box;
-  transition: all 0.2s ease;
+  resize: none;
+  line-height: 1.35;
+  transition: all 0.15s ease;
+}
+
+.saitriq-textarea-input:focus {
+  border-color: var(--saitriq-primary, #008060);
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(0, 128, 96, 0.12);
+}
+
+/* Text Alignment Buttons */
+.saitriq-align-btn-group {
+  display: inline-flex;
+  align-items: center;
+  background: #f1f5f9;
+  border-radius: 5px;
+  padding: 1px;
+  gap: 1px;
+}
+
+.saitriq-align-btn {
+  background: transparent;
+  border: none;
+  padding: 2px 5px;
+  border-radius: 4px;
+  color: #64748b;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  height: 18px;
+  min-width: 18px;
+}
+
+.saitriq-align-btn:hover {
+  color: #0f172a;
+  background: #e2e8f0;
+}
+
+.saitriq-align-btn.is-active {
+  background: #ffffff;
+  color: var(--saitriq-primary, #008060);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.saitriq-text-input {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #1f2937;
+  background: #ffffff;
+  box-sizing: border-box;
+  transition: all 0.15s ease;
 }
 
 .saitriq-text-input:focus {
   border-color: var(--saitriq-primary, #008060);
   outline: none;
-  box-shadow: 0 0 0 3px rgba(0, 128, 96, 0.15);
+  box-shadow: 0 0 0 2px rgba(0, 128, 96, 0.12);
 }
 
 .saitriq-sublabel {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   color: #475569;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
   display: block;
 }
 
 .saitriq-select-input {
   width: 100%;
-  padding: 10px 36px 10px 14px;
+  padding: 6px 28px 6px 10px;
   border: 1px solid #d1d5db;
-  border-radius: 8px;
-  font-size: 14px;
+  border-radius: 6px;
+  font-size: 12px;
   font-weight: 500;
   color: #1f2937;
   background-color: #ffffff;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
   background-repeat: no-repeat;
-  background-position: right 12px center;
+  background-position: right 10px center;
   appearance: none;
   cursor: pointer;
   box-sizing: border-box;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
 }
 
 .saitriq-select-input:focus {
   border-color: var(--saitriq-primary, #008060);
   outline: none;
-  box-shadow: 0 0 0 3px rgba(0, 128, 96, 0.15);
+  box-shadow: 0 0 0 2px rgba(0, 128, 96, 0.12);
 }
 
 /* Color Swatches Grid */
@@ -464,12 +531,12 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 5px;
 }
 
 .saitriq-color-swatch {
-  width: 28px;
-  height: 28px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   border: 2px solid #ffffff;
   box-shadow: 0 0 0 1px #cbd5e1;
@@ -487,7 +554,7 @@
 
 .saitriq-color-swatch.is-active {
   transform: scale(1.15);
-  box-shadow: 0 0 0 2px var(--saitriq-primary, #008060), 0 2px 6px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 0 0 2px var(--saitriq-primary, #008060), 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 .saitriq-color-swatch.is-active::after {
@@ -495,8 +562,8 @@
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
   transform: translate(-50%, -50%);
   background-color: #ffffff;
@@ -509,8 +576,8 @@
 
 /* Custom Color Picker input */
 .saitriq-custom-color-picker {
-  width: 28px;
-  height: 28px;
+  width: 22px;
+  height: 22px;
   padding: 0;
   border: 1px dashed #cbd5e1;
   border-radius: 50%;
@@ -527,9 +594,9 @@
 
 /* Photo Upload Box */
 .saitriq-upload-dropzone {
-  border: 2px dashed #cbd5e1;
-  border-radius: 10px;
-  padding: 20px 16px;
+  border: 1.5px dashed #cbd5e1;
+  border-radius: 8px;
+  padding: 10px 12px;
   text-align: center;
   background-color: #f8fafc;
   cursor: pointer;
@@ -537,7 +604,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
 }
 
 .saitriq-upload-dropzone:hover,
@@ -556,13 +623,13 @@
 }
 
 .saitriq-upload-main-text {
-  font-size: 13px;
+  font-size: 12px;
   color: #1e293b;
   margin: 0;
 }
 
 .saitriq-upload-sub-text {
-  font-size: 11px;
+  font-size: 10px;
   color: #64748b;
   margin: 0;
 }
@@ -571,18 +638,18 @@
 .saitriq-upload-preview {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
+  gap: 8px;
+  padding: 6px 10px;
   background: #f8fafc;
   border: 1px solid #e2e8f0;
-  border-radius: 8px;
+  border-radius: 6px;
 }
 
 .saitriq-upload-thumb {
-  width: 48px;
-  height: 48px;
+  width: 36px;
+  height: 36px;
   object-fit: cover;
-  border-radius: 6px;
+  border-radius: 4px;
   border: 1px solid #e2e8f0;
 }
 
@@ -590,12 +657,12 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
   overflow: hidden;
 }
 
 .saitriq-upload-name {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   color: #0f172a;
   white-space: nowrap;
@@ -604,18 +671,25 @@
 }
 
 .saitriq-upload-status {
-  font-size: 11px;
+  font-size: 10px;
   color: #166534;
   font-weight: 500;
+}
+
+.saitriq-upload-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
 }
 
 .saitriq-upload-change-btn {
   background: #ffffff;
   border: 1px solid #d1d5db;
   color: #374151;
-  padding: 6px 10px;
-  border-radius: 6px;
-  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 5px;
+  font-size: 11px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -626,23 +700,77 @@
   border-color: #9ca3af;
 }
 
+.saitriq-upload-remove-btn {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #dc2626;
+  padding: 4px 8px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  transition: all 0.15s ease;
+}
+
+.saitriq-upload-remove-btn:hover {
+  background: #fee2e2;
+  border-color: #f87171;
+  color: #b91c1c;
+}
+
+.saitriq-upload-thumb-wrap {
+  position: relative;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.saitriq-upload-thumb-del {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 16px;
+  height: 16px;
+  background: #ef4444;
+  color: #ffffff;
+  border-radius: 50%;
+  border: 1.5px solid #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  transition: transform 0.15s ease, background 0.15s ease;
+  padding: 0;
+}
+
+.saitriq-upload-thumb-del:hover {
+  transform: scale(1.15);
+  background: #b91c1c;
+}
+
 /* Live Summary Card (Anchored at bottom of right panel) */
 .saitriq-summary-card {
   background: #f8fafc;
   border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 14px 16px;
+  border-radius: 8px;
+  padding: 8px 10px;
   margin-top: auto;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 6px;
 }
 
 .saitriq-summary-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 13px;
+  font-size: 11px;
 }
 
 .saitriq-summary-label {
@@ -656,25 +784,25 @@
 }
 
 .saitriq-summary-badge {
-  font-size: 11px;
+  font-size: 10px;
   background: #dcfce7;
   color: #166534;
-  padding: 2px 8px;
-  border-radius: 12px;
+  padding: 1px 6px;
+  border-radius: 10px;
   font-weight: 600;
 }
 
 .saitriq-summary-guarantee {
   border-top: 1px dashed #cbd5e1;
-  padding-top: 8px;
-  font-size: 11px;
+  padding-top: 6px;
+  font-size: 10px;
   color: #475569;
   text-align: center;
 }
 
 /* Modal Footer Action Bar */
 .saitriq-modal-footer {
-  padding: 16px 24px;
+  padding: 10px 18px;
   border-top: 1px solid #e2e8f0;
   background-color: #ffffff;
   display: flex;
@@ -685,15 +813,15 @@
 .saitriq-preview-info {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 13px;
+  gap: 6px;
+  font-size: 12px;
   color: #475569;
   font-weight: 500;
 }
 
 .saitriq-pulse-dot {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   background-color: #10b981;
   box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
@@ -716,10 +844,10 @@
   background: #ffffff;
   border: 1px solid #d1d5db;
   color: #374151;
-  padding: 11px 20px;
-  border-radius: 8px;
+  padding: 7px 14px;
+  border-radius: 6px;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   transition: all 0.15s ease;
 }
@@ -730,25 +858,25 @@
 }
 
 .saitriq-submit-cart-btn {
-  padding: 12px 24px;
-  font-size: 14px;
+  padding: 8px 18px;
+  font-size: 13px;
   font-weight: 600;
   color: #ffffff;
   background-color: var(--saitriq-primary, #008060);
   border: none;
-  border-radius: 8px;
+  border-radius: 6px;
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 8px;
-  box-shadow: 0 4px 12px rgba(0, 128, 96, 0.25);
+  gap: 6px;
+  box-shadow: 0 3px 8px rgba(0, 128, 96, 0.2);
   transition: all 0.2s ease;
 }
 
 .saitriq-submit-cart-btn:hover {
   filter: brightness(1.08);
   transform: translateY(-1px);
-  box-shadow: 0 6px 16px rgba(0, 128, 96, 0.35);
+  box-shadow: 0 5px 12px rgba(0, 128, 96, 0.3);
 }
 
 .saitriq-submit-cart-btn:active {

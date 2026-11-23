@@ -12,6 +12,13 @@
   {% endunless %}
 {% endif %}
 
+{% assign default_btn_text = 'personalizer.button_text' | t %}
+{% if default_btn_text contains 'translation missing:' or default_btn_text == blank %}
+  {% assign default_btn_text = '🎨 Customize This Product' %}
+{% endif %}
+{% assign btn_text = block.settings.button_text | default: default_btn_text %}
+{% assign btn_color = block.settings.primary_color | default: '#008060' %}
+
 <div class="saitriq-personalizer-root" id="saitriq-personalizer-{{ block.id }}" {{ block.shopify_attributes }}>
   <saitriq-personalizer
     data-product-id="{{ current_product.id }}"
@@ -20,11 +27,51 @@
     data-product-image="{{ base_image_url }}"
     data-shop="{{ shop.permanent_domain }}"
     data-fabric-url="{{ 'fabric.min.js' | asset_url }}"
-    data-button-text="{{ block.settings.button_text | default: '🎨 Customize This Product' | escape }}"
-    data-primary-color="{{ block.settings.primary_color | default: '#008060' }}"
+    data-button-text="{{ btn_text | escape }}"
+    data-primary-color="{{ btn_color | escape }}"
     data-auto-open="{{ block.settings.auto_open | default: false }}"
     data-design-mode="{% if request.design_mode %}true{% else %}false{% endif %}"
+    style="display: none;"
   >
+    <script type="application/json" class="saitriq-locales-json">
+      {
+        "button_text": {{ 'personalizer.button_text' | t | json }},
+        "modal_title": {{ 'personalizer.modal_title' | t | json }},
+        "modal_subtitle": {{ 'personalizer.modal_subtitle' | t | json }},
+        "front_side": {{ 'personalizer.front_side' | t | json }},
+        "back_side": {{ 'personalizer.back_side' | t | json }},
+        "product_options": {{ 'personalizer.product_options' | t | json }},
+        "custom_text_title": {{ 'personalizer.custom_text_title' | t | json }},
+        "your_message": {{ 'personalizer.your_message' | t | json }},
+        "text_placeholder": {{ 'personalizer.text_placeholder' | t | json }},
+        "font_family": {{ 'personalizer.font_family' | t | json }},
+        "align_left": {{ 'personalizer.align_left' | t | json }},
+        "align_center": {{ 'personalizer.align_center' | t | json }},
+        "align_right": {{ 'personalizer.align_right' | t | json }},
+        "print_ink_color": {{ 'personalizer.print_ink_color' | t | json }},
+        "pick_custom_color": {{ 'personalizer.pick_custom_color' | t | json }},
+        "upload_title": {{ 'personalizer.upload_title' | t | json }},
+        "upload_browse": {{ 'personalizer.upload_browse' | t | json }},
+        "upload_or_drag": {{ 'personalizer.upload_or_drag' | t | json }},
+        "upload_hint": {{ 'personalizer.upload_hint' | t | json }},
+        "change_photo": {{ 'personalizer.change_photo' | t | json }},
+        "remove_photo": {{ 'personalizer.remove_photo' | t | json }},
+        "uploaded_photo": {{ 'personalizer.uploaded_photo' | t | json }},
+        "added_to_front_canvas": {{ 'personalizer.added_to_front_canvas' | t | json }},
+        "added_to_back_canvas": {{ 'personalizer.added_to_back_canvas' | t | json }},
+        "cancel": {{ 'personalizer.cancel' | t | json }},
+        "add_to_cart": {{ 'personalizer.add_to_cart' | t | json }},
+        "adding_to_cart": {{ 'personalizer.adding_to_cart' | t | json }},
+        "uploading_front_design": {{ 'personalizer.uploading_front_design' | t | json }},
+        "uploading_back_design": {{ 'personalizer.uploading_back_design' | t | json }},
+        "uploading_front_photo": {{ 'personalizer.uploading_front_photo' | t | json }},
+        "uploading_back_photo": {{ 'personalizer.uploading_back_photo' | t | json }},
+        "uploading_photo": {{ 'personalizer.uploading_photo' | t | json }},
+        "preparing_canvas": {{ 'personalizer.preparing_canvas' | t | json }},
+        "error_select_variant": {{ 'personalizer.error_select_variant' | t | json }},
+        "error_add_to_cart": {{ 'personalizer.error_add_to_cart' | t | json }}
+      }
+    </script>
     {% if current_product and current_product.variants.size > 0 %}
       <script type="application/json" class="saitriq-variants-json">
         {
@@ -55,24 +102,18 @@
       <button
         type="button"
         class="saitriq-customize-btn"
-        style="background-color: {{ block.settings.primary_color | default: '#008060' }};"
+        style="background-color: {{ btn_color | escape }};"
       >
-        {{ block.settings.button_text | default: '🎨 Customize This Product' | escape }}
+        {{ btn_text | escape }}
       </button>
     </div>
   </saitriq-personalizer>
 </div>
 
-{% # theme-check-disable AssetSizeAppBlockJavaScript %}
-<script src="{{ 'cart_preview.js' | asset_url }}" defer></script>
-<script src="{{ 'personalizer.js' | asset_url }}" defer></script>
-{% # theme-check-enable AssetSizeAppBlockJavaScript %}
-
 {% schema %}
 {
   "name": "Product Personalizer",
   "target": "section",
-  "stylesheet": "personalizer.css",
   "templates": ["product"],
   "settings": [
     {

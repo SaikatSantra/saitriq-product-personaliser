@@ -304,6 +304,20 @@ export default function PersonalizerDashboard() {
                   </div>
                 </div>
               </div>
+
+              <div style={{ borderTop: "1px solid #e1e3e5", paddingTop: "12px", marginTop: "4px" }}>
+                <Link
+                  to="/app/guide"
+                  style={{
+                    color: "#008060",
+                    fontSize: "13px",
+                    fontWeight: 600,
+                    textDecoration: "none",
+                  }}
+                >
+                  Open Full Setup &amp; Front/Back Guide &rarr;
+                </Link>
+              </div>
             </div>
           </div>
         </s-section>
