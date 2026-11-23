@@ -48,12 +48,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   if (intent === "duplicate" && templateId) {
     await duplicateTemplate(templateId, session.shop);
-    return { success: true };
+    return { success: true, message: "Template duplicated successfully" };
   }
 
   if (intent === "delete" && templateId) {
     await deleteTemplate(templateId, session.shop);
-    return { success: true };
+    return { success: true, message: "Template deleted" };
   }
 
   return { success: false };
@@ -102,59 +102,90 @@ export default function TemplatesIndex() {
 
   return (
     <s-page heading="Personalization Templates">
-      <s-button
-        slot="primary-action"
-        variant="primary"
-        onClick={handleCreateNew}
-      >
-        Create Template
-      </s-button>
+      <div slot="primary-action" style={{ display: "flex", gap: "8px" }}>
+        <s-button variant="primary" onClick={handleCreateNew}>
+          + Create Template
+        </s-button>
+      </div>
 
-      {/* Overview Stats */}
-      <s-section>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "16px", marginBottom: "20px" }}>
-          <div style={{ background: "#f8f9fa", padding: "16px", borderRadius: "8px", border: "1px solid #e1e3e5" }}>
-            <span style={{ fontSize: "13px", color: "#6d7175", fontWeight: 500 }}>Active Templates</span>
-            <h2 style={{ fontSize: "24px", margin: "4px 0 0", color: "#202223" }}>{templates.length}</h2>
-          </div>
-          <div style={{ background: "#f8f9fa", padding: "16px", borderRadius: "8px", border: "1px solid #e1e3e5" }}>
-            <span style={{ fontSize: "13px", color: "#6d7175", fontWeight: 500 }}>Customized Products</span>
-            <h2 style={{ fontSize: "24px", margin: "4px 0 0", color: "#202223" }}>{totalProducts}</h2>
-          </div>
-          <div style={{ background: "#f8f9fa", padding: "16px", borderRadius: "8px", border: "1px solid #e1e3e5" }}>
-            <span style={{ fontSize: "13px", color: "#6d7175", fontWeight: 500 }}>Default Print Quality</span>
-            <h2 style={{ fontSize: "24px", margin: "4px 0 0", color: "#202223" }}>300 DPI</h2>
-          </div>
+      {fetcher.data?.message && (
+        <div style={{ marginBottom: "16px" }}>
+          <s-banner tone="success">{fetcher.data.message}</s-banner>
         </div>
-      </s-section>
+      )}
+
+      {/* Overview Stats Cards */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "16px", marginBottom: "24px" }}>
+        <div style={{ background: "#fff", padding: "18px", borderRadius: "10px", border: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <div style={{ fontSize: "12px", color: "#64748b", fontWeight: 600, textTransform: "uppercase" }}>Active Templates</div>
+            <div style={{ fontSize: "28px", fontWeight: 800, margin: "4px 0 0", color: "#0f172a" }}>{templates.length}</div>
+          </div>
+          <span style={{ fontSize: "28px" }}>🎨</span>
+        </div>
+
+        <div style={{ background: "#fff", padding: "18px", borderRadius: "10px", border: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <div style={{ fontSize: "12px", color: "#64748b", fontWeight: 600, textTransform: "uppercase" }}>Linked Products</div>
+            <div style={{ fontSize: "28px", fontWeight: 800, margin: "4px 0 0", color: "#0f172a" }}>{totalProducts}</div>
+          </div>
+          <span style={{ fontSize: "28px" }}>🛍️</span>
+        </div>
+
+        <div style={{ background: "#fff", padding: "18px", borderRadius: "10px", border: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <div style={{ fontSize: "12px", color: "#64748b", fontWeight: 600, textTransform: "uppercase" }}>Print Resolution</div>
+            <div style={{ fontSize: "28px", fontWeight: 800, margin: "4px 0 0", color: "#0f172a" }}>300 DPI</div>
+          </div>
+          <span style={{ fontSize: "28px" }}>🖨️</span>
+        </div>
+      </div>
 
       {templates.length === 0 ? (
-        <s-section>
-          <div style={{ textAlign: "center", padding: "60px 20px" }}>
-            <div style={{ fontSize: "48px", marginBottom: "16px" }}>🎨</div>
-            <h3 style={{ fontSize: "18px", fontWeight: 600, margin: "0 0 8px" }}>
-              No templates created yet
-            </h3>
-            <p style={{ color: "#6d7175", maxWidth: "460px", margin: "0 auto 24px", fontSize: "14px" }}>
-              Create your first canvas template to let customers personalize products with custom text, images, cliparts, and live 300 DPI print files.
-            </p>
-            <s-button variant="primary" onClick={handleCreateNew}>
-              Create Your First Template
-            </s-button>
-          </div>
-        </s-section>
+        <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: "12px", textAlign: "center", padding: "64px 20px" }}>
+          <div style={{ fontSize: "52px", marginBottom: "14px" }}>🎨</div>
+          <h3 style={{ fontSize: "18px", fontWeight: 700, margin: "0 0 8px", color: "#0f172a" }}>
+            No Templates Created Yet
+          </h3>
+          <p style={{ color: "#64748b", maxWidth: "480px", margin: "0 auto 24px", fontSize: "13px", lineHeight: 1.5 }}>
+            Create your first canvas template to assign products, configure text &amp; photo print areas, and generate 300 DPI print-ready production files automatically upon checkout.
+          </p>
+          <s-button variant="primary" onClick={handleCreateNew}>
+            + Create Your First Template
+          </s-button>
+        </div>
       ) : (
-        <s-section heading="All Templates">
-          <div style={{ overflowX: "auto", background: "#fff", borderRadius: "8px", border: "1px solid #e1e3e5" }}>
+        <div style={{ background: "#fff", borderRadius: "12px", border: "1px solid #e2e8f0", overflow: "hidden", boxShadow: "0 2px 6px rgba(0,0,0,0.02)" }}>
+          <div style={{ padding: "16px 20px", borderBottom: "1px solid #f1f5f9", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <h3 style={{ margin: 0, fontSize: "15px", fontWeight: 700, color: "#0f172a" }}>All Templates ({templates.length})</h3>
+            <button
+              type="button"
+              onClick={handleCreateNew}
+              style={{
+                background: "#008060",
+                color: "#fff",
+                border: "none",
+                borderRadius: "6px",
+                padding: "6px 12px",
+                fontSize: "12px",
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              + New Template
+            </button>
+          </div>
+
+          <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
               <thead>
-                <tr style={{ borderBottom: "1px solid #e1e3e5", background: "#fafbfb" }}>
-                  <th style={{ padding: "12px 16px", fontSize: "13px", fontWeight: 600, color: "#6d7175" }}>Template Name</th>
-                  <th style={{ padding: "12px 16px", fontSize: "13px", fontWeight: 600, color: "#6d7175" }}>Print Dimensions</th>
-                  <th style={{ padding: "12px 16px", fontSize: "13px", fontWeight: 600, color: "#6d7175" }}>Layers</th>
-                  <th style={{ padding: "12px 16px", fontSize: "13px", fontWeight: 600, color: "#6d7175" }}>Products Linked</th>
-                  <th style={{ padding: "12px 16px", fontSize: "13px", fontWeight: 600, color: "#6d7175" }}>Last Updated</th>
-                  <th style={{ padding: "12px 16px", fontSize: "13px", fontWeight: 600, color: "#6d7175", textAlign: "right" }}>Actions</th>
+                <tr style={{ borderBottom: "1px solid #e2e8f0", background: "#f8fafc" }}>
+                  <th style={{ padding: "12px 18px", fontSize: "12px", fontWeight: 600, color: "#64748b" }}>Template Name</th>
+                  <th style={{ padding: "12px 18px", fontSize: "12px", fontWeight: 600, color: "#64748b" }}>Canvas Dimensions</th>
+                  <th style={{ padding: "12px 18px", fontSize: "12px", fontWeight: 600, color: "#64748b" }}>Layers</th>
+                  <th style={{ padding: "12px 18px", fontSize: "12px", fontWeight: 600, color: "#64748b" }}>Products Linked</th>
+                  <th style={{ padding: "12px 18px", fontSize: "12px", fontWeight: 600, color: "#64748b" }}>Last Updated</th>
+                  <th style={{ padding: "12px 18px", fontSize: "12px", fontWeight: 600, color: "#64748b", textAlign: "right" }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -162,18 +193,23 @@ export default function TemplatesIndex() {
                   let layerCount = 0;
                   try {
                     const parsed = JSON.parse(tpl.layersJson || "[]");
-                    layerCount = Array.isArray(parsed) ? parsed.length : (parsed.objects?.length || 0);
+                    if (parsed.sides) {
+                      layerCount = (parsed.sides.front?.objects?.length || 0) + (parsed.sides.back?.objects?.length || 0);
+                    } else {
+                      layerCount = Array.isArray(parsed) ? parsed.length : (parsed.objects?.length || 0);
+                    }
                   } catch {
                     layerCount = 0;
                   }
 
                   return (
-                    <tr key={tpl.id} style={{ borderBottom: "1px solid #f1f2f3" }}>
-                      <td style={{ padding: "16px", fontWeight: 600 }}>
+                    <tr key={tpl.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                      <td style={{ padding: "14px 18px", fontWeight: 700 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <span>🎨</span>
                           <Link
                             to={`/app/templates/${tpl.id}`}
-                            style={{ color: "#005bd3", textDecoration: "none", fontSize: "14px" }}
+                            style={{ color: "#008060", textDecoration: "none", fontSize: "14px" }}
                           >
                             {tpl.title}
                           </Link>
@@ -185,75 +221,62 @@ export default function TemplatesIndex() {
                               background: "none",
                               border: "none",
                               cursor: "pointer",
-                              padding: "2px 6px",
+                              padding: "2px 4px",
                               fontSize: "12px",
-                              color: "#6d7175",
-                              borderRadius: "4px",
+                              color: "#94a3b8",
                             }}
                           >
                             ✏️
                           </button>
                         </div>
                       </td>
-                      <td style={{ padding: "16px", color: "#6d7175", fontSize: "13px" }}>
-                        {tpl.canvasWidth} × {tpl.canvasHeight} px ({tpl.printDpi} DPI)
+                      <td style={{ padding: "14px 18px", color: "#64748b", fontSize: "12px" }}>
+                        <span style={{ background: "#f1f5f9", padding: "4px 8px", borderRadius: "4px", fontWeight: 600 }}>
+                          {tpl.canvasWidth} × {tpl.canvasHeight} px ({tpl.printDpi} DPI)
+                        </span>
                       </td>
-                      <td style={{ padding: "16px", fontSize: "13px" }}>
-                        <span style={{ background: "#f0f2f5", padding: "4px 8px", borderRadius: "12px", fontSize: "12px" }}>
+                      <td style={{ padding: "14px 18px", fontSize: "12px" }}>
+                        <span style={{ background: "#f8fafc", border: "1px solid #e2e8f0", padding: "3px 8px", borderRadius: "12px", fontSize: "11px", fontWeight: 600 }}>
                           {layerCount} layers
                         </span>
                       </td>
-                      <td style={{ padding: "16px", fontSize: "13px" }}>
-                        <span style={{ color: ttplHasProducts(tpl) ? "#108043" : "#6d7175" }}>
+                      <td style={{ padding: "14px 18px", fontSize: "12px" }}>
+                        <span style={{ color: (tpl.products?.length || 0) > 0 ? "#059669" : "#94a3b8", fontWeight: 600 }}>
+                          {(tpl.products?.length || 0) > 0 ? "✓ " : "○ "}
                           {tpl.products?.length || 0} products
                         </span>
                       </td>
-                      <td style={{ padding: "16px", color: "#6d7175", fontSize: "13px" }}>
+                      <td style={{ padding: "14px 18px", color: "#64748b", fontSize: "12px" }}>
                         {new Date(tpl.updatedAt).toLocaleDateString()}
                       </td>
-                      <td style={{ padding: "16px", textAlign: "right" }}>
-                        <div style={{ display: "inline-flex", gap: "8px", alignItems: "center" }}>
-                          <button
-                            type="button"
-                            onClick={() => handleRename(tpl.id, tpl.title)}
-                            style={{
-                              padding: "6px 10px",
-                              borderRadius: "6px",
-                              border: "1px solid #c9cccf",
-                              background: "#fff",
-                              color: "#202223",
-                              fontSize: "13px",
-                              cursor: "pointer",
-                            }}
-                          >
-                            Rename
-                          </button>
+                      <td style={{ padding: "14px 18px", textAlign: "right" }}>
+                        <div style={{ display: "inline-flex", gap: "6px", alignItems: "center" }}>
                           <Link
                             to={`/app/templates/${tpl.id}`}
                             style={{
                               padding: "6px 12px",
                               borderRadius: "6px",
-                              border: "1px solid #c9cccf",
-                              background: "#fff",
-                              color: "#202223",
-                              fontSize: "13px",
+                              background: "#008060",
+                              color: "#fff",
                               textDecoration: "none",
-                              fontWeight: 500,
+                              fontSize: "12px",
+                              fontWeight: 700,
                             }}
                           >
-                            Edit Studio
+                            Open Studio &rarr;
                           </Link>
                           <button
                             type="button"
                             onClick={() => handleDuplicate(tpl.id)}
+                            title="Duplicate template"
                             style={{
                               padding: "6px 10px",
                               borderRadius: "6px",
-                              border: "1px solid #c9cccf",
+                              border: "1px solid #cbd5e1",
                               background: "#fff",
-                              color: "#202223",
-                              fontSize: "13px",
                               cursor: "pointer",
+                              fontSize: "12px",
+                              color: "#475569",
                             }}
                           >
                             Duplicate
@@ -261,14 +284,15 @@ export default function TemplatesIndex() {
                           <button
                             type="button"
                             onClick={() => handleDelete(tpl.id)}
+                            title="Delete template"
                             style={{
                               padding: "6px 10px",
                               borderRadius: "6px",
-                              border: "1px solid #fed3d1",
-                              background: "#fff0f0",
-                              color: "#d72c0d",
-                              fontSize: "13px",
+                              border: "1px solid #fecaca",
+                              background: "#fff5f5",
                               cursor: "pointer",
+                              fontSize: "12px",
+                              color: "#dc2626",
                             }}
                           >
                             Delete
@@ -281,12 +305,8 @@ export default function TemplatesIndex() {
               </tbody>
             </table>
           </div>
-        </s-section>
+        </div>
       )}
     </s-page>
   );
-}
-
-function ttplHasProducts(tpl: any) {
-  return (tpl.products?.length || 0) > 0;
 }

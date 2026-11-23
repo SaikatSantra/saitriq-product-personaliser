@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
-import { useLoaderData, useFetcher, useNavigate } from "react-router";
+import { useLoaderData, useFetcher, useNavigate, Link } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import {
@@ -18,11 +18,11 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     throw new Response("Template not found", { status: 404 });
   }
 
-  // Fetch shop products for the assignment dropdown/modal
+  // Fetch shop products with images and variants for assignment & mockup sync
   const response = await admin.graphql(
     `#graphql
       query getProducts {
-        products(first: 25) {
+        products(first: 50) {
           edges {
             node {
               id
@@ -30,7 +30,14 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
               featuredImage {
                 url
               }
-              variants(first: 5) {
+              images(first: 5) {
+                edges {
+                  node {
+                    url
+                  }
+                }
+              }
+              variants(first: 10) {
                 edges {
                   node {
                     id
@@ -45,7 +52,11 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
       }`,
   );
   const productsJson = await response.json();
-  const shopProducts = productsJson.data?.products?.edges?.map((e: any) => e.node) || [];
+  const shopProducts = productsJson.data?.products?.edges?.map((e: any) => ({
+    ...e.node,
+    images: e.node.images?.edges?.map((imgEdge: any) => imgEdge.node) || [],
+    variants: e.node.variants?.edges?.map((vEdge: any) => vEdge.node) || [],
+  })) || [];
 
   return { template, shopProducts };
 };
@@ -90,7 +101,7 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
 
     await assignProductsToTemplate(templateId, session.shop, assignedProductIds);
 
-    return { success: true, message: "Template saved successfully" };
+    return { success: true, message: "Template saved successfully!" };
   }
 
   if (intent === "create_sample_products") {
@@ -150,14 +161,13 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
 export default function TemplateStudio() {
   const { template, shopProducts } = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
-  const navigate = useNavigate();
   const shopify = useAppBridge();
 
   // Template state
   const [title, setTitle] = useState(template.title);
-  const [canvasWidth, setCanvasWidth] = useState(template.canvasWidth);
-  const [canvasHeight, setCanvasHeight] = useState(template.canvasHeight);
-  const [printDpi, setPrintDpi] = useState(template.printDpi);
+  const [canvasWidth, setCanvasWidth] = useState(template.canvasWidth || 1200);
+  const [canvasHeight, setCanvasHeight] = useState(template.canvasHeight || 1200);
+  const [printDpi, setPrintDpi] = useState(template.printDpi || 300);
   const [assignedProductIds, setAssignedProductIds] = useState<string[]>(
     template.products.map((p: any) => p.shopifyProductId),
   );
@@ -174,7 +184,11 @@ export default function TemplateStudio() {
   const [activeLayer, setActiveLayer] = useState<any>(null);
   const [layersList, setLayersList] = useState<any[]>([]);
   const [showProductModal, setShowProductModal] = useState(false);
-  const [zoomLevel, setZoomLevel] = useState(0.4);
+  const [productSearch, setProductSearch] = useState("");
+  const [zoomLevel, setZoomLevel] = useState(0.45);
+
+  // Matched assigned products
+  const assignedProductsList = shopProducts.filter((p: any) => assignedProductIds.includes(p.id));
 
   // Initialize Fabric Canvas on Client
   useEffect(() => {
@@ -184,7 +198,7 @@ export default function TemplateStudio() {
       if (typeof window === "undefined" || !canvasRef.current) return;
 
       const fabricModule = await import("fabric");
-      const { Canvas, IText, Rect, Image: FabricImage } = fabricModule;
+      const { Canvas } = fabricModule;
 
       if (!isMounted) return;
 
@@ -320,7 +334,6 @@ export default function TemplateStudio() {
       fontSize: 48,
       fill: "#111111",
       name: `Text Layer ${layersList.length + 1}`,
-      // Custom personalizer metadata
       customType: "text",
       isCustomerEditable: true,
       maxCharacters: 25,
@@ -342,15 +355,14 @@ export default function TemplateStudio() {
       top: 150,
       width: 400,
       height: 400,
-      fill: "rgba(0, 128, 255, 0.15)",
-      stroke: "#0080ff",
+      fill: "rgba(0, 128, 96, 0.12)",
+      stroke: "#008060",
       strokeDashArray: [10, 10],
       strokeWidth: 4,
       name: `Photo Upload ${layersList.length + 1}`,
-      // Custom personalizer metadata
       customType: "image_upload",
       isCustomerEditable: true,
-      optionLabel: "Upload Your Photo",
+      optionLabel: "Upload Photo or Logo",
       enableAiBackgroundRemoval: true,
     });
 
@@ -372,6 +384,10 @@ export default function TemplateStudio() {
       const imgElement = new Image();
       imgElement.src = dataUrl;
       imgElement.onload = () => {
+        // Remove old mockup underlay if present
+        const existing = fabricCanvasRef.current.getObjects().filter((o: any) => o.name === "Mockup Underlay" || o.customType === "background_mockup");
+        existing.forEach((o: any) => fabricCanvasRef.current.remove(o));
+
         const fabricImg = new FabricImage(imgElement, {
           left: 0,
           top: 0,
@@ -383,7 +399,6 @@ export default function TemplateStudio() {
           customType: "background_mockup",
         });
 
-        // Send to bottom
         fabricCanvasRef.current.add(fabricImg);
         fabricCanvasRef.current.sendObjectToBack(fabricImg);
         fabricCanvasRef.current.renderAll();
@@ -391,6 +406,55 @@ export default function TemplateStudio() {
       };
     };
     reader.readAsDataURL(file);
+  };
+
+  // Sync Mockup image automatically from assigned product
+  const syncMockupFromProduct = async () => {
+    if (!assignedProductIds || assignedProductIds.length === 0) {
+      alert("Please assign a product to this template first.");
+      return;
+    }
+    const matched = shopProducts.find((p: any) => assignedProductIds.includes(p.id));
+    if (!matched) {
+      alert("Could not find product data to sync.");
+      return;
+    }
+
+    // Front uses featured image; Back uses second image if present
+    const targetUrl = (activeSide === "back" && matched.images && matched.images.length > 1)
+      ? matched.images[1].url
+      : matched.featuredImage?.url;
+
+    if (!targetUrl) {
+      alert(`No image found on ${matched.title} for the ${activeSide} side.`);
+      return;
+    }
+
+    if (!fabricCanvasRef.current) return;
+    const { FabricImage } = await import("fabric");
+    const imgElement = new Image();
+    imgElement.crossOrigin = "anonymous";
+    imgElement.src = targetUrl;
+    imgElement.onload = () => {
+      const existing = fabricCanvasRef.current.getObjects().filter((o: any) => o.name === "Mockup Underlay" || o.customType === "background_mockup");
+      existing.forEach((o: any) => fabricCanvasRef.current.remove(o));
+
+      const fabricImg = new FabricImage(imgElement, {
+        left: 0,
+        top: 0,
+        scaleX: (canvasWidth / imgElement.width),
+        scaleY: (canvasHeight / imgElement.height),
+        selectable: false,
+        evented: false,
+        name: "Mockup Underlay",
+        customType: "background_mockup",
+      });
+
+      fabricCanvasRef.current.add(fabricImg);
+      fabricCanvasRef.current.sendObjectToBack(fabricImg);
+      fabricCanvasRef.current.renderAll();
+      updateLayersState(fabricCanvasRef.current);
+    };
   };
 
   const removeSelectedLayer = () => {
@@ -514,28 +578,38 @@ export default function TemplateStudio() {
     setShowProductModal(true);
   };
 
+  const toggleProductAssignment = (id: string) => {
+    setAssignedProductIds((prev) =>
+      prev.includes(id) ? prev.filter((pId) => pId !== id) : [...prev, id],
+    );
+  };
+
   const isSaving = fetcher.state === "submitting";
 
   return (
-    <s-page
-      heading={title}
-      back-action="/app/templates"
-    >
-      <s-button
-        slot="primary-action"
-        variant="primary"
-        onClick={handleSave}
-        disabled={isSaving}
-      >
-        {isSaving ? "Saving..." : "Save Template"}
-      </s-button>
-
-      <s-button
-        slot="secondary-actions"
-        onClick={handleOpenNativePicker}
-      >
-        Assign Products ({assignedProductIds.length})
-      </s-button>
+    <s-page heading="Template Studio">
+      {/* Primary Action in Page Header */}
+      <div slot="primary-action" style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+        <Link
+          to="/app/templates"
+          style={{
+            color: "#6d7175",
+            fontSize: "13px",
+            fontWeight: 600,
+            textDecoration: "none",
+            padding: "8px 12px",
+          }}
+        >
+          &larr; Back to Templates
+        </Link>
+        <s-button
+          variant="primary"
+          onClick={handleSave}
+          disabled={isSaving}
+        >
+          {isSaving ? "Saving..." : "Save Template"}
+        </s-button>
+      </div>
 
       {fetcher.data?.message && (
         <div style={{ marginBottom: "16px" }}>
@@ -545,299 +619,301 @@ export default function TemplateStudio() {
         </div>
       )}
 
-      {/* Top Template Bar: Name & Canvas Specs */}
+      {/* Top Header Bar: Editable Template Title & Linked Products Status */}
       <div
         style={{
           background: "#ffffff",
-          borderRadius: "8px",
+          borderRadius: "12px",
           border: "1px solid #e1e3e5",
-          padding: "12px 18px",
-          marginBottom: "16px",
+          padding: "16px 20px",
+          marginBottom: "20px",
           display: "flex",
-          alignItems: "center",
           justifyContent: "space-between",
-          gap: "16px",
+          alignItems: "center",
           flexWrap: "wrap",
+          gap: "16px",
+          boxShadow: "0 2px 6px rgba(0,0,0,0.02)",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: "10px", flex: 1, minWidth: "300px" }}>
-          <label style={{ fontSize: "13px", fontWeight: 700, color: "#202223", display: "flex", alignItems: "center", gap: "6px", whiteSpace: "nowrap" }}>
-            <span>✏️ Template Name:</span>
-          </label>
-          <input
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="e.g. Custom Cap Front Studio, T-Shirt Print Template..."
-            style={{
-              flex: 1,
-              maxWidth: "460px",
-              padding: "8px 12px",
-              fontSize: "14px",
-              fontWeight: 600,
-              border: "1px solid #8c9196",
-              borderRadius: "6px",
-              outline: "none",
-              color: "#202223",
-              background: "#fafbfb",
-            }}
-          />
+        <div style={{ display: "flex", alignItems: "center", gap: "12px", flex: 1, minWidth: "320px" }}>
+          <div style={{ width: "38px", height: "38px", borderRadius: "8px", background: "#f0fdf4", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "18px" }}>
+            🎨
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: "11px", fontWeight: 700, color: "#6d7175", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+              Template Title
+            </div>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="e.g. Custom Cap Front Studio, T-Shirt Print Template..."
+              style={{
+                width: "100%",
+                maxWidth: "520px",
+                border: "none",
+                borderBottom: "2px solid #008060",
+                fontSize: "16px",
+                fontWeight: 700,
+                color: "#1a1a1a",
+                padding: "4px 0",
+                outline: "none",
+                background: "transparent",
+              }}
+            />
+          </div>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: "16px", fontSize: "13px", color: "#6d7175" }}>
-          <div>
-            <span>Print Size: </span>
-            <strong style={{ color: "#202223" }}>{canvasWidth} × {canvasHeight} px</strong>
-          </div>
-          <div>
-            <span>Quality: </span>
-            <strong style={{ color: "#202223" }}>{printDpi} DPI</strong>
-          </div>
-          <div>
-            <span>Products: </span>
-            <strong style={{ color: assignedProductIds.length > 0 ? "#108043" : "#6d7175" }}>
-              {assignedProductIds.length} linked
-            </strong>
-          </div>
+        {/* Status badges */}
+        <div style={{ display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
+          <span
+            style={{
+              background: assignedProductIds.length > 0 ? "#ecfdf5" : "#fef3c7",
+              color: assignedProductIds.length > 0 ? "#059669" : "#d97706",
+              padding: "5px 12px",
+              borderRadius: "20px",
+              fontSize: "12px",
+              fontWeight: 700,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+            }}
+          >
+            <span>{assignedProductIds.length > 0 ? "✓" : "!"}</span>
+            <span>{assignedProductIds.length} Products Assigned</span>
+          </span>
+
+          <span style={{ fontSize: "12px", color: "#6d7175", background: "#f1f5f9", padding: "5px 10px", borderRadius: "6px", fontWeight: 600 }}>
+            {canvasWidth} × {canvasHeight} px @ {printDpi} DPI
+          </span>
+
+          <button
+            type="button"
+            onClick={handleOpenNativePicker}
+            style={{
+              background: "#008060",
+              color: "#ffffff",
+              border: "none",
+              borderRadius: "6px",
+              padding: "7px 14px",
+              fontSize: "12px",
+              fontWeight: 700,
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+            }}
+          >
+            <span>🛍️</span> Assign Products
+          </button>
         </div>
       </div>
 
-      {/* Main Studio Layout */}
-      <div style={{ display: "grid", gridTemplateColumns: "240px 1fr 300px", gap: "16px", minHeight: "750px" }}>
+      {/* =========================================================================
+          2-COLUMN PROFESSIONAL STUDIO LAYOUT
+      ========================================================================= */}
+      <div style={{ display: "grid", gridTemplateColumns: "360px 1fr", gap: "20px", alignItems: "start" }}>
         
-        {/* Left Toolbar */}
-        <div style={{ background: "#fff", borderRadius: "8px", border: "1px solid #e1e3e5", padding: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
-          <h4 style={{ margin: "0 0 4px", fontSize: "14px", fontWeight: 600 }}>Add Layers</h4>
+        {/* =====================================================================
+            LEFT COLUMN: SETUP, PRODUCTS & LAYERS CONFIGURATION
+        ===================================================================== */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           
-          <button
-            type="button"
-            onClick={addTextLayer}
-            style={{
-              padding: "10px 14px",
-              borderRadius: "6px",
-              border: "1px solid #c9cccf",
-              background: "#fafbfb",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              fontSize: "13px",
-              fontWeight: 500,
-            }}
-          >
-            <span>🔤</span> Add Custom Text
-          </button>
+          {/* 1. Assigned Product Card */}
+          <div style={{ background: "#ffffff", border: "1px solid #e1e3e5", borderRadius: "10px", padding: "18px", boxShadow: "0 2px 6px rgba(0,0,0,0.02)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+              <div style={{ fontSize: "13px", fontWeight: 700, color: "#202223" }}>
+                🛍️ Assigned Products ({assignedProductIds.length})
+              </div>
+              <button
+                type="button"
+                onClick={handleOpenNativePicker}
+                style={{ background: "none", border: "none", color: "#008060", fontSize: "12px", fontWeight: 600, cursor: "pointer", padding: 0 }}
+              >
+                Change
+              </button>
+            </div>
 
-          <button
-            type="button"
-            onClick={addPhotoUploadArea}
-            style={{
-              padding: "10px 14px",
-              borderRadius: "6px",
-              border: "1px solid #c9cccf",
-              background: "#fafbfb",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              fontSize: "13px",
-              fontWeight: 500,
-            }}
-          >
-            <span>🖼️</span> Add Photo Upload Area
-          </button>
+            {assignedProductsList.length === 0 ? (
+              <div style={{ background: "#f9fafb", border: "1px dashed #c9cccf", borderRadius: "8px", padding: "20px", textAlign: "center" }}>
+                <p style={{ margin: "0 0 10px", fontSize: "12px", color: "#6d7175" }}>
+                  No product assigned yet. Connect a product so the customizer button appears on its page.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleOpenNativePicker}
+                  style={{
+                    background: "#008060",
+                    color: "#fff",
+                    border: "none",
+                    borderRadius: "6px",
+                    padding: "6px 12px",
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  + Assign Product
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                {assignedProductsList.map((p: any) => (
+                  <div
+                    key={p.id}
+                    style={{
+                      display: "flex",
+                      gap: "12px",
+                      alignItems: "center",
+                      background: "#f8fafc",
+                      border: "1px solid #e2e8f0",
+                      borderRadius: "8px",
+                      padding: "10px 12px",
+                    }}
+                  >
+                    <img
+                      src={p.featuredImage?.url || "https://cdn.shopify.com/s/files/1/0533/2089/files/placeholder-images-image_large.png"}
+                      alt={p.title}
+                      style={{ width: "42px", height: "42px", borderRadius: "6px", objectFit: "cover", border: "1px solid #e2e8f0" }}
+                    />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, fontSize: "13px", color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {p.title}
+                      </div>
+                      <div style={{ fontSize: "11px", color: "#64748b" }}>
+                        {p.variants?.length || 1} variants detected
+                      </div>
+                    </div>
+                  </div>
+                ))}
 
-          <label
-            style={{
-              padding: "10px 14px",
-              borderRadius: "6px",
-              border: "1px dashed #0080ff",
-              background: "#f0f8ff",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              fontSize: "13px",
-              fontWeight: 500,
-              color: "#0066cc",
-            }}
-          >
-            <span>{activeSide === "front" ? "👕" : "🔄"}</span> Upload {activeSide === "front" ? "Front" : "Back"} Underlay
-            <input
-              type="file"
-              accept="image/*"
-              onChange={addMockupBackground}
-              style={{ display: "none" }}
-            />
-          </label>
-
-          <hr style={{ border: "none", borderTop: "1px solid #e1e3e5", margin: "8px 0" }} />
-
-          <h4 style={{ margin: "0 0 4px", fontSize: "14px", fontWeight: 600 }}>Canvas Zoom</h4>
-          <div style={{ display: "flex", gap: "8px" }}>
-            <button
-              type="button"
-              onClick={() => setZoomLevel((z) => Math.max(0.2, z - 0.1))}
-              style={{ flex: 1, padding: "6px", border: "1px solid #c9cccf", borderRadius: "4px", background: "#fff" }}
-            >
-              Zoom Out
-            </button>
-            <button
-              type="button"
-              onClick={() => setZoomLevel((z) => Math.min(1.0, z + 0.1))}
-              style={{ flex: 1, padding: "6px", border: "1px solid #c9cccf", borderRadius: "4px", background: "#fff" }}
-            >
-              Zoom In
-            </button>
+                {/* 1-Click Sync Mockup Underlay Button */}
+                <button
+                  type="button"
+                  onClick={syncMockupFromProduct}
+                  title="Loads product photo directly onto canvas as the base mockup underlay"
+                  style={{
+                    marginTop: "6px",
+                    background: "#f0fdf4",
+                    border: "1px solid #bbf7d0",
+                    color: "#15803d",
+                    borderRadius: "6px",
+                    padding: "8px 12px",
+                    fontSize: "12px",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "6px",
+                  }}
+                >
+                  <span>🖼️</span> Sync Product Photo to Canvas Underlay
+                </button>
+              </div>
+            )}
           </div>
-          <span style={{ fontSize: "12px", color: "#6d7175", textAlign: "center" }}>
-            Current Zoom: {Math.round(zoomLevel * 100)}%
-          </span>
 
-          <hr style={{ border: "none", borderTop: "1px solid #e1e3e5", margin: "8px 0" }} />
+          {/* 2. Studio Layer Controls */}
+          <div style={{ background: "#ffffff", border: "1px solid #e1e3e5", borderRadius: "10px", padding: "18px", boxShadow: "0 2px 6px rgba(0,0,0,0.02)" }}>
+            <div style={{ fontSize: "13px", fontWeight: 700, color: "#202223", marginBottom: "12px" }}>
+              ⚡ Add Personalization Tools
+            </div>
 
-          <h4 style={{ margin: "0 0 4px", fontSize: "14px", fontWeight: 600 }}>Print Bounds</h4>
-          <label style={{ fontSize: "12px", color: "#6d7175" }}>
-            Width (px):
-            <input
-              type="number"
-              value={canvasWidth}
-              onChange={(e) => setCanvasWidth(parseInt(e.target.value) || 1000)}
-              style={{ width: "100%", padding: "6px", border: "1px solid #c9cccf", borderRadius: "4px", marginTop: "4px" }}
-            />
-          </label>
-          <label style={{ fontSize: "12px", color: "#6d7175" }}>
-            Height (px):
-            <input
-              type="number"
-              value={canvasHeight}
-              onChange={(e) => setCanvasHeight(parseInt(e.target.value) || 1000)}
-              style={{ width: "100%", padding: "6px", border: "1px solid #c9cccf", borderRadius: "4px", marginTop: "4px" }}
-            />
-          </label>
-          <label style={{ fontSize: "12px", color: "#6d7175" }}>
-            Print DPI:
-            <input
-              type="number"
-              value={printDpi}
-              onChange={(e) => setPrintDpi(parseInt(e.target.value) || 300)}
-              style={{ width: "100%", padding: "6px", border: "1px solid #c9cccf", borderRadius: "4px", marginTop: "4px" }}
-            />
-          </label>
-        </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "12px" }}>
+              <button
+                type="button"
+                onClick={addTextLayer}
+                style={{
+                  background: "#f8fafc",
+                  border: "1px solid #cbd5e1",
+                  borderRadius: "8px",
+                  padding: "12px 10px",
+                  cursor: "pointer",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: "6px",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  color: "#0f172a",
+                }}
+              >
+                <span style={{ fontSize: "20px" }}>🔤</span>
+                <span>+ Custom Text</span>
+              </button>
 
-        {/* Center Canvas Workspace */}
-        <div
-          ref={canvasContainerRef}
-          style={{
-            background: "#ebeef0",
-            borderRadius: "8px",
-            border: "1px solid #c9cccf",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "flex-start",
-            overflow: "auto",
-            padding: "20px 30px",
-            boxShadow: "inset 0 0 10px rgba(0,0,0,0.05)",
-          }}
-        >
-          {/* Side Switcher Control */}
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "center",
-              marginBottom: "16px",
-              background: "#d8dcde",
-              padding: "4px",
-              borderRadius: "10px",
-              gap: "4px",
-              boxShadow: "inset 0 1px 3px rgba(0,0,0,0.08)",
-            }}
-          >
-            <button
-              type="button"
-              onClick={() => handleSwitchSide("front")}
+              <button
+                type="button"
+                onClick={addPhotoUploadArea}
+                style={{
+                  background: "#f8fafc",
+                  border: "1px solid #cbd5e1",
+                  borderRadius: "8px",
+                  padding: "12px 10px",
+                  cursor: "pointer",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: "6px",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  color: "#0f172a",
+                }}
+              >
+                <span style={{ fontSize: "20px" }}>📷</span>
+                <span>+ Upload Area</span>
+              </button>
+            </div>
+
+            {/* Custom Mockup File Upload */}
+            <label
               style={{
-                padding: "8px 24px",
-                borderRadius: "8px",
-                border: "none",
-                fontSize: "13px",
-                fontWeight: 700,
-                cursor: "pointer",
                 display: "flex",
                 alignItems: "center",
+                justifyContent: "center",
                 gap: "8px",
-                background: activeSide === "front" ? "#ffffff" : "transparent",
-                color: activeSide === "front" ? "#202223" : "#5c5f62",
-                boxShadow: activeSide === "front" ? "0 2px 6px rgba(0,0,0,0.12)" : "none",
-                transition: "all 0.15s ease",
-              }}
-            >
-              <span>👕</span> Front Side
-            </button>
-            <button
-              type="button"
-              onClick={() => handleSwitchSide("back")}
-              style={{
-                padding: "8px 24px",
-                borderRadius: "8px",
-                border: "none",
-                fontSize: "13px",
-                fontWeight: 700,
+                padding: "9px 12px",
+                borderRadius: "6px",
+                border: "1px dashed #008060",
+                background: "#f0fdf4",
+                color: "#15803d",
+                fontSize: "12px",
+                fontWeight: 600,
                 cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                background: activeSide === "back" ? "#ffffff" : "transparent",
-                color: activeSide === "back" ? "#202223" : "#5c5f62",
-                boxShadow: activeSide === "back" ? "0 2px 6px rgba(0,0,0,0.12)" : "none",
-                transition: "all 0.15s ease",
               }}
             >
-              <span>🔄</span> Back Side
-            </button>
+              <span>📁</span> Upload Custom Mockup ({activeSide === "front" ? "Front" : "Back"})
+              <input
+                type="file"
+                accept="image/*"
+                onChange={addMockupBackground}
+                style={{ display: "none" }}
+              />
+            </label>
           </div>
 
-          <div
-            style={{
-              boxShadow: "0 4px 20px rgba(0,0,0,0.15)",
-              border: "1px solid #bbb",
-              background: "#fff",
-              lineHeight: 0,
-            }}
-          >
-            <canvas ref={canvasRef} />
-          </div>
-        </div>
-
-        {/* Right Inspector & Layer Stack */}
-        <div style={{ background: "#fff", borderRadius: "8px", border: "1px solid #e1e3e5", padding: "16px", display: "flex", flexDirection: "column", gap: "16px" }}>
-          
-          {/* Active Layer Settings */}
-          {activeLayer ? (
-            <div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                <h4 style={{ margin: 0, fontSize: "14px", fontWeight: 600 }}>Layer Inspector</h4>
+          {/* 3. Layer Inspector & Properties */}
+          <div style={{ background: "#ffffff", border: "1px solid #e1e3e5", borderRadius: "10px", padding: "18px", boxShadow: "0 2px 6px rgba(0,0,0,0.02)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+              <div style={{ fontSize: "13px", fontWeight: 700, color: "#202223" }}>
+                {activeLayer ? "🔧 Selected Layer Inspector" : "📑 Canvas Layers Stack"}
+              </div>
+              {activeLayer && (
                 <button
                   type="button"
                   onClick={removeSelectedLayer}
-                  style={{
-                    color: "#d72c0d",
-                    background: "none",
-                    border: "none",
-                    cursor: "pointer",
-                    fontSize: "12px",
-                    fontWeight: 600,
-                  }}
+                  style={{ color: "#d82c0d", background: "none", border: "none", cursor: "pointer", fontSize: "12px", fontWeight: 700 }}
                 >
-                  Delete
+                  Delete Layer
                 </button>
-              </div>
+              )}
+            </div>
 
-              <div style={{ display: "flex", flexDirection: "column", gap: "10px", fontSize: "13px" }}>
-                <label>
-                  Layer Name:
+            {activeLayer ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: "10px", fontSize: "12px" }}>
+                <label style={{ fontWeight: 600, color: "#202223" }}>
+                  Layer Label:
                   <input
                     type="text"
                     value={activeLayer.name || ""}
@@ -846,13 +922,13 @@ export default function TemplateStudio() {
                       fabricCanvasRef.current?.renderAll();
                       updateLayersState(fabricCanvasRef.current);
                     }}
-                    style={{ width: "100%", padding: "6px", border: "1px solid #c9cccf", borderRadius: "4px", marginTop: "4px" }}
+                    style={{ width: "100%", padding: "7px 10px", border: "1px solid #c9cccf", borderRadius: "6px", marginTop: "3px" }}
                   />
                 </label>
 
                 {activeLayer.type === "i-text" && (
                   <>
-                    <label>
+                    <label style={{ fontWeight: 600, color: "#202223" }}>
                       Font Family:
                       <select
                         value={activeLayer.fontFamily || "Roboto"}
@@ -860,19 +936,19 @@ export default function TemplateStudio() {
                           activeLayer.set("fontFamily", e.target.value);
                           fabricCanvasRef.current?.renderAll();
                         }}
-                        style={{ width: "100%", padding: "6px", border: "1px solid #c9cccf", borderRadius: "4px", marginTop: "4px" }}
+                        style={{ width: "100%", padding: "7px 10px", border: "1px solid #c9cccf", borderRadius: "6px", marginTop: "3px" }}
                       >
-                        <option value="Roboto">Roboto (Sans-serif)</option>
-                        <option value="Montserrat">Montserrat</option>
-                        <option value="Playfair Display">Playfair Display (Serif)</option>
-                        <option value="Pacifico">Pacifico (Handwritten)</option>
-                        <option value="Oswald">Oswald (Bold Impact)</option>
-                        <option value="Courier New">Courier New (Monospace)</option>
+                        <option value="Roboto">Roboto (Clean Modern)</option>
+                        <option value="Montserrat">Montserrat (Geometric)</option>
+                        <option value="Playfair Display">Playfair Display (Luxury Serif)</option>
+                        <option value="Pacifico">Pacifico (Handwritten Script)</option>
+                        <option value="Oswald">Oswald (Bold Headline)</option>
+                        <option value="Courier New">Courier New (Vintage Monospace)</option>
                       </select>
                     </label>
 
-                    <label>
-                      Fill Color:
+                    <label style={{ fontWeight: 600, color: "#202223" }}>
+                      Text Ink Color:
                       <input
                         type="color"
                         value={activeLayer.fill || "#111111"}
@@ -880,189 +956,244 @@ export default function TemplateStudio() {
                           activeLayer.set("fill", e.target.value);
                           fabricCanvasRef.current?.renderAll();
                         }}
-                        style={{ width: "100%", height: "36px", border: "1px solid #c9cccf", borderRadius: "4px", marginTop: "4px", cursor: "pointer" }}
+                        style={{ width: "100%", height: "36px", border: "1px solid #c9cccf", borderRadius: "6px", marginTop: "3px", cursor: "pointer" }}
                       />
                     </label>
                   </>
                 )}
 
-                <label style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "8px", cursor: "pointer" }}>
-                  <input
-                    type="checkbox"
-                    checked={Boolean(activeLayer.isCustomerEditable)}
-                    onChange={(e) => {
-                      activeLayer.set("isCustomerEditable", e.target.checked);
-                      fabricCanvasRef.current?.renderAll();
-                      updateLayersState(fabricCanvasRef.current);
-                    }}
-                  />
-                  <span>Customer Editable on Storefront</span>
-                </label>
-
-                {activeLayer.isCustomerEditable && (
-                  <label>
-                    Storefront Input Label:
-                    <input
-                      type="text"
-                      value={activeLayer.optionLabel || ""}
-                      onChange={(e) => {
-                        activeLayer.set("optionLabel", e.target.value);
-                        fabricCanvasRef.current?.renderAll();
-                      }}
-                      style={{ width: "100%", padding: "6px", border: "1px solid #c9cccf", borderRadius: "4px", marginTop: "4px" }}
-                    />
-                  </label>
-                )}
-
-                <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
+                <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
                   <button
                     type="button"
                     onClick={bringLayerForward}
-                    style={{ flex: 1, padding: "6px", border: "1px solid #c9cccf", borderRadius: "4px", background: "#fff", fontSize: "12px" }}
+                    style={{ flex: 1, padding: "6px 10px", border: "1px solid #c9cccf", borderRadius: "4px", background: "#fff", fontSize: "11px", fontWeight: 600, cursor: "pointer" }}
                   >
                     Bring Forward
                   </button>
                   <button
                     type="button"
                     onClick={sendLayerBackward}
-                    style={{ flex: 1, padding: "6px", border: "1px solid #c9cccf", borderRadius: "4px", background: "#fff", fontSize: "12px" }}
+                    style={{ flex: 1, padding: "6px 10px", border: "1px solid #c9cccf", borderRadius: "4px", background: "#fff", fontSize: "11px", fontWeight: 600, cursor: "pointer" }}
                   >
                     Send Backward
                   </button>
                 </div>
               </div>
-            </div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-              <div style={{ paddingBottom: "10px", borderBottom: "1px solid #e1e3e5" }}>
-                <h4 style={{ margin: "0 0 4px", fontSize: "14px", fontWeight: 700, color: "#202223" }}>
-                  📋 Template Settings
-                </h4>
-                <p style={{ margin: 0, fontSize: "12px", color: "#6d7175" }}>
-                  Configure template name and print dimensions.
-                </p>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                {layersList.length === 0 ? (
+                  <p style={{ margin: 0, fontSize: "12px", color: "#6d7175", textAlign: "center", padding: "10px" }}>
+                    No layers added on {activeSide} side yet.
+                  </p>
+                ) : (
+                  layersList.map((layer, idx) => (
+                    <div
+                      key={idx}
+                      onClick={() => {
+                        fabricCanvasRef.current?.setActiveObject(layer);
+                        fabricCanvasRef.current?.renderAll();
+                        setActiveLayer(layer);
+                      }}
+                      style={{
+                        padding: "8px 10px",
+                        borderRadius: "6px",
+                        border: "1px solid #e2e8f0",
+                        background: "#fafbfb",
+                        fontSize: "12px",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                      }}
+                    >
+                      <span style={{ fontWeight: 600 }}>{layer.name || `Layer ${idx + 1}`}</span>
+                      <span style={{ fontSize: "11px", color: "#64748b" }}>{layer.type}</span>
+                    </div>
+                  ))
+                )}
               </div>
+            )}
+          </div>
 
-              <label style={{ fontSize: "13px", fontWeight: 600, color: "#202223" }}>
-                Template Name:
+          {/* 4. Canvas & Print Specs */}
+          <div style={{ background: "#ffffff", border: "1px solid #e1e3e5", borderRadius: "10px", padding: "16px", fontSize: "12px" }}>
+            <div style={{ fontSize: "13px", fontWeight: 700, color: "#202223", marginBottom: "8px" }}>
+              📐 Print Specifications
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "8px" }}>
+              <label style={{ color: "#6d7175" }}>
+                Width (px):
                 <input
-                  type="text"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="Enter template name..."
-                  style={{
-                    width: "100%",
-                    padding: "8px 10px",
-                    border: "1px solid #c9cccf",
-                    borderRadius: "6px",
-                    marginTop: "6px",
-                    fontSize: "13px",
-                    fontWeight: 500,
-                    boxSizing: "border-box",
-                  }}
+                  type="number"
+                  value={canvasWidth}
+                  onChange={(e) => setCanvasWidth(parseInt(e.target.value) || 1200)}
+                  style={{ width: "100%", padding: "6px 8px", border: "1px solid #c9cccf", borderRadius: "4px", marginTop: "2px" }}
                 />
               </label>
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-                <label style={{ fontSize: "12px", color: "#6d7175" }}>
-                  Width (px):
-                  <input
-                    type="number"
-                    value={canvasWidth}
-                    onChange={(e) => setCanvasWidth(parseInt(e.target.value) || 1200)}
-                    style={{
-                      width: "100%",
-                      padding: "6px 8px",
-                      border: "1px solid #c9cccf",
-                      borderRadius: "4px",
-                      marginTop: "4px",
-                      fontSize: "13px",
-                      boxSizing: "border-box",
-                    }}
-                  />
-                </label>
-                <label style={{ fontSize: "12px", color: "#6d7175" }}>
-                  Height (px):
-                  <input
-                    type="number"
-                    value={canvasHeight}
-                    onChange={(e) => setCanvasHeight(parseInt(e.target.value) || 1200)}
-                    style={{
-                      width: "100%",
-                      padding: "6px 8px",
-                      border: "1px solid #c9cccf",
-                      borderRadius: "4px",
-                      marginTop: "4px",
-                      fontSize: "13px",
-                      boxSizing: "border-box",
-                    }}
-                  />
-                </label>
-              </div>
-
-              <label style={{ fontSize: "12px", color: "#6d7175" }}>
-                Print Resolution:
-                <select
-                  value={printDpi}
-                  onChange={(e) => setPrintDpi(parseInt(e.target.value) || 300)}
-                  style={{
-                    width: "100%",
-                    padding: "6px 8px",
-                    border: "1px solid #c9cccf",
-                    borderRadius: "4px",
-                    marginTop: "4px",
-                    fontSize: "13px",
-                    boxSizing: "border-box",
-                  }}
-                >
-                  <option value={150}>150 DPI (Screen preview)</option>
-                  <option value={300}>300 DPI (Commercial print)</option>
-                  <option value={600}>600 DPI (Ultra fine print)</option>
-                </select>
+              <label style={{ color: "#6d7175" }}>
+                Height (px):
+                <input
+                  type="number"
+                  value={canvasHeight}
+                  onChange={(e) => setCanvasHeight(parseInt(e.target.value) || 1200)}
+                  style={{ width: "100%", padding: "6px 8px", border: "1px solid #c9cccf", borderRadius: "4px", marginTop: "2px" }}
+                />
               </label>
-
-              <div style={{ background: "#f8f9fa", padding: "10px", borderRadius: "6px", fontSize: "12px", color: "#6d7175", marginTop: "4px" }}>
-                💡 <em>Tip: Select any layer on the canvas to inspect its fonts, colors, and options.</em>
-              </div>
             </div>
-          )}
-
-          <hr style={{ border: "none", borderTop: "1px solid #e1e3e5", margin: 0 }} />
-
-          {/* Layer Hierarchy Stack */}
-          <div>
-            <h4 style={{ margin: "0 0 8px", fontSize: "14px", fontWeight: 600 }}>Layers Stack ({layersList.length})</h4>
-            <div style={{ display: "flex", flexDirection: "column", gap: "6px", maxHeight: "250px", overflowY: "auto" }}>
-              {layersList.map((layer, index) => (
-                <div
-                  key={index}
-                  onClick={() => {
-                    fabricCanvasRef.current?.setActiveObject(layer);
-                    fabricCanvasRef.current?.renderAll();
-                    setActiveLayer(layer);
-                  }}
-                  style={{
-                    padding: "8px 12px",
-                    borderRadius: "6px",
-                    border: activeLayer === layer ? "2px solid #0080ff" : "1px solid #e1e3e5",
-                    background: activeLayer === layer ? "#f0f8ff" : "#fafbfb",
-                    fontSize: "12px",
-                    cursor: "pointer",
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                  }}
-                >
-                  <span style={{ fontWeight: 500 }}>{layer.name || `Layer ${index + 1}`}</span>
-                  <span style={{ color: "#6d7175", fontSize: "11px" }}>{layer.type}</span>
-                </div>
-              ))}
+            <div style={{ color: "#059669", fontWeight: 600, fontSize: "11px" }}>
+              ✓ 300 DPI High-Resolution Output
             </div>
+          </div>
+        </div>
+
+        {/* =====================================================================
+            RIGHT COLUMN: INTERACTIVE VISUAL WORKSPACE & LIVE CANVAS
+        ===================================================================== */}
+        <div
+          style={{
+            background: "#1e293b",
+            borderRadius: "14px",
+            border: "1px solid #334155",
+            padding: "20px",
+            boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+          }}
+        >
+          {/* Studio Top Switcher Bar */}
+          <div
+            style={{
+              width: "100%",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "18px",
+              paddingBottom: "14px",
+              borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
+              flexWrap: "wrap",
+              gap: "12px",
+            }}
+          >
+            {/* Front / Back Switcher Tabs */}
+            <div
+              style={{
+                background: "rgba(15, 23, 42, 0.8)",
+                padding: "4px",
+                borderRadius: "10px",
+                display: "flex",
+                gap: "4px",
+                border: "1px solid rgba(255, 255, 255, 0.1)",
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => handleSwitchSide("front")}
+                style={{
+                  padding: "8px 20px",
+                  borderRadius: "8px",
+                  border: "none",
+                  fontSize: "13px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  background: activeSide === "front" ? "#008060" : "transparent",
+                  color: "#ffffff",
+                  boxShadow: activeSide === "front" ? "0 2px 8px rgba(0, 128, 96, 0.4)" : "none",
+                }}
+              >
+                <span>👕</span> Front Side
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleSwitchSide("back")}
+                style={{
+                  padding: "8px 20px",
+                  borderRadius: "8px",
+                  border: "none",
+                  fontSize: "13px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  background: activeSide === "back" ? "#008060" : "transparent",
+                  color: "#ffffff",
+                  boxShadow: activeSide === "back" ? "0 2px 8px rgba(0, 128, 96, 0.4)" : "none",
+                }}
+              >
+                <span>🔄</span> Back Side
+              </button>
+            </div>
+
+            {/* Zoom Controls */}
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <span style={{ fontSize: "12px", color: "#94a3b8", fontWeight: 600 }}>
+                Zoom: {Math.round(zoomLevel * 100)}%
+              </span>
+              <button
+                type="button"
+                onClick={() => setZoomLevel((z) => Math.max(0.2, z - 0.05))}
+                style={{ background: "rgba(255, 255, 255, 0.1)", color: "#fff", border: "none", borderRadius: "4px", padding: "4px 8px", fontSize: "12px", cursor: "pointer" }}
+              >
+                -
+              </button>
+              <button
+                type="button"
+                onClick={() => setZoomLevel(0.45)}
+                style={{ background: "rgba(255, 255, 255, 0.1)", color: "#fff", border: "none", borderRadius: "4px", padding: "4px 8px", fontSize: "11px", cursor: "pointer" }}
+              >
+                Reset
+              </button>
+              <button
+                type="button"
+                onClick={() => setZoomLevel((z) => Math.min(1.0, z + 0.05))}
+                style={{ background: "rgba(255, 255, 255, 0.1)", color: "#fff", border: "none", borderRadius: "4px", padding: "4px 8px", fontSize: "12px", cursor: "pointer" }}
+              >
+                +
+              </button>
+            </div>
+          </div>
+
+          {/* Canvas Wrapper */}
+          <div
+            ref={canvasContainerRef}
+            style={{
+              padding: "20px",
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              overflow: "auto",
+              maxWidth: "100%",
+            }}
+          >
+            <div
+              style={{
+                boxShadow: "0 12px 36px rgba(0,0,0,0.4)",
+                borderRadius: "8px",
+                overflow: "hidden",
+                border: "2px solid rgba(255, 255, 255, 0.2)",
+                lineHeight: 0,
+                background: "#ffffff",
+              }}
+            >
+              <canvas ref={canvasRef} />
+            </div>
+          </div>
+
+          {/* Footer Guide text */}
+          <div style={{ marginTop: "14px", fontSize: "12px", color: "#94a3b8", textAlign: "center" }}>
+            💡 <em>Click any text or photo layer on the canvas to drag, scale, or reposition print boundaries.</em>
           </div>
         </div>
       </div>
 
-      {/* Product Assignment Modal */}
+      {/* =========================================================================
+          STYLED PRODUCT PICKER MODAL (FALLBACK IF NATIVE PICKER CANNOT RUN)
+      ========================================================================= */}
       {showProductModal && (
         <div
           style={{
@@ -1071,100 +1202,105 @@ export default function TemplateStudio() {
             left: 0,
             right: 0,
             bottom: 0,
-            background: "rgba(0,0,0,0.5)",
+            background: "rgba(0,0,0,0.6)",
+            zIndex: 9999,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            zIndex: 9999,
+            padding: "20px",
           }}
         >
-          <div style={{ background: "#fff", borderRadius: "8px", width: "520px", maxHeight: "80vh", overflowY: "auto", padding: "24px" }}>
-            <h3 style={{ margin: "0 0 16px" }}>Assign Products to Template</h3>
-            <p style={{ color: "#6d7175", fontSize: "13px", margin: "0 0 16px" }}>
-              Select which products will display this customizer studio on their storefront detail page.
-            </p>
+          <div
+            style={{
+              background: "#fff",
+              borderRadius: "12px",
+              width: "100%",
+              maxWidth: "600px",
+              maxHeight: "85vh",
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
+              boxShadow: "0 16px 40px rgba(0,0,0,0.3)",
+            }}
+          >
+            {/* Modal Header */}
+            <div style={{ padding: "16px 20px", borderBottom: "1px solid #e1e3e5", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700 }}>Assign Products to Template</h3>
+              <button
+                type="button"
+                onClick={() => setShowProductModal(false)}
+                style={{ background: "none", border: "none", fontSize: "20px", cursor: "pointer", color: "#6d7175" }}
+              >
+                &times;
+              </button>
+            </div>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "20px" }}>
-              {shopProducts.length === 0 ? (
-                <div style={{ textAlign: "center", padding: "24px 16px", background: "#f6f6f7", borderRadius: "8px" }}>
-                  <div style={{ fontSize: "36px", marginBottom: "8px" }}>👕</div>
-                  <h4 style={{ margin: "0 0 6px", fontSize: "15px" }}>No products found on your store</h4>
-                  <p style={{ color: "#6d7175", fontSize: "13px", margin: "0 auto 16px", maxWidth: "380px" }}>
-                    Your development store doesn't have any products yet. Click below to automatically create 3 sample customizable products (T-Shirt, Mug, Canvas Art) on your store.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      fetcher.submit({ intent: "create_sample_products" }, { method: "POST" });
-                    }}
-                    disabled={fetcher.state === "submitting"}
-                    style={{
-                      padding: "10px 18px",
-                      background: "#008060",
-                      color: "#fff",
-                      border: "none",
-                      borderRadius: "6px",
-                      cursor: "pointer",
-                      fontWeight: 600,
-                      fontSize: "13px",
-                    }}
-                  >
-                    {fetcher.state === "submitting" ? "Creating Products..." : "✨ Generate 3 Sample Products"}
-                  </button>
-                </div>
-              ) : (
-                shopProducts.map((prod: any) => {
-                  const isChecked = assignedProductIds.includes(prod.id);
+            {/* Modal Search */}
+            <div style={{ padding: "12px 20px", borderBottom: "1px solid #f1f2f3" }}>
+              <input
+                type="text"
+                placeholder="Search products..."
+                value={productSearch}
+                onChange={(e) => setProductSearch(e.target.value)}
+                style={{ width: "100%", padding: "8px 12px", borderRadius: "6px", border: "1px solid #c9cccf", fontSize: "13px" }}
+              />
+            </div>
+
+            {/* Modal Products List */}
+            <div style={{ padding: "10px 20px", overflowY: "auto", flex: 1, display: "flex", flexDirection: "column", gap: "8px" }}>
+              {shopProducts
+                .filter((p: any) => p.title.toLowerCase().includes(productSearch.toLowerCase()))
+                .map((p: any) => {
+                  const isChecked = assignedProductIds.includes(p.id);
                   return (
                     <label
-                      key={prod.id}
+                      key={p.id}
                       style={{
                         display: "flex",
                         alignItems: "center",
                         gap: "12px",
-                        padding: "8px",
-                        border: "1px solid #e1e3e5",
-                        borderRadius: "6px",
+                        padding: "10px",
+                        borderRadius: "8px",
+                        border: isChecked ? "2px solid #008060" : "1px solid #e2e8f0",
+                        background: isChecked ? "#f0fdf4" : "#ffffff",
                         cursor: "pointer",
                       }}
                     >
                       <input
                         type="checkbox"
                         checked={isChecked}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setAssignedProductIds([...assignedProductIds, prod.id]);
-                          } else {
-                            setAssignedProductIds(assignedProductIds.filter((id) => id !== prod.id));
-                          }
-                        }}
+                        onChange={() => toggleProductAssignment(p.id)}
                       />
-                      {prod.featuredImage?.url && (
-                        <img
-                          src={prod.featuredImage.url}
-                          alt=""
-                          style={{ width: "40px", height: "40px", objectFit: "cover", borderRadius: "4px" }}
-                        />
-                      )}
-                      <div>
-                        <div style={{ fontWeight: 600, fontSize: "13px" }}>{prod.title}</div>
-                        <div style={{ color: "#6d7175", fontSize: "11px" }}>{prod.id}</div>
+                      <img
+                        src={p.featuredImage?.url || "https://cdn.shopify.com/s/files/1/0533/2089/files/placeholder-images-image_large.png"}
+                        alt={p.title}
+                        style={{ width: "40px", height: "40px", borderRadius: "6px", objectFit: "cover", border: "1px solid #e2e8f0" }}
+                      />
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 600, fontSize: "13px" }}>{p.title}</div>
+                        <div style={{ fontSize: "11px", color: "#6d7175" }}>{p.variants?.length || 1} variants</div>
                       </div>
                     </label>
                   );
-                })
-              )}
+                })}
             </div>
 
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px" }}>
+            {/* Modal Footer */}
+            <div style={{ padding: "14px 20px", borderTop: "1px solid #e1e3e5", display: "flex", justifyContent: "space-between", alignItems: "center", background: "#f8fafc" }}>
+              <span style={{ fontSize: "13px", fontWeight: 600, color: "#64748b" }}>
+                {assignedProductIds.length} selected
+              </span>
               <button
                 type="button"
                 onClick={() => setShowProductModal(false)}
                 style={{
-                  padding: "8px 16px",
+                  background: "#008060",
+                  color: "#fff",
+                  border: "none",
                   borderRadius: "6px",
-                  border: "1px solid #c9cccf",
-                  background: "#fff",
+                  padding: "8px 18px",
+                  fontSize: "13px",
+                  fontWeight: 700,
                   cursor: "pointer",
                 }}
               >
