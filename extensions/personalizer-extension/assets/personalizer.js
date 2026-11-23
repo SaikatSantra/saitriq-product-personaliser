@@ -517,6 +517,32 @@
         this.hasCustomizer = true;
         this.templateData = data.template;
         window.__saitriq_template = data.template;
+
+        // 1. Sync Primary Accent Color from Backend Settings
+        const backendPrimary = data.primaryColor || data.settings?.primaryColor;
+        if (backendPrimary && typeof backendPrimary === "string" && backendPrimary.trim() !== "") {
+          this.primaryColor = backendPrimary.trim();
+          this.style.setProperty("--saitriq-primary", this.primaryColor);
+          document.documentElement.style.setProperty("--saitriq-primary", this.primaryColor);
+          if (this.btn) {
+            this.btn.style.backgroundColor = this.primaryColor;
+          }
+        }
+
+        // 2. Sync Storefront Text Translations from Backend Settings
+        if (data.storefrontText && typeof data.storefrontText === "object") {
+          this.locales = Object.assign({}, this.locales, data.storefrontText);
+        }
+
+        // 3. Sync Trigger Button Text from Backend Settings
+        const customBtnText = this.locales["button_text"] || data.storefrontText?.button_text;
+        if (customBtnText && typeof customBtnText === "string" && customBtnText.trim() !== "") {
+          this.buttonText = customBtnText;
+          if (this.btn) {
+            this.btn.textContent = customBtnText;
+          }
+        }
+
         this.style.display = "";
         if (isRoot) rootEl.style.display = "";
         console.log("[Saitriq] Successfully loaded template from backend:", data.template.id, data.template.title);
@@ -527,6 +553,9 @@
 
         if (this.btn) {
           this.btn.textContent = this.buttonText;
+          if (this.primaryColor) {
+            this.btn.style.backgroundColor = this.primaryColor;
+          }
         }
 
         if (this.pendingOpen || this.autoOpen) {
@@ -631,7 +660,7 @@
               <button type="button" class="saitriq-close-btn-secondary">
                 ${this.t("cancel", "Cancel")}
               </button>
-              <button type="button" class="saitriq-submit-cart-btn">
+              <button type="button" class="saitriq-submit-cart-btn" style="background-color: ${this.primaryColor};">
                 <span>${this.t("add_to_cart", "Add to Cart with Design")}</span>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
               </button>

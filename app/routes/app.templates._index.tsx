@@ -141,23 +141,30 @@ export default function TemplatesIndex() {
   const totalProducts = templates.reduce((acc: number, t: any) => acc + (t.products?.length || 0), 0);
 
   return (
-    <div style={{ maxWidth: "1140px", margin: "0 auto", padding: "20px 24px 60px" }}>
+    <div
+      style={{
+        maxWidth: "1140px",
+        margin: "0 auto",
+        padding: "16px 20px 48px",
+        fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+      }}
+    >
       {/* Top Header */}
       <div
         style={{
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          marginBottom: "20px",
+          marginBottom: "16px",
           flexWrap: "wrap",
           gap: "12px",
         }}
       >
         <div>
-          <h1 style={{ margin: 0, fontSize: "20px", fontWeight: 800, color: "#0f172a" }}>
+          <h1 style={{ margin: 0, fontSize: "18px", fontWeight: 800, color: "#0f172a" }}>
             Personalization Templates
           </h1>
-          <p style={{ margin: "4px 0 0", fontSize: "13px", color: "#64748b" }}>
+          <p style={{ margin: "2px 0 0", fontSize: "13px", color: "#64748b" }}>
             Manage product templates, assign items from your catalog, and configure 300 DPI print output.
           </p>
         </div>
@@ -169,12 +176,12 @@ export default function TemplatesIndex() {
             display: "inline-flex",
             alignItems: "center",
             gap: "6px",
-            padding: "9px 18px",
+            padding: "8px 16px",
             borderRadius: "8px",
             background: "#008060",
             color: "#ffffff",
             border: "none",
-            fontSize: "14px",
+            fontSize: "13px",
             fontWeight: 700,
             cursor: "pointer",
             boxShadow: "0 2px 4px rgba(0, 128, 96, 0.2)",
@@ -187,13 +194,13 @@ export default function TemplatesIndex() {
       {fetcher.data?.message && (
         <div
           style={{
-            marginBottom: "20px",
-            padding: "12px 18px",
+            marginBottom: "16px",
+            padding: "10px 16px",
             borderRadius: "8px",
             background: "#ecfdf5",
             border: "1px solid #a7f3d0",
             color: "#065f46",
-            fontSize: "14px",
+            fontSize: "13px",
             fontWeight: 600,
             display: "flex",
             alignItems: "center",
@@ -209,15 +216,15 @@ export default function TemplatesIndex() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-          gap: "16px",
-          marginBottom: "24px",
+          gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+          gap: "12px",
+          marginBottom: "16px",
         }}
       >
         <div
           style={{
             background: "#fff",
-            padding: "18px",
+            padding: "12px 16px",
             borderRadius: "10px",
             border: "1px solid #e2e8f0",
             display: "flex",
@@ -226,20 +233,20 @@ export default function TemplatesIndex() {
           }}
         >
           <div>
-            <div style={{ fontSize: "12px", color: "#64748b", fontWeight: 600, textTransform: "uppercase" }}>
+            <div style={{ fontSize: "11px", color: "#64748b", fontWeight: 600, textTransform: "uppercase" }}>
               Active Templates
             </div>
-            <div style={{ fontSize: "28px", fontWeight: 800, margin: "4px 0 0", color: "#0f172a" }}>
+            <div style={{ fontSize: "22px", fontWeight: 800, margin: "2px 0 0", color: "#0f172a" }}>
               {templates.length}
             </div>
           </div>
-          <span style={{ fontSize: "28px" }}>🎨</span>
+          <span style={{ fontSize: "22px" }}>🎨</span>
         </div>
 
         <div
           style={{
             background: "#fff",
-            padding: "18px",
+            padding: "12px 16px",
             borderRadius: "10px",
             border: "1px solid #e2e8f0",
             display: "flex",
@@ -248,20 +255,20 @@ export default function TemplatesIndex() {
           }}
         >
           <div>
-            <div style={{ fontSize: "12px", color: "#64748b", fontWeight: 600, textTransform: "uppercase" }}>
+            <div style={{ fontSize: "11px", color: "#64748b", fontWeight: 600, textTransform: "uppercase" }}>
               Linked Products
             </div>
-            <div style={{ fontSize: "28px", fontWeight: 800, margin: "4px 0 0", color: "#0f172a" }}>
+            <div style={{ fontSize: "22px", fontWeight: 800, margin: "2px 0 0", color: "#008060" }}>
               {totalProducts}
             </div>
           </div>
-          <span style={{ fontSize: "28px" }}>🛍️</span>
+          <span style={{ fontSize: "22px" }}>🛍️</span>
         </div>
 
         <div
           style={{
             background: "#fff",
-            padding: "18px",
+            padding: "12px 16px",
             borderRadius: "10px",
             border: "1px solid #e2e8f0",
             display: "flex",
@@ -270,14 +277,14 @@ export default function TemplatesIndex() {
           }}
         >
           <div>
-            <div style={{ fontSize: "12px", color: "#64748b", fontWeight: 600, textTransform: "uppercase" }}>
+            <div style={{ fontSize: "11px", color: "#64748b", fontWeight: 600, textTransform: "uppercase" }}>
               Print Resolution
             </div>
-            <div style={{ fontSize: "28px", fontWeight: 800, margin: "4px 0 0", color: "#0f172a" }}>
+            <div style={{ fontSize: "22px", fontWeight: 800, margin: "2px 0 0", color: "#0f172a" }}>
               300 DPI
             </div>
           </div>
-          <span style={{ fontSize: "28px" }}>🖨️</span>
+          <span style={{ fontSize: "22px" }}>🖨️</span>
         </div>
       </div>
 

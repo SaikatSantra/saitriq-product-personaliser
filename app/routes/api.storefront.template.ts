@@ -22,14 +22,40 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   let languages: any = {};
   let storefrontText: Record<string, string> = {};
+  let primaryColor = "#008060";
+  let defaultDpi = 300;
 
-  if (shop) {
+  const normalizedShop = shop
+    ? shop.includes(".myshopify.com")
+      ? shop
+      : `${shop}.myshopify.com`
+    : "";
+
+  if (normalizedShop) {
     try {
-      const shopRecord = await prisma.shop.findUnique({
-        where: { shopifyDomain: shop },
+      let shopRecord = await prisma.shop.findUnique({
+        where: { shopifyDomain: normalizedShop },
       });
+      if (!shopRecord && shop) {
+        shopRecord = await prisma.shop.findFirst({
+          where: {
+            OR: [
+              { shopifyDomain: shop },
+              { shopifyDomain: normalizedShop },
+              { shopifyDomain: { contains: shop.replace(".myshopify.com", "") } },
+            ],
+          },
+        });
+      }
+
       if (shopRecord?.settings) {
         const parsed = JSON.parse(shopRecord.settings);
+        if (parsed.primaryColor && typeof parsed.primaryColor === "string") {
+          primaryColor = parsed.primaryColor;
+        }
+        if (parsed.defaultDpi && Number(parsed.defaultDpi)) {
+          defaultDpi = Number(parsed.defaultDpi);
+        }
         if (parsed.languages && typeof parsed.languages === "object") {
           languages = parsed.languages;
         } else if (parsed.storefrontText) {
@@ -42,7 +68,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           };
         }
       }
-    } catch {}
+    } catch (e) {
+      console.error("[api.storefront.template] Failed to load shop settings:", e);
+    }
   }
 
   // Pick strings for requested locale, or fallback to default / English
@@ -53,18 +81,34 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     storefrontText = languages[defaultKey]?.strings || languages["en"]?.strings || {};
   }
 
-  if (!shop) {
+  if (!normalizedShop) {
     return Response.json(
-      { hasCustomizer: false, error: "Missing shop parameter", storefrontText, languages },
+      {
+        hasCustomizer: false,
+        error: "Missing shop parameter",
+        primaryColor,
+        defaultDpi,
+        settings: { primaryColor, defaultDpi },
+        storefrontText,
+        languages,
+      },
       { headers: corsHeaders },
     );
   }
 
-  const template = await getTemplateForProduct(shop, productId);
+  const template = await getTemplateForProduct(normalizedShop, productId);
 
   if (!template) {
     return Response.json(
-      { hasCustomizer: false, message: "No template assigned to this product", storefrontText, languages },
+      {
+        hasCustomizer: false,
+        message: "No template assigned to this product",
+        primaryColor,
+        defaultDpi,
+        settings: { primaryColor, defaultDpi },
+        storefrontText,
+        languages,
+      },
       { headers: corsHeaders },
     );
   }
@@ -79,6 +123,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   return Response.json(
     {
       hasCustomizer: true,
+      primaryColor,
+      defaultDpi,
+      settings: { primaryColor, defaultDpi },
       storefrontText,
       languages,
       template: {
@@ -86,7 +133,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         title: template.title,
         canvasWidth: template.canvasWidth || 1200,
         canvasHeight: template.canvasHeight || 1200,
-        printDpi: template.printDpi || 300,
+        printDpi: template.printDpi || defaultDpi || 300,
         layers: parsedLayers,
         optionGroups: template.optionGroups || [],
       },

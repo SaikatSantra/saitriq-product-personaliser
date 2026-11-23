@@ -80,14 +80,21 @@ export default function AppGuide() {
   ];
 
   return (
-    <div style={{ maxWidth: "1140px", margin: "0 auto", padding: "20px 24px 60px" }}>
+    <div
+      style={{
+        maxWidth: "1140px",
+        margin: "0 auto",
+        padding: "16px 20px 48px",
+        fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+      }}
+    >
       {/* Top Header */}
       <div
         style={{
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          marginBottom: "20px",
+          marginBottom: "16px",
           flexWrap: "wrap",
           gap: "12px",
         }}

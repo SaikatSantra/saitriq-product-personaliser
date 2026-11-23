@@ -368,14 +368,21 @@ export default function SettingsPage() {
   ];
 
   return (
-    <div style={{ maxWidth: "1140px", margin: "0 auto", padding: "20px 24px 60px" }}>
+    <div
+      style={{
+        maxWidth: "1140px",
+        margin: "0 auto",
+        padding: "16px 20px 48px",
+        fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+      }}
+    >
       {/* Top Header */}
       <div
         style={{
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          marginBottom: "20px",
+          marginBottom: "16px",
           flexWrap: "wrap",
           gap: "12px",
         }}
@@ -499,12 +506,12 @@ export default function SettingsPage() {
         style={{
           background: "linear-gradient(135deg, #0b192c 0%, #1e3e62 60%, #000000 100%)",
           color: "#fff",
-          borderRadius: "16px",
-          padding: "26px 28px",
-          marginBottom: "24px",
+          borderRadius: "12px",
+          padding: "16px 20px",
+          marginBottom: "16px",
           position: "relative",
           overflow: "hidden",
-          boxShadow: "0 10px 25px rgba(11, 25, 44, 0.2)",
+          boxShadow: "0 6px 18px rgba(11, 25, 44, 0.15)",
           border: "1px solid rgba(255, 255, 255, 0.1)",
         }}
       >
@@ -514,73 +521,73 @@ export default function SettingsPage() {
             justifyContent: "space-between",
             alignItems: "center",
             flexWrap: "wrap",
-            gap: "18px",
+            gap: "14px",
             position: "relative",
             zIndex: 1,
           }}
         >
           <div>
-            <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "8px" }}>
+            <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "6px" }}>
               <span
                 style={{
                   background: "rgba(0, 128, 96, 0.3)",
                   border: "1px solid rgba(0, 128, 96, 0.6)",
                   color: "#6ee7b7",
-                  padding: "3px 10px",
-                  borderRadius: "14px",
-                  fontSize: "11px",
+                  padding: "2px 8px",
+                  borderRadius: "12px",
+                  fontSize: "10.5px",
                   fontWeight: 700,
                   letterSpacing: "0.5px",
                 }}
               >
                 100% SHOPIFY NATIVE
               </span>
-              <span style={{ fontSize: "12px", color: "#94a3b8" }}>• Zero Third-Party Dependencies</span>
+              <span style={{ fontSize: "11px", color: "#94a3b8" }}>• Zero Third-Party Dependencies</span>
             </div>
-            <h2 style={{ margin: "0 0 6px", fontSize: "18px", fontWeight: 700, color: "#ffffff" }}>
+            <h2 style={{ margin: "0 0 4px", fontSize: "16px", fontWeight: 700, color: "#ffffff" }}>
               Native Shopify Files CDN &amp; High-Resolution Fulfillment
             </h2>
-            <p style={{ margin: 0, fontSize: "13px", color: "#cbd5e1", maxWidth: "620px", lineHeight: 1.5 }}>
+            <p style={{ margin: 0, fontSize: "12.5px", color: "#cbd5e1", maxWidth: "600px", lineHeight: 1.45 }}>
               All customer mockups and 300 DPI production print files are stored automatically on Shopify&apos;s native CDN with zero external storage setup required.
             </p>
           </div>
 
-          <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
             <div
               style={{
                 background: "rgba(255, 255, 255, 0.08)",
                 border: "1px solid rgba(255, 255, 255, 0.15)",
-                borderRadius: "10px",
-                padding: "10px 16px",
+                borderRadius: "8px",
+                padding: "7px 12px",
                 textAlign: "center",
               }}
             >
-              <div style={{ fontSize: "11px", color: "#94a3b8", fontWeight: 600 }}>STORAGE</div>
-              <div style={{ fontSize: "14px", fontWeight: 700, color: "#6ee7b7", marginTop: "2px" }}>Shopify CDN</div>
+              <div style={{ fontSize: "10px", color: "#94a3b8", fontWeight: 600 }}>STORAGE</div>
+              <div style={{ fontSize: "13px", fontWeight: 700, color: "#6ee7b7", marginTop: "1px" }}>Shopify CDN</div>
             </div>
             <div
               style={{
                 background: "rgba(255, 255, 255, 0.08)",
                 border: "1px solid rgba(255, 255, 255, 0.15)",
-                borderRadius: "10px",
-                padding: "10px 16px",
+                borderRadius: "8px",
+                padding: "7px 12px",
                 textAlign: "center",
               }}
             >
-              <div style={{ fontSize: "11px", color: "#94a3b8", fontWeight: 600 }}>RESOLUTION</div>
-              <div style={{ fontSize: "14px", fontWeight: 700, color: "#93c5fd", marginTop: "2px" }}>300 DPI Print</div>
+              <div style={{ fontSize: "10px", color: "#94a3b8", fontWeight: 600 }}>RESOLUTION</div>
+              <div style={{ fontSize: "13px", fontWeight: 700, color: "#93c5fd", marginTop: "1px" }}>300 DPI Print</div>
             </div>
             <div
               style={{
                 background: "rgba(255, 255, 255, 0.08)",
                 border: "1px solid rgba(255, 255, 255, 0.15)",
-                borderRadius: "10px",
-                padding: "10px 16px",
+                borderRadius: "8px",
+                padding: "7px 12px",
                 textAlign: "center",
               }}
             >
-              <div style={{ fontSize: "11px", color: "#94a3b8", fontWeight: 600 }}>LANGUAGES</div>
-              <div style={{ fontSize: "14px", fontWeight: 700, color: "#fef08a", marginTop: "2px" }}>
+              <div style={{ fontSize: "10px", color: "#94a3b8", fontWeight: 600 }}>LANGUAGES</div>
+              <div style={{ fontSize: "13px", fontWeight: 700, color: "#fef08a", marginTop: "1px" }}>
                 {Object.keys(languages).length} Active
               </div>
             </div>
@@ -593,18 +600,18 @@ export default function SettingsPage() {
         style={{
           display: "grid",
           gridTemplateColumns: "1.4fr 1fr",
-          gap: "24px",
+          gap: "16px",
           alignItems: "start",
         }}
       >
         {/* LEFT COLUMN: Multilingual Management */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           <div
             style={{
               background: "#ffffff",
-              borderRadius: "14px",
+              borderRadius: "10px",
               border: "1px solid #e2e8f0",
-              padding: "22px",
+              padding: "16px 18px",
               boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
             }}
           >
