@@ -1,6 +1,6 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
-import { useLoaderData, useFetcher } from "react-router";
-import { useState } from "react";
+import { useLoaderData, useFetcher, Link } from "react-router";
+import { useState, useMemo } from "react";
 import { authenticate } from "../shopify.server";
 import {
   listCustomizedOrders,
@@ -331,6 +331,7 @@ export default function CustomizedOrdersPage() {
   const { orders, shop } = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
   const [activeModalImage, setActiveModalImage] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const handleGeneratePrint = (order: any) => {
     fetcher.submit(
@@ -346,114 +347,351 @@ export default function CustomizedOrdersPage() {
     );
   };
 
+  const filteredOrders = useMemo(() => {
+    if (!searchQuery.trim()) return orders;
+    const q = searchQuery.toLowerCase().trim();
+    return orders.filter(
+      (o: any) =>
+        (o.shopifyOrderId || "").toLowerCase().includes(q) ||
+        (o.productTitle || "").toLowerCase().includes(q) ||
+        Object.values(o.customerSelections || {}).some((v: any) =>
+          String(v).toLowerCase().includes(q),
+        ),
+    );
+  }, [orders, searchQuery]);
+
+  const completedPrintsCount = orders.filter(
+    (o) => o.printFileUrl || o.renderStatus === "completed",
+  ).length;
+
   return (
-    <s-page heading="Customized Orders & Print Files">
+    <div style={{ maxWidth: "1140px", margin: "0 auto", padding: "20px 24px 60px" }}>
+      {/* Top Header */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "20px",
+          flexWrap: "wrap",
+          gap: "12px",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <Link
+            to="/app"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              padding: "7px 12px",
+              borderRadius: "8px",
+              background: "#fff",
+              border: "1px solid #cbd5e1",
+              color: "#334155",
+              fontSize: "13px",
+              fontWeight: 600,
+              textDecoration: "none",
+            }}
+          >
+            ← Dashboard
+          </Link>
+          <div>
+            <h1 style={{ margin: 0, fontSize: "20px", fontWeight: 800, color: "#0f172a" }}>
+              Customized Orders &amp; Print Production
+            </h1>
+            <p style={{ margin: "2px 0 0", fontSize: "13px", color: "#64748b" }}>
+              Inspect customer personalization designs, download transparent print assets, and generate 300 DPI production files.
+            </p>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+          <Link
+            to="/app/templates"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              padding: "8px 16px",
+              borderRadius: "8px",
+              background: "#008060",
+              color: "#ffffff",
+              fontSize: "13px",
+              fontWeight: 700,
+              textDecoration: "none",
+              boxShadow: "0 2px 4px rgba(0, 128, 96, 0.2)",
+            }}
+          >
+            🎨 Manage Templates
+          </Link>
+        </div>
+      </div>
+
+      {/* Graphical Hero Banner */}
+      <div
+        style={{
+          background: "linear-gradient(135deg, #0b192c 0%, #1e3e62 60%, #008060 100%)",
+          borderRadius: "14px",
+          padding: "24px 28px",
+          color: "#ffffff",
+          marginBottom: "24px",
+          boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.2)",
+          position: "relative",
+          overflow: "hidden",
+        }}
+      >
+        <div style={{ position: "relative", zIndex: 1, maxWidth: "700px" }}>
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "10px" }}>
+            <span
+              style={{
+                background: "rgba(0, 128, 96, 0.3)",
+                border: "1px solid rgba(0, 128, 96, 0.6)",
+                color: "#6ee7b7",
+                padding: "3px 10px",
+                borderRadius: "20px",
+                fontSize: "11px",
+                fontWeight: 700,
+                letterSpacing: "0.5px",
+              }}
+            >
+              ⚡ LIVE FULFILLMENT PIPELINE
+            </span>
+            <span
+              style={{
+                background: "rgba(255, 255, 255, 0.12)",
+                border: "1px solid rgba(255, 255, 255, 0.2)",
+                color: "#e2e8f0",
+                padding: "3px 10px",
+                borderRadius: "20px",
+                fontSize: "11px",
+                fontWeight: 600,
+              }}
+            >
+              ☁️ SHOPIFY FILES CDN HOSTED
+            </span>
+          </div>
+
+          <h2 style={{ fontSize: "22px", fontWeight: 800, margin: "0 0 8px", color: "#ffffff" }}>
+            Production Print Files &amp; Design Snaps
+          </h2>
+          <p style={{ margin: "0", color: "#cbd5e1", fontSize: "13px", lineHeight: 1.5 }}>
+            Every time a shopper customizes front or back sides and places an order, their multi-line text parameters, uploaded photos, and visual preview canvas are captured and linked directly to their Shopify line item.
+          </p>
+        </div>
+      </div>
+
       {/* Top Metrics */}
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
           gap: "16px",
-          marginBottom: "20px",
+          marginBottom: "24px",
         }}
       >
         <div
           style={{
             background: "#fff",
-            border: "1px solid #e1e3e5",
-            padding: "16px",
-            borderRadius: "8px",
+            padding: "18px",
+            borderRadius: "10px",
+            border: "1px solid #e2e8f0",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
           }}
         >
-          <span style={{ fontSize: "13px", color: "#6d7175" }}>Total Custom Orders</span>
-          <h2 style={{ fontSize: "24px", margin: "4px 0 0" }}>{orders.length}</h2>
+          <div>
+            <div style={{ fontSize: "12px", color: "#64748b", fontWeight: 600, textTransform: "uppercase" }}>
+              Total Custom Orders
+            </div>
+            <div style={{ fontSize: "28px", fontWeight: 800, margin: "4px 0 0", color: "#0f172a" }}>
+              {orders.length}
+            </div>
+          </div>
+          <span style={{ fontSize: "28px" }}>📦</span>
         </div>
+
         <div
           style={{
             background: "#fff",
-            border: "1px solid #e1e3e5",
-            padding: "16px",
-            borderRadius: "8px",
+            padding: "18px",
+            borderRadius: "10px",
+            border: "1px solid #e2e8f0",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
           }}
         >
-          <span style={{ fontSize: "13px", color: "#6d7175" }}>Completed Print Files</span>
-          <h2 style={{ fontSize: "24px", margin: "4px 0 0", color: "#108043" }}>
-            {orders.filter((o) => o.printFileUrl || o.renderStatus === "completed").length}
-          </h2>
+          <div>
+            <div style={{ fontSize: "12px", color: "#64748b", fontWeight: 600, textTransform: "uppercase" }}>
+              300 DPI Print Ready
+            </div>
+            <div style={{ fontSize: "28px", fontWeight: 800, margin: "4px 0 0", color: "#008060" }}>
+              {completedPrintsCount}
+            </div>
+          </div>
+          <span style={{ fontSize: "28px" }}>🖨️</span>
         </div>
+
         <div
           style={{
             background: "#fff",
-            border: "1px solid #e1e3e5",
-            padding: "16px",
-            borderRadius: "8px",
+            padding: "18px",
+            borderRadius: "10px",
+            border: "1px solid #e2e8f0",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
           }}
         >
-          <span style={{ fontSize: "13px", color: "#6d7175" }}>Target Store</span>
-          <h2 style={{ fontSize: "15px", margin: "8px 0 0", color: "#202223" }}>{shop}</h2>
+          <div>
+            <div style={{ fontSize: "12px", color: "#64748b", fontWeight: 600, textTransform: "uppercase" }}>
+              Store Sync
+            </div>
+            <div style={{ fontSize: "14px", fontWeight: 700, margin: "8px 0 0", color: "#0f172a", wordBreak: "break-all" }}>
+              {shop}
+            </div>
+          </div>
+          <span style={{ fontSize: "28px" }}>🟢</span>
         </div>
       </div>
 
       {orders.length === 0 ? (
-        <s-section>
-          <div
+        <div
+          style={{
+            textAlign: "center",
+            padding: "60px 20px",
+            background: "#fff",
+            borderRadius: "12px",
+            border: "1px solid #e2e8f0",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+          }}
+        >
+          <div style={{ fontSize: "48px", marginBottom: "12px" }}>📦</div>
+          <h3 style={{ fontSize: "18px", fontWeight: 700, margin: "0 0 8px", color: "#0f172a" }}>
+            No customized orders received yet
+          </h3>
+          <p
             style={{
-              textAlign: "center",
-              padding: "60px 20px",
-              background: "#fff",
-              borderRadius: "8px",
-              border: "1px solid #e1e3e5",
+              color: "#64748b",
+              maxWidth: "480px",
+              margin: "0 auto 20px auto",
+              fontSize: "14px",
+              lineHeight: 1.5,
             }}
           >
-            <div style={{ fontSize: "42px", marginBottom: "12px" }}>📦</div>
-            <h3 style={{ fontSize: "18px", margin: "0 0 8px" }}>No customized orders found yet</h3>
-            <p
-              style={{
-                color: "#6d7175",
-                maxWidth: "480px",
-                margin: "0 auto 16px auto",
-                fontSize: "14px",
-                lineHeight: "1.5",
-              }}
-            >
-              When customers personalize items on your store and place an order, their visual design
-              snapshots and high-resolution print assets will appear right here.
-            </p>
-          </div>
-        </s-section>
+            When customers personalize items on your store and checkout, their visual design snapshots, front/back thumbnails, and 300 DPI print files will automatically populate here.
+          </p>
+          <Link
+            to="/app/templates"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              padding: "9px 18px",
+              borderRadius: "8px",
+              background: "#008060",
+              color: "#ffffff",
+              fontSize: "13px",
+              fontWeight: 700,
+              textDecoration: "none",
+            }}
+          >
+            Assign Products to Templates →
+          </Link>
+        </div>
       ) : (
-        <s-section heading="Orders with Custom Products">
+        <div
+          style={{
+            background: "#fff",
+            borderRadius: "12px",
+            border: "1px solid #e2e8f0",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+            overflow: "hidden",
+          }}
+        >
+          {/* Card Header & Search */}
           <div
             style={{
-              background: "#fff",
-              borderRadius: "8px",
-              border: "1px solid #e1e3e5",
-              overflowX: "auto",
+              padding: "16px 20px",
+              borderBottom: "1px solid #e2e8f0",
+              background: "#f8fafc",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              flexWrap: "wrap",
+              gap: "12px",
             }}
           >
+            <div>
+              <h3 style={{ margin: 0, fontSize: "15px", fontWeight: 700, color: "#0f172a" }}>
+                Customized Orders ({filteredOrders.length})
+              </h3>
+              <p style={{ margin: "2px 0 0", fontSize: "12px", color: "#64748b" }}>
+                View customer front/back previews, upload sources, and generate production print files.
+              </p>
+            </div>
+
+            <div style={{ position: "relative", minWidth: "260px" }}>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search by #order or product..."
+                style={{
+                  width: "100%",
+                  padding: "7px 12px 7px 32px",
+                  borderRadius: "6px",
+                  border: "1px solid #cbd5e1",
+                  fontSize: "13px",
+                  outline: "none",
+                  boxSizing: "border-box",
+                }}
+              />
+              <span
+                style={{
+                  position: "absolute",
+                  left: "10px",
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  fontSize: "14px",
+                  color: "#94a3b8",
+                  pointerEvents: "none",
+                }}
+              >
+                🔍
+              </span>
+            </div>
+          </div>
+
+          <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
               <thead>
-                <tr style={{ background: "#fafbfb", borderBottom: "1px solid #e1e3e5" }}>
-                  <th style={{ padding: "12px 16px", fontSize: "13px", color: "#6d7175" }}>
+                <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
+                  <th style={{ padding: "12px 18px", fontSize: "12px", fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.5px" }}>
                     Customized Preview
                   </th>
-                  <th style={{ padding: "12px 16px", fontSize: "13px", color: "#6d7175" }}>
+                  <th style={{ padding: "12px 18px", fontSize: "12px", fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.5px" }}>
                     Order
                   </th>
-                  <th style={{ padding: "12px 16px", fontSize: "13px", color: "#6d7175" }}>
+                  <th style={{ padding: "12px 18px", fontSize: "12px", fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.5px" }}>
                     Product
                   </th>
-                  <th style={{ padding: "12px 16px", fontSize: "13px", color: "#6d7175" }}>
+                  <th style={{ padding: "12px 18px", fontSize: "12px", fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.5px" }}>
                     Customer Customizations
                   </th>
-                  <th style={{ padding: "12px 16px", fontSize: "13px", color: "#6d7175" }}>
+                  <th style={{ padding: "12px 18px", fontSize: "12px", fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.5px" }}>
                     Date
                   </th>
                   <th
                     style={{
-                      padding: "12px 16px",
-                      fontSize: "13px",
-                      color: "#6d7175",
+                      padding: "12px 18px",
+                      fontSize: "12px",
+                      fontWeight: 700,
+                      color: "#475569",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.5px",
                       textAlign: "right",
                     }}
                   >
@@ -462,7 +700,7 @@ export default function CustomizedOrdersPage() {
                 </tr>
               </thead>
               <tbody>
-                {orders.map((o, idx) => (
+                {filteredOrders.map((o, idx) => (
                   <tr
                     key={o.orderGid + "_" + o.lineItemId + "_" + idx}
                     style={{ borderBottom: "1px solid #f1f2f3" }}
@@ -895,7 +1133,7 @@ export default function CustomizedOrdersPage() {
               </tbody>
             </table>
           </div>
-        </s-section>
+        </div>
       )}
 
       {/* Lightbox Modal for Preview Image */}
@@ -1016,6 +1254,6 @@ export default function CustomizedOrdersPage() {
           </div>
         </div>
       )}
-    </s-page>
+    </div>
   );
 }

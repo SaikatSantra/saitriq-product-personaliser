@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
-import { useLoaderData, useFetcher } from "react-router";
+import { useLoaderData, useFetcher, Link } from "react-router";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { ensureShop } from "../models/shop.server";
@@ -105,20 +105,20 @@ export const PRESET_LANGUAGES: Record<string, { name: string; strings: Record<st
     strings: {
       button_text: "🎨 Personalizza questo prodotto",
       modal_title: "Personalizza il tuo design",
-      modal_subtitle: "Personalizza il testo, carica foto e visualizza l'anteprima dal vivo",
-      front_side: "Fronte",
-      back_side: "Retro",
+      modal_subtitle: "Personalizza il testo, carica foto e guarda l'anteprima in tempo reale",
+      front_side: "Lato frontale",
+      back_side: "Lato posteriore",
       custom_text_title: "Aggiungi testo personalizzato",
       your_message: "Il tuo messaggio / testo",
       text_placeholder: "Riga 1\nRiga 2...",
-      font_family: "Carattere",
-      print_ink_color: "Colore di stampa",
+      font_family: "Carattere tipografico",
+      print_ink_color: "Colore inchiostro",
       upload_title: "Carica foto o logo",
       upload_hint: "Alta risoluzione PNG, JPG o WEBP",
       change_photo: "Modifica",
       remove_photo: "Rimuovi",
       cancel: "Annulla",
-      add_to_cart: "Aggiungi al carrello con il design",
+      add_to_cart: "Aggiungi al carrello con design",
       adding_to_cart: "Aggiunta al carrello...",
     },
   },
@@ -138,12 +138,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   let settings = {
     defaultDpi: 300,
-    storageProvider: "local",
-    enableAiBackgroundRemoval: true,
-    s3Bucket: "",
-    s3Region: "us-east-1",
-    printfulApiKey: "",
-    printifyApiKey: "",
+    primaryColor: "#008060",
     languages: DEFAULT_LANGUAGES,
   };
 
@@ -167,7 +162,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     };
   } catch {}
 
-  return { shop, settings };
+  return { shop: session.shop, settings };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -182,39 +177,50 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
   } catch {}
 
-  const settings = {
-    defaultDpi: parseInt(formData.get("defaultDpi") as string) || 300,
-    storageProvider: (formData.get("storageProvider") as string) || "local",
-    enableAiBackgroundRemoval: formData.get("enableAiBackgroundRemoval") === "true",
-    s3Bucket: (formData.get("s3Bucket") as string) || "",
-    s3Region: (formData.get("s3Region") as string) || "us-east-1",
-    printfulApiKey: (formData.get("printfulApiKey") as string) || "",
-    printifyApiKey: (formData.get("printifyApiKey") as string) || "",
+  const defaultDpi = parseInt(formData.get("defaultDpi") as string) || 300;
+  const primaryColor = (formData.get("primaryColor") as string)?.trim() || "#008060";
+
+  // Preserve existing settings while cleaning out obsolete keys
+  const shop = await ensureShop(session.shop);
+  let currentSettings: any = {};
+  try {
+    currentSettings = JSON.parse(shop.settings || "{}");
+  } catch {}
+
+  const newSettings = {
+    ...currentSettings,
+    defaultDpi,
+    primaryColor,
     languages,
   };
+
+  // Remove obsolete keys
+  delete newSettings.storageProvider;
+  delete newSettings.enableAiBackgroundRemoval;
+  delete newSettings.s3Bucket;
+  delete newSettings.s3Region;
+  delete newSettings.printfulApiKey;
+  delete newSettings.printifyApiKey;
 
   await prisma.shop.update({
     where: { shopifyDomain: session.shop },
     data: {
-      settings: JSON.stringify(settings),
+      settings: JSON.stringify(newSettings),
       updatedAt: new Date(),
     },
   });
 
-  return { success: true, message: "Languages and settings saved successfully" };
+  return { success: true, message: "Settings and multi-language translations saved successfully!" };
 };
 
 export default function SettingsPage() {
   const { settings } = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
 
-  const [defaultDpi, setDefaultDpi] = useState(settings.defaultDpi);
-  const [storageProvider, setStorageProvider] = useState(settings.storageProvider);
-  const [enableAi, setEnableAi] = useState(settings.enableAiBackgroundRemoval);
-  const [s3Bucket, setS3Bucket] = useState(settings.s3Bucket);
-  const [s3Region, setS3Region] = useState(settings.s3Region);
-  const [printfulKey, setPrintfulKey] = useState(settings.printfulApiKey);
-  const [printifyKey, setPrintifyKey] = useState(settings.printifyApiKey);
+  const [defaultDpi, setDefaultDpi] = useState(settings.defaultDpi || 300);
+  const [primaryColor, setPrimaryColor] = useState(settings.primaryColor || "#008060");
+
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Multilingual state
   const [languages, setLanguages] = useState<Record<string, LanguageDefinition>>(
@@ -222,6 +228,7 @@ export default function SettingsPage() {
   );
   const [activeLangCode, setActiveLangCode] = useState<string>("en");
   const [newLangPreset, setNewLangPreset] = useState<string>("es");
+  const [searchFilter, setSearchFilter] = useState<string>("");
 
   const activeLang = languages[activeLangCode] || languages["en"] || {
     name: "English",
@@ -250,6 +257,7 @@ export default function SettingsPage() {
   };
 
   const handleAddLanguage = () => {
+    setErrorMessage(null);
     if (languages[newLangPreset]) {
       setActiveLangCode(newLangPreset);
       return;
@@ -269,9 +277,10 @@ export default function SettingsPage() {
 
   const handleRemoveLanguage = (code: string) => {
     if (code === "en" || languages[code]?.isDefault) {
-      alert("Cannot remove default language.");
+      setErrorMessage("Cannot remove the default store language. Set another language as default first.");
       return;
     }
+    setErrorMessage(null);
     setLanguages((prev) => {
       const next = { ...prev };
       delete next[code];
@@ -281,6 +290,7 @@ export default function SettingsPage() {
   };
 
   const handleSetDefaultLanguage = (code: string) => {
+    setErrorMessage(null);
     setLanguages((prev) => {
       const next: Record<string, LanguageDefinition> = {};
       Object.keys(prev).forEach((k) => {
@@ -294,46 +304,18 @@ export default function SettingsPage() {
   };
 
   const handleSave = () => {
+    setErrorMessage(null);
     fetcher.submit(
       {
         defaultDpi: defaultDpi.toString(),
-        storageProvider,
-        enableAiBackgroundRemoval: enableAi.toString(),
-        s3Bucket,
-        s3Region,
-        printfulApiKey: printfulKey,
-        printifyApiKey: printifyKey,
+        primaryColor,
         languages: JSON.stringify(languages),
       },
       { method: "POST" },
     );
   };
 
-  const isSaving = fetcher.state === "submitting";
-
-  const inputStyle = {
-    width: "100%",
-    padding: "8px 12px",
-    border: "1px solid #c9cccf",
-    borderRadius: "6px",
-    marginTop: "4px",
-    fontSize: "13px",
-  };
-
-  const labelStyle = {
-    fontSize: "13px",
-    fontWeight: 600,
-    color: "#202223",
-    display: "flex",
-    flexDirection: "column" as const,
-    gap: "2px",
-  };
-
-  const hintStyle = {
-    fontSize: "12px",
-    color: "#6d7175",
-    fontWeight: 400,
-  };
+  const isSaving = fetcher.state === "submitting" || fetcher.state === "loading";
 
   const languageFlags: Record<string, string> = {
     en: "🇬🇧",
@@ -343,37 +325,306 @@ export default function SettingsPage() {
     it: "🇮🇹",
   };
 
-  return (
-    <s-page heading="App Settings & Multi-Language Translations">
-      <s-button
-        slot="primary-action"
-        variant="primary"
-        onClick={handleSave}
-        disabled={isSaving}
-      >
-        {isSaving ? "Saving..." : "Save Settings"}
-      </s-button>
+  // Human-readable labels and descriptions for all translation keys
+  const stringDefinitions: Array<{ key: string; label: string; desc: string; icon: string }> = [
+    { key: "button_text", label: "Customize Button Text", desc: "Text on the main storefront product page trigger button", icon: "🔘" },
+    { key: "modal_title", label: "Modal Header Title", desc: "Main title shown at the top of the personalizer studio window", icon: "🎨" },
+    { key: "modal_subtitle", label: "Modal Subtitle", desc: "Helper subtitle explaining customization capabilities", icon: "💬" },
+    { key: "front_side", label: "Front Side Tab", desc: "Label for the front-view switcher tab", icon: "👕" },
+    { key: "back_side", label: "Back Side Tab", desc: "Label for the back-view switcher tab", icon: "🔄" },
+    { key: "custom_text_title", label: "Text Section Title", desc: "Header for the text customization card", icon: "✏️" },
+    { key: "your_message", label: "Text Input Label", desc: "Label above the customer text input area", icon: "✍️" },
+    { key: "text_placeholder", label: "Text Placeholder", desc: "Hint shown inside the empty text area", icon: "📝" },
+    { key: "font_family", label: "Font Selector Label", desc: "Label for the font dropdown menu", icon: "🔤" },
+    { key: "print_ink_color", label: "Ink Color Label", desc: "Label above the ink swatch palette", icon: "🌈" },
+    { key: "upload_title", label: "Upload Card Title", desc: "Header for the customer photo/logo upload zone", icon: "📷" },
+    { key: "upload_hint", label: "Upload File Hint", desc: "Explains allowed file formats (PNG, JPG, WEBP)", icon: "💡" },
+    { key: "change_photo", label: "Change Photo Button", desc: "Button shown when replacing an uploaded image", icon: "🔁" },
+    { key: "remove_photo", label: "Remove Photo Button", desc: "Button to clear an uploaded image from canvas", icon: "🗑️" },
+    { key: "cancel", label: "Cancel Button", desc: "Closes the studio without saving changes", icon: "✕" },
+    { key: "add_to_cart", label: "Add to Cart Button", desc: "Main checkout button with customized print files", icon: "🛒" },
+    { key: "adding_to_cart", label: "Adding to Cart State", desc: "Temporary state shown while uploading & adding to cart", icon: "⏳" },
+  ];
 
+  const filteredStrings = useMemo(() => {
+    if (!searchFilter.trim()) return stringDefinitions;
+    const q = searchFilter.toLowerCase().trim();
+    return stringDefinitions.filter(
+      (s) =>
+        s.label.toLowerCase().includes(q) ||
+        s.key.toLowerCase().includes(q) ||
+        s.desc.toLowerCase().includes(q) ||
+        (activeLang.strings[s.key] || "").toLowerCase().includes(q),
+    );
+  }, [searchFilter, activeLang.strings]);
+
+  const presetColors = [
+    { label: "Shopify Emerald", hex: "#008060" },
+    { label: "Royal Blue", hex: "#2563eb" },
+    { label: "Modern Black", hex: "#111111" },
+    { label: "Crimson Red", hex: "#dc2626" },
+    { label: "Elegant Purple", hex: "#9333ea" },
+    { label: "Sunset Amber", hex: "#d97706" },
+  ];
+
+  return (
+    <div style={{ maxWidth: "1140px", margin: "0 auto", padding: "20px 24px 60px" }}>
+      {/* Top Header */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "20px",
+          flexWrap: "wrap",
+          gap: "12px",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <Link
+            to="/app"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              padding: "7px 12px",
+              borderRadius: "8px",
+              background: "#fff",
+              border: "1px solid #cbd5e1",
+              color: "#334155",
+              fontSize: "13px",
+              fontWeight: 600,
+              textDecoration: "none",
+            }}
+          >
+            ← Dashboard
+          </Link>
+          <div>
+            <h1 style={{ margin: 0, fontSize: "20px", fontWeight: 800, color: "#0f172a" }}>
+              App Settings &amp; Multi-Language
+            </h1>
+            <p style={{ margin: "2px 0 0", fontSize: "13px", color: "#64748b" }}>
+              Manage translations in any language, customize button styling, and verify 300 DPI print output.
+            </p>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={isSaving}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "6px",
+            padding: "9px 20px",
+            borderRadius: "8px",
+            background: "#008060",
+            color: "#ffffff",
+            border: "none",
+            fontSize: "14px",
+            fontWeight: 700,
+            cursor: isSaving ? "not-allowed" : "pointer",
+            boxShadow: "0 2px 5px rgba(0, 128, 96, 0.25)",
+            opacity: isSaving ? 0.7 : 1,
+          }}
+        >
+          {isSaving ? "Saving..." : "💾 Save Settings"}
+        </button>
+      </div>
+
+      {/* Success Notification Banner */}
       {fetcher.data?.message && (
-        <div style={{ marginBottom: "16px" }}>
-          <s-banner tone="success">
-            {fetcher.data.message}
-          </s-banner>
+        <div
+          style={{
+            marginBottom: "20px",
+            padding: "12px 18px",
+            borderRadius: "8px",
+            background: "#ecfdf5",
+            border: "1px solid #a7f3d0",
+            color: "#065f46",
+            fontSize: "14px",
+            fontWeight: 600,
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+          }}
+        >
+          <span>✓</span>
+          <span>{fetcher.data.message}</span>
         </div>
       )}
 
-      <div style={{ display: "flex", flexDirection: "column", gap: "24px", maxWidth: "840px" }}>
-        
-        {/* In-App Multi-Language & Storefront Translations */}
-        <s-section heading="In-App Multi-Language & Translations">
-          <div style={{ background: "#fff", border: "1px solid #e1e3e5", borderRadius: "10px", padding: "20px", display: "flex", flexDirection: "column", gap: "18px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "10px" }}>
+      {/* Error Notification Banner */}
+      {errorMessage && (
+        <div
+          style={{
+            marginBottom: "20px",
+            padding: "12px 18px",
+            borderRadius: "8px",
+            background: "#fef2f2",
+            border: "1px solid #fecaca",
+            color: "#991b1b",
+            fontSize: "14px",
+            fontWeight: 600,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "8px",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <span>⚠️</span>
+            <span>{errorMessage}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setErrorMessage(null)}
+            style={{
+              background: "none",
+              border: "none",
+              color: "#991b1b",
+              cursor: "pointer",
+              fontSize: "16px",
+              fontWeight: 700,
+            }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {/* Graphical Hero Banner */}
+      <div
+        style={{
+          background: "linear-gradient(135deg, #0b192c 0%, #1e3e62 60%, #000000 100%)",
+          color: "#fff",
+          borderRadius: "16px",
+          padding: "26px 28px",
+          marginBottom: "24px",
+          position: "relative",
+          overflow: "hidden",
+          boxShadow: "0 10px 25px rgba(11, 25, 44, 0.2)",
+          border: "1px solid rgba(255, 255, 255, 0.1)",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: "18px",
+            position: "relative",
+            zIndex: 1,
+          }}
+        >
+          <div>
+            <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "8px" }}>
+              <span
+                style={{
+                  background: "rgba(0, 128, 96, 0.3)",
+                  border: "1px solid rgba(0, 128, 96, 0.6)",
+                  color: "#6ee7b7",
+                  padding: "3px 10px",
+                  borderRadius: "14px",
+                  fontSize: "11px",
+                  fontWeight: 700,
+                  letterSpacing: "0.5px",
+                }}
+              >
+                100% SHOPIFY NATIVE
+              </span>
+              <span style={{ fontSize: "12px", color: "#94a3b8" }}>• Zero Third-Party Dependencies</span>
+            </div>
+            <h2 style={{ margin: "0 0 6px", fontSize: "18px", fontWeight: 700, color: "#ffffff" }}>
+              Native Shopify Files CDN &amp; High-Resolution Fulfillment
+            </h2>
+            <p style={{ margin: 0, fontSize: "13px", color: "#cbd5e1", maxWidth: "620px", lineHeight: 1.5 }}>
+              All customer mockups and 300 DPI production print files are stored automatically on Shopify&apos;s native CDN with zero external storage setup required.
+            </p>
+          </div>
+
+          <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+            <div
+              style={{
+                background: "rgba(255, 255, 255, 0.08)",
+                border: "1px solid rgba(255, 255, 255, 0.15)",
+                borderRadius: "10px",
+                padding: "10px 16px",
+                textAlign: "center",
+              }}
+            >
+              <div style={{ fontSize: "11px", color: "#94a3b8", fontWeight: 600 }}>STORAGE</div>
+              <div style={{ fontSize: "14px", fontWeight: 700, color: "#6ee7b7", marginTop: "2px" }}>Shopify CDN</div>
+            </div>
+            <div
+              style={{
+                background: "rgba(255, 255, 255, 0.08)",
+                border: "1px solid rgba(255, 255, 255, 0.15)",
+                borderRadius: "10px",
+                padding: "10px 16px",
+                textAlign: "center",
+              }}
+            >
+              <div style={{ fontSize: "11px", color: "#94a3b8", fontWeight: 600 }}>RESOLUTION</div>
+              <div style={{ fontSize: "14px", fontWeight: 700, color: "#93c5fd", marginTop: "2px" }}>300 DPI Print</div>
+            </div>
+            <div
+              style={{
+                background: "rgba(255, 255, 255, 0.08)",
+                border: "1px solid rgba(255, 255, 255, 0.15)",
+                borderRadius: "10px",
+                padding: "10px 16px",
+                textAlign: "center",
+              }}
+            >
+              <div style={{ fontSize: "11px", color: "#94a3b8", fontWeight: 600 }}>LANGUAGES</div>
+              <div style={{ fontSize: "14px", fontWeight: 700, color: "#fef08a", marginTop: "2px" }}>
+                {Object.keys(languages).length} Active
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Grid: 2 Columns */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1.4fr 1fr",
+          gap: "24px",
+          alignItems: "start",
+        }}
+      >
+        {/* LEFT COLUMN: Multilingual Management */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+          <div
+            style={{
+              background: "#ffffff",
+              borderRadius: "14px",
+              border: "1px solid #e2e8f0",
+              padding: "22px",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
+            }}
+          >
+            {/* Header & Add Language */}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "flex-start",
+                marginBottom: "18px",
+                flexWrap: "wrap",
+                gap: "12px",
+              }}
+            >
               <div>
-                <h4 style={{ margin: 0, fontSize: "15px", fontWeight: 700, color: "#202223" }}>
-                  Storefront Languages & Translations
-                </h4>
-                <p style={{ margin: "4px 0 0", fontSize: "13px", color: "#6d7175" }}>
-                  Manage and customize all text in every language directly here. The storefront automatically detects customer language (or language switcher) and displays the matching translation!
+                <h3 style={{ margin: "0 0 4px", fontSize: "16px", fontWeight: 700, color: "#0f172a" }}>
+                  🌐 Multi-Language Translations
+                </h3>
+                <p style={{ margin: 0, fontSize: "13px", color: "#64748b" }}>
+                  Edit all storefront texts in any language. Shoppers see the matching translation automatically.
                 </p>
               </div>
 
@@ -382,7 +633,13 @@ export default function SettingsPage() {
                 <select
                   value={newLangPreset}
                   onChange={(e) => setNewLangPreset(e.target.value)}
-                  style={{ padding: "7px 10px", borderRadius: "6px", border: "1px solid #c9cccf", fontSize: "13px" }}
+                  style={{
+                    padding: "7px 10px",
+                    borderRadius: "6px",
+                    border: "1px solid #cbd5e1",
+                    fontSize: "13px",
+                    background: "#fff",
+                  }}
                 >
                   <option value="es">🇪🇸 Spanish (Español)</option>
                   <option value="fr">🇫🇷 French (Français)</option>
@@ -403,27 +660,37 @@ export default function SettingsPage() {
                     cursor: "pointer",
                   }}
                 >
-                  + Add Language
+                  + Add
                 </button>
               </div>
             </div>
 
-            {/* Language Tabs */}
-            <div style={{ display: "flex", gap: "8px", borderBottom: "1px solid #e1e3e5", paddingBottom: "12px", flexWrap: "wrap" }}>
+            {/* Language Selection Tabs */}
+            <div
+              style={{
+                display: "flex",
+                gap: "8px",
+                borderBottom: "1px solid #e2e8f0",
+                paddingBottom: "12px",
+                marginBottom: "16px",
+                flexWrap: "wrap",
+              }}
+            >
               {Object.keys(languages).map((code) => {
                 const lang = languages[code];
                 const isActive = activeLangCode === code;
                 const flag = languageFlags[code] || "🌐";
+
                 return (
                   <button
                     key={code}
                     type="button"
                     onClick={() => setActiveLangCode(code)}
                     style={{
-                      background: isActive ? "#008060" : "#f1f2f3",
-                      color: isActive ? "#fff" : "#202223",
-                      border: "none",
-                      borderRadius: "6px",
+                      background: isActive ? "#008060" : "#f8fafc",
+                      color: isActive ? "#ffffff" : "#334155",
+                      border: `1px solid ${isActive ? "#008060" : "#cbd5e1"}`,
+                      borderRadius: "8px",
                       padding: "8px 14px",
                       fontSize: "13px",
                       fontWeight: 600,
@@ -431,12 +698,20 @@ export default function SettingsPage() {
                       display: "flex",
                       alignItems: "center",
                       gap: "6px",
+                      transition: "all 0.15s ease",
                     }}
                   >
                     <span>{flag}</span>
                     <span>{lang.name}</span>
                     {lang.isDefault && (
-                      <span style={{ fontSize: "10px", background: isActive ? "rgba(255,255,255,0.25)" : "#e1e3e5", padding: "1px 5px", borderRadius: "4px" }}>
+                      <span
+                        style={{
+                          fontSize: "10px",
+                          background: isActive ? "rgba(255,255,255,0.25)" : "#e2e8f0",
+                          padding: "1px 6px",
+                          borderRadius: "4px",
+                        }}
+                      >
                         Default
                       </span>
                     )}
@@ -446,330 +721,302 @@ export default function SettingsPage() {
             </div>
 
             {/* Active Language Controls */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#f9fafb", padding: "10px 14px", borderRadius: "6px" }}>
-              <div style={{ fontSize: "13px", fontWeight: 600, color: "#202223" }}>
-                Editing Translations: <span style={{ color: "#008060" }}>{activeLang.name} ({activeLangCode.toUpperCase()})</span>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                background: "#f8fafc",
+                padding: "10px 14px",
+                borderRadius: "8px",
+                border: "1px solid #e2e8f0",
+                marginBottom: "16px",
+              }}
+            >
+              <div style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a" }}>
+                Editing: {activeLang.name} {activeLang.isDefault ? "(Default Store Language)" : ""}
               </div>
-              <div style={{ display: "flex", gap: "10px" }}>
+              <div style={{ display: "flex", gap: "8px" }}>
                 {!activeLang.isDefault && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => handleSetDefaultLanguage(activeLangCode)}
-                      style={{ background: "none", border: "1px solid #c9cccf", borderRadius: "4px", padding: "4px 8px", fontSize: "12px", cursor: "pointer" }}
-                    >
-                      Set as Default
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveLanguage(activeLangCode)}
-                      style={{ background: "none", border: "1px solid #d82c0d", color: "#d82c0d", borderRadius: "4px", padding: "4px 8px", fontSize: "12px", cursor: "pointer" }}
-                    >
-                      Delete Language
-                    </button>
-                  </>
+                  <button
+                    type="button"
+                    onClick={() => handleSetDefaultLanguage(activeLangCode)}
+                    style={{
+                      background: "#fff",
+                      border: "1px solid #cbd5e1",
+                      borderRadius: "6px",
+                      padding: "4px 10px",
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      color: "#334155",
+                    }}
+                  >
+                    ⭐ Set as Default
+                  </button>
+                )}
+                {activeLangCode !== "en" && !activeLang.isDefault && (
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveLanguage(activeLangCode)}
+                    style={{
+                      background: "#fff5f5",
+                      border: "1px solid #fecaca",
+                      borderRadius: "6px",
+                      padding: "4px 10px",
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      color: "#dc2626",
+                    }}
+                  >
+                    Remove
+                  </button>
                 )}
               </div>
             </div>
 
-            {/* Translation Input Fields */}
-            <div style={{ borderTop: "1px solid #f1f2f3", paddingTop: "14px" }}>
-              <div style={{ fontSize: "14px", fontWeight: 700, marginBottom: "10px", color: "#1a1a1a" }}>
-                1. Button & Studio Titles
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                <label style={labelStyle}>
-                  Customize Button Text:
-                  <input
-                    type="text"
-                    value={activeLang.strings?.button_text || ""}
-                    onChange={(e) => updateActiveString("button_text", e.target.value)}
-                    style={inputStyle}
-                  />
-                  <span style={hintStyle}>Shown on the product page next to Add to Cart</span>
-                </label>
-                <label style={labelStyle}>
-                  Studio Modal Header:
-                  <input
-                    type="text"
-                    value={activeLang.strings?.modal_title || ""}
-                    onChange={(e) => updateActiveString("modal_title", e.target.value)}
-                    style={inputStyle}
-                  />
-                  <span style={hintStyle}>Main title at top of the personalization modal</span>
-                </label>
-              </div>
-
-              <div style={{ marginTop: "10px" }}>
-                <label style={labelStyle}>
-                  Modal Subtitle:
-                  <input
-                    type="text"
-                    value={activeLang.strings?.modal_subtitle || ""}
-                    onChange={(e) => updateActiveString("modal_subtitle", e.target.value)}
-                    style={inputStyle}
-                  />
-                </label>
-              </div>
+            {/* Search Filter for Translation Keys */}
+            <div style={{ marginBottom: "16px" }}>
+              <input
+                type="text"
+                placeholder="🔍 Filter translation fields (e.g., button, upload, cart)..."
+                value={searchFilter}
+                onChange={(e) => setSearchFilter(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "8px 12px",
+                  borderRadius: "6px",
+                  border: "1px solid #cbd5e1",
+                  fontSize: "13px",
+                  boxSizing: "border-box",
+                  outline: "none",
+                }}
+              />
             </div>
 
-            <div style={{ borderTop: "1px solid #f1f2f3", paddingTop: "14px" }}>
-              <div style={{ fontSize: "14px", fontWeight: 700, marginBottom: "10px", color: "#1a1a1a" }}>
-                2. Multi-Side Switcher Tabs
+            {/* Translation Inputs List */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+              {filteredStrings.map((item) => {
+                const currentVal = activeLang.strings[item.key] ?? "";
+
+                return (
+                  <div
+                    key={item.key}
+                    style={{
+                      padding: "12px 14px",
+                      borderRadius: "8px",
+                      border: "1px solid #e2e8f0",
+                      background: "#ffffff",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
+                      <span>{item.icon}</span>
+                      <label style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a" }}>
+                        {item.label}
+                      </label>
+                      <span style={{ fontSize: "11px", color: "#94a3b8", fontFamily: "monospace" }}>
+                        ({item.key})
+                      </span>
+                    </div>
+                    <div style={{ fontSize: "12px", color: "#64748b", marginBottom: "6px" }}>
+                      {item.desc}
+                    </div>
+                    <input
+                      type="text"
+                      value={currentVal}
+                      onChange={(e) => updateActiveString(item.key, e.target.value)}
+                      placeholder={PRESET_LANGUAGES.en.strings[item.key] || item.label}
+                      style={{
+                        width: "100%",
+                        padding: "8px 10px",
+                        borderRadius: "6px",
+                        border: "1px solid #cbd5e1",
+                        fontSize: "13px",
+                        boxSizing: "border-box",
+                      }}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* RIGHT COLUMN: Button Styling & Production Specs */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+          {/* Storefront Button Appearance Card */}
+          <div
+            style={{
+              background: "#ffffff",
+              borderRadius: "14px",
+              border: "1px solid #e2e8f0",
+              padding: "22px",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
+            }}
+          >
+            <h3 style={{ margin: "0 0 4px", fontSize: "16px", fontWeight: 700, color: "#0f172a" }}>
+              🎨 Storefront Button Styling
+            </h3>
+            <p style={{ margin: "0 0 16px", fontSize: "13px", color: "#64748b" }}>
+              Control the primary accent color and preview how the trigger button renders on your product pages.
+            </p>
+
+            {/* Live Button Preview Mockup */}
+            <div
+              style={{
+                background: "#f8fafc",
+                borderRadius: "10px",
+                border: "1px solid #e2e8f0",
+                padding: "20px",
+                marginBottom: "16px",
+                textAlign: "center",
+              }}
+            >
+              <div style={{ fontSize: "11px", color: "#64748b", fontWeight: 700, textTransform: "uppercase", marginBottom: "10px" }}>
+                Live Button Preview
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                <label style={labelStyle}>
-                  Front Side Tab Label:
-                  <input
-                    type="text"
-                    value={activeLang.strings?.front_side || ""}
-                    onChange={(e) => updateActiveString("front_side", e.target.value)}
-                    style={inputStyle}
-                  />
-                </label>
-                <label style={labelStyle}>
-                  Back Side Tab Label:
-                  <input
-                    type="text"
-                    value={activeLang.strings?.back_side || ""}
-                    onChange={(e) => updateActiveString("back_side", e.target.value)}
-                    style={inputStyle}
-                  />
-                </label>
-              </div>
+              <button
+                type="button"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "8px",
+                  width: "100%",
+                  padding: "14px 20px",
+                  fontSize: "14px",
+                  fontWeight: 700,
+                  color: "#ffffff",
+                  backgroundColor: primaryColor,
+                  border: "none",
+                  borderRadius: "8px",
+                  cursor: "default",
+                  boxShadow: "0 3px 8px rgba(0,0,0,0.12)",
+                }}
+              >
+                {activeLang.strings["button_text"] || "🎨 Customize This Product"}
+              </button>
             </div>
 
-            <div style={{ borderTop: "1px solid #f1f2f3", paddingTop: "14px" }}>
-              <div style={{ fontSize: "14px", fontWeight: 700, marginBottom: "10px", color: "#1a1a1a" }}>
-                3. Custom Text Controls
+            {/* Accent Color Picker & Swatches */}
+            <div style={{ marginBottom: "14px" }}>
+              <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: "#475569", marginBottom: "6px" }}>
+                Primary Accent Color
+              </label>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "10px" }}>
+                <input
+                  type="color"
+                  value={primaryColor}
+                  onChange={(e) => setPrimaryColor(e.target.value)}
+                  style={{ width: "42px", height: "36px", border: "none", borderRadius: "6px", cursor: "pointer" }}
+                />
+                <input
+                  type="text"
+                  value={primaryColor}
+                  onChange={(e) => setPrimaryColor(e.target.value)}
+                  style={{
+                    flex: 1,
+                    padding: "8px 10px",
+                    borderRadius: "6px",
+                    border: "1px solid #cbd5e1",
+                    fontSize: "13px",
+                    fontFamily: "monospace",
+                  }}
+                />
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                <label style={labelStyle}>
-                  Text Card Title:
-                  <input
-                    type="text"
-                    value={activeLang.strings?.custom_text_title || ""}
-                    onChange={(e) => updateActiveString("custom_text_title", e.target.value)}
-                    style={inputStyle}
-                  />
-                </label>
-                <label style={labelStyle}>
-                  Message Field Label:
-                  <input
-                    type="text"
-                    value={activeLang.strings?.your_message || ""}
-                    onChange={(e) => updateActiveString("your_message", e.target.value)}
-                    style={inputStyle}
-                  />
-                </label>
-                <label style={labelStyle}>
-                  Font Family Label:
-                  <input
-                    type="text"
-                    value={activeLang.strings?.font_family || ""}
-                    onChange={(e) => updateActiveString("font_family", e.target.value)}
-                    style={inputStyle}
-                  />
-                </label>
-                <label style={labelStyle}>
-                  Print Ink Color Label:
-                  <input
-                    type="text"
-                    value={activeLang.strings?.print_ink_color || ""}
-                    onChange={(e) => updateActiveString("print_ink_color", e.target.value)}
-                    style={inputStyle}
-                  />
-                </label>
-              </div>
-            </div>
 
-            <div style={{ borderTop: "1px solid #f1f2f3", paddingTop: "14px" }}>
-              <div style={{ fontSize: "14px", fontWeight: 700, marginBottom: "10px", color: "#1a1a1a" }}>
-                4. Photo & Logo Upload Controls
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                <label style={labelStyle}>
-                  Upload Card Title:
-                  <input
-                    type="text"
-                    value={activeLang.strings?.upload_title || ""}
-                    onChange={(e) => updateActiveString("upload_title", e.target.value)}
-                    style={inputStyle}
-                  />
-                </label>
-                <label style={labelStyle}>
-                  Upload Hint / File Types:
-                  <input
-                    type="text"
-                    value={activeLang.strings?.upload_hint || ""}
-                    onChange={(e) => updateActiveString("upload_hint", e.target.value)}
-                    style={inputStyle}
-                  />
-                </label>
-                <label style={labelStyle}>
-                  Change Photo Button:
-                  <input
-                    type="text"
-                    value={activeLang.strings?.change_photo || ""}
-                    onChange={(e) => updateActiveString("change_photo", e.target.value)}
-                    style={inputStyle}
-                  />
-                </label>
-                <label style={labelStyle}>
-                  Remove Photo Button:
-                  <input
-                    type="text"
-                    value={activeLang.strings?.remove_photo || ""}
-                    onChange={(e) => updateActiveString("remove_photo", e.target.value)}
-                    style={inputStyle}
-                  />
-                </label>
-              </div>
-            </div>
-
-            <div style={{ borderTop: "1px solid #f1f2f3", paddingTop: "14px" }}>
-              <div style={{ fontSize: "14px", fontWeight: 700, marginBottom: "10px", color: "#1a1a1a" }}>
-                5. Actions & Buttons
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                <label style={labelStyle}>
-                  Cancel Button:
-                  <input
-                    type="text"
-                    value={activeLang.strings?.cancel || ""}
-                    onChange={(e) => updateActiveString("cancel", e.target.value)}
-                    style={inputStyle}
-                  />
-                </label>
-                <label style={labelStyle}>
-                  Add to Cart Button:
-                  <input
-                    type="text"
-                    value={activeLang.strings?.add_to_cart || ""}
-                    onChange={(e) => updateActiveString("add_to_cart", e.target.value)}
-                    style={inputStyle}
-                  />
-                </label>
-                <label style={labelStyle}>
-                  Adding to Cart (Loading State):
-                  <input
-                    type="text"
-                    value={activeLang.strings?.adding_to_cart || ""}
-                    onChange={(e) => updateActiveString("adding_to_cart", e.target.value)}
-                    style={inputStyle}
-                  />
-                </label>
+              {/* Preset Swatches */}
+              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                {presetColors.map((col) => (
+                  <button
+                    key={col.hex}
+                    type="button"
+                    onClick={() => setPrimaryColor(col.hex)}
+                    title={col.label}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      padding: "4px 8px",
+                      borderRadius: "6px",
+                      border: primaryColor.toLowerCase() === col.hex.toLowerCase() ? "2px solid #0f172a" : "1px solid #cbd5e1",
+                      background: "#fff",
+                      fontSize: "11px",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: "12px",
+                        height: "12px",
+                        borderRadius: "50%",
+                        backgroundColor: col.hex,
+                      }}
+                    />
+                    <span>{col.label}</span>
+                  </button>
+                ))}
               </div>
             </div>
           </div>
-        </s-section>
 
-        {/* Print Standards */}
-        <s-section heading="Print Specifications">
-          <div style={{ background: "#fff", border: "1px solid #e1e3e5", borderRadius: "8px", padding: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
-            <label style={{ fontSize: "13px", fontWeight: 500 }}>
-              Default Print Resolution (DPI):
-              <input
-                type="number"
+          {/* Production Print Specifications Card */}
+          <div
+            style={{
+              background: "#ffffff",
+              borderRadius: "14px",
+              border: "1px solid #e2e8f0",
+              padding: "22px",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
+            }}
+          >
+            <h3 style={{ margin: "0 0 4px", fontSize: "16px", fontWeight: 700, color: "#0f172a" }}>
+              🖨️ Production &amp; Print Output
+            </h3>
+            <p style={{ margin: "0 0 16px", fontSize: "13px", color: "#64748b" }}>
+              Configure global default print resolution for production files generated upon order checkout.
+            </p>
+
+            <div>
+              <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: "#475569", marginBottom: "6px" }}>
+                Default Print Resolution
+              </label>
+              <select
                 value={defaultDpi}
                 onChange={(e) => setDefaultDpi(parseInt(e.target.value) || 300)}
-                style={{ width: "100%", padding: "8px", border: "1px solid #c9cccf", borderRadius: "4px", marginTop: "4px" }}
-              />
-              <span style={{ fontSize: "12px", color: "#6d7175" }}>
-                300 DPI is the industry gold standard for physical commercial printing.
-              </span>
-            </label>
-          </div>
-        </s-section>
-
-        {/* AI Processing */}
-        <s-section heading="AI Image Processing">
-          <div style={{ background: "#fff", border: "1px solid #e1e3e5", borderRadius: "8px", padding: "16px" }}>
-            <label style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer" }}>
-              <input
-                type="checkbox"
-                checked={enableAi}
-                onChange={(e) => setEnableAi(e.target.checked)}
-              />
-              <div>
-                <div style={{ fontSize: "13px", fontWeight: 600 }}>Enable AI Background Removal on Customer Uploads</div>
-                <div style={{ fontSize: "12px", color: "#6d7175" }}>
-                  Automatically isolates subject portraits from customer-uploaded photos using Rembg / PhotoRoom pipeline.
-                </div>
-              </div>
-            </label>
-          </div>
-        </s-section>
-
-        {/* Storage Provider */}
-        <s-section heading="Asset & Print Storage Provider">
-          <div style={{ background: "#fff", border: "1px solid #e1e3e5", borderRadius: "8px", padding: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
-            <label style={{ fontSize: "13px", fontWeight: 500 }}>
-              Storage Destination:
-              <select
-                value={storageProvider}
-                onChange={(e) => setStorageProvider(e.target.value)}
-                style={{ width: "100%", padding: "8px", border: "1px solid #c9cccf", borderRadius: "4px", marginTop: "4px" }}
+                style={{
+                  width: "100%",
+                  padding: "8px 10px",
+                  borderRadius: "6px",
+                  border: "1px solid #cbd5e1",
+                  fontSize: "13px",
+                  background: "#fff",
+                }}
               >
-                <option value="local">Local Development Storage (App Filesystem)</option>
-                <option value="s3">Amazon AWS S3 Bucket</option>
-                <option value="r2">Cloudflare R2 (Zero Egress Fees)</option>
+                <option value={300}>300 DPI (Commercial Print Ready - Recommended)</option>
+                <option value={150}>150 DPI (Standard Web Preview / Draft)</option>
               </select>
-            </label>
+            </div>
 
-            {storageProvider !== "local" && (
-              <>
-                <label style={{ fontSize: "13px", fontWeight: 500 }}>
-                  Bucket Name:
-                  <input
-                    type="text"
-                    value={s3Bucket}
-                    onChange={(e) => setS3Bucket(e.target.value)}
-                    placeholder="e.g. my-store-customizer-prints"
-                    style={{ width: "100%", padding: "8px", border: "1px solid #c9cccf", borderRadius: "4px", marginTop: "4px" }}
-                  />
-                </label>
-                <label style={{ fontSize: "13px", fontWeight: 500 }}>
-                  Region:
-                  <input
-                    type="text"
-                    value={s3Region}
-                    onChange={(e) => setS3Region(e.target.value)}
-                    placeholder="us-east-1"
-                    style={{ width: "100%", padding: "8px", border: "1px solid #c9cccf", borderRadius: "4px", marginTop: "4px" }}
-                  />
-                </label>
-              </>
-            )}
+            <div
+              style={{
+                marginTop: "14px",
+                padding: "12px",
+                borderRadius: "8px",
+                background: "#f8fafc",
+                border: "1px solid #e2e8f0",
+                fontSize: "12px",
+                color: "#64748b",
+                lineHeight: 1.4,
+              }}
+            >
+              💡 <strong>Production Note:</strong> When orders are placed, the personalizer renders high-resolution transparent PNG print files and saves them directly into your Shopify Files CDN. You can download and print them directly from the <strong>Customized Orders</strong> page.
+            </div>
           </div>
-        </s-section>
-
-        {/* POD Automation */}
-        <s-section heading="Print on Demand (POD) Integrations">
-          <div style={{ background: "#fff", border: "1px solid #e1e3e5", borderRadius: "8px", padding: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
-            <label style={{ fontSize: "13px", fontWeight: 500 }}>
-              Printful API Key (Optional):
-              <input
-                type="password"
-                value={printfulKey}
-                onChange={(e) => setPrintfulKey(e.target.value)}
-                placeholder="Bearer token..."
-                style={{ width: "100%", padding: "8px", border: "1px solid #c9cccf", borderRadius: "4px", marginTop: "4px" }}
-              />
-            </label>
-            <label style={{ fontSize: "13px", fontWeight: 500 }}>
-              Printify API Token (Optional):
-              <input
-                type="password"
-                value={printifyKey}
-                onChange={(e) => setPrintifyKey(e.target.value)}
-                placeholder="API token..."
-                style={{ width: "100%", padding: "8px", border: "1px solid #c9cccf", borderRadius: "4px", marginTop: "4px" }}
-              />
-            </label>
-          </div>
-        </s-section>
+        </div>
       </div>
-    </s-page>
+    </div>
   );
 }
