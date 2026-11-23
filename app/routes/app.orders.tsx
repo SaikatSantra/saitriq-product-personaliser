@@ -747,20 +747,14 @@ export default function CustomizedOrdersPage() {
               <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
                 <thead>
                   <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
-                    <th style={{ padding: "8px 12px", fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
-                      Order
+                    <th style={{ padding: "8px 12px", fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", width: "135px" }}>
+                      Preview
                     </th>
-                    <th style={{ padding: "8px 12px", fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
-                      Product
-                    </th>
-                    <th style={{ padding: "8px 12px", fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", minWidth: "125px" }}>
-                      Design Previews
+                    <th style={{ padding: "8px 12px", fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", minWidth: "220px" }}>
+                      Order &amp; Product Details
                     </th>
                     <th style={{ padding: "8px 12px", fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
                       Customer Customizations
-                    </th>
-                    <th style={{ padding: "8px 12px", fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
-                      Date
                     </th>
                     <th
                       style={{
@@ -770,9 +764,10 @@ export default function CustomizedOrdersPage() {
                         color: "#64748b",
                         textTransform: "uppercase",
                         textAlign: "right",
+                        width: "180px",
                       }}
                     >
-                      Production &amp; Actions
+                      Actions
                     </th>
                   </tr>
                 </thead>
@@ -784,77 +779,8 @@ export default function CustomizedOrdersPage() {
                         key={o.orderGid + "_" + o.lineItemId + "_" + idx}
                         style={{ borderBottom: "1px solid #f1f5f9" }}
                       >
-                        {/* 1. Order Number & Status */}
-                        <td style={{ padding: "8px 12px", verticalAlign: "middle", whiteSpace: "nowrap" }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                            <a
-                              href={o.adminOrderUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              style={{
-                                fontWeight: 700,
-                                fontSize: "13px",
-                                color: "#008060",
-                                textDecoration: "none",
-                              }}
-                            >
-                              {o.shopifyOrderId} ↗
-                            </a>
-                            {o.financialStatus && (
-                              <span
-                                style={{
-                                  background: "#f1f5f9",
-                                  color: "#475569",
-                                  padding: "1px 5px",
-                                  borderRadius: "3px",
-                                  fontSize: "9px",
-                                  fontWeight: 700,
-                                  textTransform: "uppercase",
-                                }}
-                              >
-                                {o.financialStatus}
-                              </span>
-                            )}
-                          </div>
-                          <div style={{ fontSize: "11px", color: "#64748b", marginTop: "2px" }}>
-                            Line item: {o.lineItemId}
-                          </div>
-                        </td>
-
-                        {/* 2. Product Title & Quantity */}
-                        <td style={{ padding: "8px 12px", verticalAlign: "middle", maxWidth: "180px" }}>
-                          <div
-                            style={{
-                              fontWeight: 600,
-                              fontSize: "12px",
-                              color: "#0f172a",
-                              whiteSpace: "nowrap",
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                            }}
-                            title={o.productTitle}
-                          >
-                            {o.productTitle}
-                          </div>
-                          <span
-                            style={{
-                              display: "inline-block",
-                              marginTop: "2px",
-                              background: "#f8fafc",
-                              border: "1px solid #e2e8f0",
-                              padding: "1px 5px",
-                              borderRadius: "3px",
-                              fontSize: "10px",
-                              color: "#64748b",
-                              fontWeight: 600,
-                            }}
-                          >
-                            Qty: {o.quantity}
-                          </span>
-                        </td>
-
-                        {/* 3. Previews (Compact Horizontal Row: Front, Back, Uploaded) */}
-                        <td style={{ padding: "8px 12px", verticalAlign: "middle", minWidth: "135px" }}>
+                        {/* 1. LEFT SIDE: Image Group (Front, Back, Customer Upload) */}
+                        <td style={{ padding: "8px 12px", verticalAlign: "middle", width: "135px" }}>
                           <div style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: "6px", flexWrap: "nowrap" }}>
                             {/* Front Preview */}
                             {(o.frontPreviewUrl || o.previewImageUrl) ? (
@@ -862,8 +788,8 @@ export default function CustomizedOrdersPage() {
                                 style={{
                                   position: "relative",
                                   cursor: "pointer",
-                                  width: "36px",
-                                  height: "36px",
+                                  width: "38px",
+                                  height: "38px",
                                   borderRadius: "5px",
                                   overflow: "hidden",
                                   border: "1px solid #cbd5e1",
@@ -915,8 +841,8 @@ export default function CustomizedOrdersPage() {
                                 style={{
                                   position: "relative",
                                   cursor: "pointer",
-                                  width: "36px",
-                                  height: "36px",
+                                  width: "38px",
+                                  height: "38px",
                                   borderRadius: "5px",
                                   overflow: "hidden",
                                   border: "1px solid #cbd5e1",
@@ -967,8 +893,8 @@ export default function CustomizedOrdersPage() {
                                 style={{
                                   position: "relative",
                                   cursor: "pointer",
-                                  width: "36px",
-                                  height: "36px",
+                                  width: "38px",
+                                  height: "38px",
                                   borderRadius: "5px",
                                   overflow: "hidden",
                                   border: "1.5px solid #008060",
@@ -1016,7 +942,69 @@ export default function CustomizedOrdersPage() {
                           </div>
                         </td>
 
-                        {/* 4. Customer Customizations (Compact Inline Chips) */}
+                        {/* 2. ORDER DETAILS: Order ID & Product Details */}
+                        <td style={{ padding: "8px 12px", verticalAlign: "middle" }}>
+                          {/* Order ID & Financial Status & Date */}
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                            <a
+                              href={o.adminOrderUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              style={{
+                                fontWeight: 700,
+                                fontSize: "13px",
+                                color: "#008060",
+                                textDecoration: "none",
+                              }}
+                            >
+                              {o.shopifyOrderId} ↗
+                            </a>
+                            {o.financialStatus && (
+                              <span
+                                style={{
+                                  background: "#f1f5f9",
+                                  color: "#475569",
+                                  padding: "1px 5px",
+                                  borderRadius: "3px",
+                                  fontSize: "9px",
+                                  fontWeight: 700,
+                                  textTransform: "uppercase",
+                                }}
+                              >
+                                {o.financialStatus}
+                              </span>
+                            )}
+                            <span style={{ fontSize: "11px", color: "#94a3b8" }}>
+                              • {new Date(o.createdAt).toLocaleDateString()}
+                            </span>
+                          </div>
+
+                          {/* Product Title */}
+                          <div
+                            style={{
+                              fontWeight: 600,
+                              fontSize: "12px",
+                              color: "#0f172a",
+                              marginTop: "2px",
+                              whiteSpace: "nowrap",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              maxWidth: "280px",
+                            }}
+                            title={o.productTitle}
+                          >
+                            {o.productTitle}
+                          </div>
+
+                          {/* Line Item & Quantity */}
+                          <div style={{ fontSize: "11px", color: "#64748b", marginTop: "1px" }}>
+                            <span>Qty: {o.quantity}</span>
+                            <span style={{ margin: "0 4px", color: "#cbd5e1" }}>|</span>
+                            <span>Line: {o.lineItemId}</span>
+                          </div>
+                        </td>
+
+                        {/* 3. CUSTOMER CUSTOMISATIONS: Compact Inline Chips */}
                         <td style={{ padding: "8px 12px", verticalAlign: "middle" }}>
                           {(() => {
                             const rawEntries = Object.entries(o.customerSelections || {});
@@ -1125,26 +1113,14 @@ export default function CustomizedOrdersPage() {
                           })()}
                         </td>
 
-                        {/* 5. Order Date */}
-                        <td
-                          style={{
-                            padding: "8px 12px",
-                            color: "#64748b",
-                            fontSize: "11px",
-                            verticalAlign: "middle",
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          {new Date(o.createdAt).toLocaleDateString()}
-                        </td>
-
-                        {/* 6. Production Print & Delete Actions (Compact) */}
+                        {/* 4. ACTIONS */}
                         <td
                           style={{
                             padding: "8px 12px",
                             textAlign: "right",
                             verticalAlign: "middle",
                             whiteSpace: "nowrap",
+                            width: "180px",
                           }}
                         >
                           <div
