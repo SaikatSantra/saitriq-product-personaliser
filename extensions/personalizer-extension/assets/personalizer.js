@@ -53,6 +53,13 @@
         }
       }
 
+      this.currentLocale = (
+        this.getAttribute("data-locale") ||
+        window.Shopify?.locale ||
+        document.documentElement.lang ||
+        "en"
+      ).toLowerCase().split("-")[0];
+
       this.productId = this.getAttribute("data-product-id") || "";
       this.productTitle = this.getAttribute("data-product-title") || "";
       this.productImage = this.getAttribute("data-product-image") || "";
@@ -434,6 +441,7 @@
           shop: cleanShop,
           productId: numericId || this.productId,
           rawProductId: this.productId,
+          locale: this.currentLocale || "en",
           t: String(Date.now()),
         }).toString();
 
@@ -466,7 +474,23 @@
           }
         }
 
-        if (data && data.storefrontText && typeof data.storefrontText === "object") {
+        if (data && data.languages && typeof data.languages === "object") {
+          this.languages = data.languages;
+          const activeCode = this.currentLocale || "en";
+          const langEntry = data.languages[activeCode] || data.languages["en"];
+          if (langEntry?.strings) {
+            const cleanText = {};
+            Object.keys(langEntry.strings).forEach((k) => {
+              if (langEntry.strings[k] && String(langEntry.strings[k]).trim() !== "") {
+                cleanText[k] = langEntry.strings[k];
+              }
+            });
+            this.locales = { ...this.locales, ...cleanText };
+            if (cleanText.button_text) {
+              this.buttonText = cleanText.button_text;
+            }
+          }
+        } else if (data && data.storefrontText && typeof data.storefrontText === "object") {
           const cleanText = {};
           Object.keys(data.storefrontText).forEach((k) => {
             if (data.storefrontText[k] && String(data.storefrontText[k]).trim() !== "") {

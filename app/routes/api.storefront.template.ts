@@ -7,6 +7,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const rawShop = url.searchParams.get("shop") || request.headers.get("x-shopify-shop-domain") || "";
   const shop = rawShop.replace(/^https?:\/\//, "").replace(/\/.*$/, "").trim();
   const productId = url.searchParams.get("productId") || url.searchParams.get("rawProductId") || "";
+  const requestedLocale = (url.searchParams.get("locale") || "en").toLowerCase().split("-")[0];
 
   const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -19,7 +20,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     return new Response(null, { status: 204, headers: corsHeaders });
   }
 
+  let languages: any = {};
   let storefrontText: Record<string, string> = {};
+
   if (shop) {
     try {
       const shopRecord = await prisma.shop.findUnique({
@@ -27,16 +30,32 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       });
       if (shopRecord?.settings) {
         const parsed = JSON.parse(shopRecord.settings);
-        if (parsed.storefrontText && typeof parsed.storefrontText === "object") {
-          storefrontText = parsed.storefrontText;
+        if (parsed.languages && typeof parsed.languages === "object") {
+          languages = parsed.languages;
+        } else if (parsed.storefrontText) {
+          languages = {
+            en: {
+              name: "English",
+              isDefault: true,
+              strings: parsed.storefrontText,
+            },
+          };
         }
       }
     } catch {}
   }
 
+  // Pick strings for requested locale, or fallback to default / English
+  if (languages[requestedLocale]?.strings) {
+    storefrontText = languages[requestedLocale].strings;
+  } else {
+    const defaultKey = Object.keys(languages).find((k) => languages[k]?.isDefault) || "en";
+    storefrontText = languages[defaultKey]?.strings || languages["en"]?.strings || {};
+  }
+
   if (!shop) {
     return Response.json(
-      { hasCustomizer: false, error: "Missing shop parameter", storefrontText },
+      { hasCustomizer: false, error: "Missing shop parameter", storefrontText, languages },
       { headers: corsHeaders },
     );
   }
@@ -45,7 +64,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   if (!template) {
     return Response.json(
-      { hasCustomizer: false, message: "No template assigned to this product", storefrontText },
+      { hasCustomizer: false, message: "No template assigned to this product", storefrontText, languages },
       { headers: corsHeaders },
     );
   }
@@ -61,6 +80,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     {
       hasCustomizer: true,
       storefrontText,
+      languages,
       template: {
         id: template.id,
         title: template.title,

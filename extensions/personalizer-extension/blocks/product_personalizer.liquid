@@ -31,6 +31,7 @@
     data-primary-color="{{ btn_color | escape }}"
     data-auto-open="{{ block.settings.auto_open | default: false }}"
     data-design-mode="{% if request.design_mode %}true{% else %}false{% endif %}"
+    data-locale="{{ request.locale.iso_code | downcase }}"
     style="display: none;"
   >
     <script type="application/json" class="saitriq-locales-json">
