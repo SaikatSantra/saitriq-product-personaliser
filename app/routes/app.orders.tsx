@@ -7,7 +7,9 @@ import {
   createCustomizedOrder,
   updateCustomizedOrderStatus,
   updateCustomizedOrderPreview,
+  deleteCustomizedOrder,
 } from "../models/order.server";
+import { getShop } from "../models/shop.server";
 import { renderHighResPrintFile } from "../services/renderer.server";
 import { uploadToShopifyFiles } from "../services/shopifyFiles.server";
 
@@ -30,6 +32,14 @@ export function normalizePreviewUrl(rawUrl?: string, shop?: string): string {
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session, admin } = await authenticate.admin(request);
   const shop = session.shop;
+
+  // Load shop settings to filter out deleted/hidden orders
+  const shopRecord = await getShop(shop);
+  let shopSettings: any = {};
+  try {
+    shopSettings = JSON.parse(shopRecord?.settings || "{}");
+  } catch {}
+  const hiddenKeys = new Set<string>(shopSettings.hiddenOrderKeys || []);
 
   // 1. Fetch live orders from Shopify Admin GraphQL API
   let shopifyCustomizedOrders: any[] = [];
@@ -72,6 +82,17 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
       for (const item of items) {
         const itemNumericId = item.id.replace(/^gid:\/\/shopify\/LineItem\//, "");
+
+        // Skip if order item was deleted by merchant
+        if (
+          hiddenKeys.has(orderNumericId) ||
+          hiddenKeys.has(order.name) ||
+          hiddenKeys.has(`${orderNumericId}_${itemNumericId}`) ||
+          hiddenKeys.has(`${order.name}_${itemNumericId}`)
+        ) {
+          continue;
+        }
+
         const attributes: Array<{ key: string; value: string }> = item.customAttributes || [];
         const attrMap: Record<string, string> = {};
         attributes.forEach((a) => {
@@ -216,6 +237,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const processedKeys = new Set(shopifyCustomizedOrders.map((so) => `${so.numericOrderId}_${so.lineItemId}`));
   for (const dbo of dbOrders) {
     const key = `${dbo.shopifyOrderId}_${dbo.shopifyLineItemId}`;
+    if (
+      hiddenKeys.has(dbo.id) ||
+      hiddenKeys.has(dbo.shopifyOrderId) ||
+      hiddenKeys.has(key)
+    ) {
+      continue;
+    }
+
     if (!processedKeys.has(key)) {
       let selections: Record<string, string> = {};
       try {
@@ -317,11 +346,21 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         await updateCustomizedOrderStatus(dbId, session.shop, "completed", printPdfUrl);
       }
 
-      return { success: true, printPdfUrl };
+      return { success: true, printPdfUrl, message: `Print PDF generated for Order ${orderId}` };
     } catch (err: any) {
       console.error("[Action] Render failed:", err);
       return { success: false, error: err?.message };
     }
+  }
+
+  if (intent === "delete_order") {
+    await deleteCustomizedOrder(session.shop, {
+      id: dbId || undefined,
+      shopifyOrderId: orderId || undefined,
+      lineItemId: lineItemId || undefined,
+    });
+
+    return { success: true, message: `Order ${orderId ? `#${orderId.replace(/\D/g, "")}` : ""} deleted from custom orders list.` };
   }
 
   return { success: false };
@@ -330,8 +369,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 export default function CustomizedOrdersPage() {
   const { orders, shop } = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
+
   const [activeModalImage, setActiveModalImage] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [filterTab, setFilterTab] = useState<"all" | "ready" | "pending">("all");
+  const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
 
   const handleGeneratePrint = (order: any) => {
     fetcher.submit(
@@ -347,110 +389,172 @@ export default function CustomizedOrdersPage() {
     );
   };
 
-  const filteredOrders = useMemo(() => {
-    if (!searchQuery.trim()) return orders;
-    const q = searchQuery.toLowerCase().trim();
-    return orders.filter(
-      (o: any) =>
-        (o.shopifyOrderId || "").toLowerCase().includes(q) ||
-        (o.productTitle || "").toLowerCase().includes(q) ||
-        Object.values(o.customerSelections || {}).some((v: any) =>
-          String(v).toLowerCase().includes(q),
-        ),
+  const handleConfirmDelete = () => {
+    if (!deleteTarget) return;
+    fetcher.submit(
+      {
+        intent: "delete_order",
+        orderId: deleteTarget.numericOrderId || deleteTarget.shopifyOrderId,
+        lineItemId: deleteTarget.lineItemId || "",
+        dbId: deleteTarget.dbId || "",
+      },
+      { method: "POST" },
     );
-  }, [orders, searchQuery]);
+    setDeleteTarget(null);
+  };
+
+  const filteredOrders = useMemo(() => {
+    return orders.filter((o: any) => {
+      // 1. Search filter
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const matchOrder = (o.shopifyOrderId || "").toLowerCase().includes(q);
+        const matchTitle = (o.productTitle || "").toLowerCase().includes(q);
+        const matchSelections = Object.values(o.customerSelections || {}).some((v: any) =>
+          String(v).toLowerCase().includes(q),
+        );
+        if (!matchOrder && !matchTitle && !matchSelections) return false;
+      }
+
+      // 2. Tab filter
+      const isReady = Boolean(o.printFileUrl || o.renderStatus === "completed");
+      if (filterTab === "ready" && !isReady) return false;
+      if (filterTab === "pending" && isReady) return false;
+
+      return true;
+    });
+  }, [orders, searchQuery, filterTab]);
 
   const completedPrintsCount = orders.filter(
-    (o) => o.printFileUrl || o.renderStatus === "completed",
+    (o: any) => o.printFileUrl || o.renderStatus === "completed",
   ).length;
+  const pendingPrintsCount = orders.length - completedPrintsCount;
 
   return (
     <s-page heading="Custom orders">
-      {/* Top Metrics */}
+      {fetcher.data?.message && (
+        <div style={{ marginBottom: "16px" }}>
+          <s-banner tone="success">{fetcher.data.message}</s-banner>
+        </div>
+      )}
+
+      {fetcher.data?.error && (
+        <div style={{ marginBottom: "16px" }}>
+          <s-banner tone="critical">{fetcher.data.error}</s-banner>
+        </div>
+      )}
+
+      {/* =========================================================================
+          POLARIS GRAPHICAL OVERVIEW BANNER
+      ========================================================================= */}
       <div
         style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-          gap: "12px",
+          background: "#ffffff",
+          border: "1px solid #e2e8f0",
+          borderRadius: "12px",
+          padding: "16px 22px",
           marginBottom: "16px",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: "16px",
+          boxShadow: "0 1px 3px rgba(0, 0, 0, 0.04)",
         }}
       >
-        <div
-          style={{
-            background: "#fff",
-            padding: "14px 16px",
-            borderRadius: "10px",
-            border: "1px solid #e2e8f0",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
+        <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+          <div
+            style={{
+              width: "48px",
+              height: "48px",
+              borderRadius: "10px",
+              background: "linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)",
+              border: "1px solid #bbf7d0",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: "24px",
+              flexShrink: 0,
+            }}
+          >
+            📦
+          </div>
           <div>
-            <div style={{ fontSize: "11px", color: "#64748b", fontWeight: 600, textTransform: "uppercase" }}>
-              Total custom orders
+            <h2 style={{ fontSize: "16px", fontWeight: 700, margin: 0, color: "#0f172a" }}>
+              Customized Production Orders &amp; Print Snapshots
+            </h2>
+            <p style={{ margin: "3px 0 0", fontSize: "13px", color: "#64748b" }}>
+              Inspect customer personalization designs, front &amp; back previews, and download 300 DPI production print files.
+            </p>
+          </div>
+        </div>
+
+        {/* Polaris Metric Pills */}
+        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
+          <div
+            style={{
+              background: "#f8fafc",
+              border: "1px solid #e2e8f0",
+              borderRadius: "8px",
+              padding: "6px 14px",
+              minWidth: "90px",
+            }}
+          >
+            <div style={{ fontSize: "10px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+              Total Orders
             </div>
-            <div style={{ fontSize: "24px", fontWeight: 800, margin: "2px 0 0", color: "#0f172a" }}>
+            <div style={{ fontSize: "18px", fontWeight: 800, color: "#0f172a", marginTop: "1px" }}>
               {orders.length}
             </div>
           </div>
-          <span style={{ fontSize: "24px" }}>📦</span>
-        </div>
 
-        <div
-          style={{
-            background: "#fff",
-            padding: "14px 16px",
-            borderRadius: "10px",
-            border: "1px solid #e2e8f0",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
-          <div>
-            <div style={{ fontSize: "11px", color: "#64748b", fontWeight: 600, textTransform: "uppercase" }}>
-              Print files ready
+          <div
+            style={{
+              background: "#f8fafc",
+              border: "1px solid #e2e8f0",
+              borderRadius: "8px",
+              padding: "6px 14px",
+              minWidth: "90px",
+            }}
+          >
+            <div style={{ fontSize: "10px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+              Print Ready
             </div>
-            <div style={{ fontSize: "24px", fontWeight: 800, margin: "2px 0 0", color: "#008060" }}>
+            <div style={{ fontSize: "18px", fontWeight: 800, color: "#008060", marginTop: "1px" }}>
               {completedPrintsCount}
             </div>
           </div>
-          <span style={{ fontSize: "24px" }}>🖨️</span>
-        </div>
 
-        <div
-          style={{
-            background: "#fff",
-            padding: "14px 16px",
-            borderRadius: "10px",
-            border: "1px solid #e2e8f0",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
-          <div>
-            <div style={{ fontSize: "11px", color: "#64748b", fontWeight: 600, textTransform: "uppercase" }}>
-              Connected store
+          <div
+            style={{
+              background: "#f8fafc",
+              border: "1px solid #e2e8f0",
+              borderRadius: "8px",
+              padding: "6px 14px",
+            }}
+          >
+            <div style={{ fontSize: "10px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+              Print Engine
             </div>
-            <div style={{ fontSize: "13px", fontWeight: 700, margin: "4px 0 0", color: "#0f172a", wordBreak: "break-all" }}>
-              {shop}
+            <div style={{ fontSize: "13px", fontWeight: 700, color: "#2563eb", marginTop: "2px" }}>
+              ✓ 300 DPI High-Res
             </div>
           </div>
-          <span style={{ fontSize: "24px" }}>🟢</span>
         </div>
       </div>
 
+      {/* =========================================================================
+          ORDERS LIST & TABLE CARD
+      ========================================================================= */}
       {orders.length === 0 ? (
         <div
           style={{
             textAlign: "center",
-            padding: "60px 20px",
-            background: "#fff",
+            padding: "56px 24px",
+            background: "#ffffff",
             borderRadius: "12px",
             border: "1px solid #e2e8f0",
-            boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
           }}
         >
           <div style={{ fontSize: "48px", marginBottom: "12px" }}>📦</div>
@@ -462,7 +566,7 @@ export default function CustomizedOrdersPage() {
               color: "#64748b",
               maxWidth: "480px",
               margin: "0 auto 20px auto",
-              fontSize: "14px",
+              fontSize: "13px",
               lineHeight: 1.5,
             }}
           >
@@ -489,19 +593,19 @@ export default function CustomizedOrdersPage() {
       ) : (
         <div
           style={{
-            background: "#fff",
+            background: "#ffffff",
             borderRadius: "12px",
             border: "1px solid #e2e8f0",
             boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
             overflow: "hidden",
           }}
         >
-          {/* Card Header & Search */}
+          {/* Card Controls Bar: Tabs & Search Input */}
           <div
             style={{
-              padding: "16px 20px",
-              borderBottom: "1px solid #e2e8f0",
-              background: "#f8fafc",
+              padding: "12px 18px",
+              borderBottom: "1px solid #f1f5f9",
+              background: "#ffffff",
               display: "flex",
               justifyContent: "space-between",
               alignItems: "center",
@@ -509,21 +613,78 @@ export default function CustomizedOrdersPage() {
               gap: "12px",
             }}
           >
-            <div>
-              <h3 style={{ margin: 0, fontSize: "15px", fontWeight: 700, color: "#0f172a" }}>
-                Customized Orders ({filteredOrders.length})
-              </h3>
-              <p style={{ margin: "2px 0 0", fontSize: "12px", color: "#64748b" }}>
-                View customer front/back previews, upload sources, and generate production print files.
-              </p>
+            {/* Filter Tabs */}
+            <div style={{ display: "flex", gap: "6px" }}>
+              <button
+                type="button"
+                onClick={() => setFilterTab("all")}
+                style={{
+                  padding: "6px 14px",
+                  borderRadius: "6px",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  border: filterTab === "all" ? "1px solid #008060" : "1px solid #cbd5e1",
+                  background: filterTab === "all" ? "#f0fdf4" : "#ffffff",
+                  color: filterTab === "all" ? "#008060" : "#475569",
+                  cursor: "pointer",
+                }}
+              >
+                All Orders ({orders.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilterTab("ready")}
+                style={{
+                  padding: "6px 14px",
+                  borderRadius: "6px",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  border: filterTab === "ready" ? "1px solid #008060" : "1px solid #cbd5e1",
+                  background: filterTab === "ready" ? "#f0fdf4" : "#ffffff",
+                  color: filterTab === "ready" ? "#008060" : "#475569",
+                  cursor: "pointer",
+                }}
+              >
+                Print Ready ({completedPrintsCount})
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilterTab("pending")}
+                style={{
+                  padding: "6px 14px",
+                  borderRadius: "6px",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  border: filterTab === "pending" ? "1px solid #008060" : "1px solid #cbd5e1",
+                  background: filterTab === "pending" ? "#f0fdf4" : "#ffffff",
+                  color: filterTab === "pending" ? "#008060" : "#475569",
+                  cursor: "pointer",
+                }}
+              >
+                Pending Render ({pendingPrintsCount})
+              </button>
             </div>
 
+            {/* Live Search */}
             <div style={{ position: "relative", minWidth: "260px" }}>
+              <span
+                style={{
+                  position: "absolute",
+                  left: "10px",
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  fontSize: "13px",
+                  color: "#94a3b8",
+                  pointerEvents: "none",
+                }}
+              >
+                🔍
+              </span>
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search by #order or product..."
+                placeholder="Search by order #, item, or text..."
                 style={{
                   width: "100%",
                   padding: "7px 12px 7px 32px",
@@ -534,489 +695,623 @@ export default function CustomizedOrdersPage() {
                   boxSizing: "border-box",
                 }}
               />
-              <span
-                style={{
-                  position: "absolute",
-                  left: "10px",
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  fontSize: "14px",
-                  color: "#94a3b8",
-                  pointerEvents: "none",
-                }}
-              >
-                🔍
-              </span>
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  style={{
+                    position: "absolute",
+                    right: "8px",
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    border: "none",
+                    background: "none",
+                    cursor: "pointer",
+                    fontSize: "13px",
+                    color: "#94a3b8",
+                  }}
+                >
+                  &times;
+                </button>
+              )}
             </div>
           </div>
 
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
-              <thead>
-                <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
-                  <th style={{ padding: "12px 18px", fontSize: "12px", fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                    Customized Preview
-                  </th>
-                  <th style={{ padding: "12px 18px", fontSize: "12px", fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                    Order
-                  </th>
-                  <th style={{ padding: "12px 18px", fontSize: "12px", fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                    Product
-                  </th>
-                  <th style={{ padding: "12px 18px", fontSize: "12px", fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                    Customer Customizations
-                  </th>
-                  <th style={{ padding: "12px 18px", fontSize: "12px", fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                    Date
-                  </th>
-                  <th
-                    style={{
-                      padding: "12px 18px",
-                      fontSize: "12px",
-                      fontWeight: 700,
-                      color: "#475569",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.5px",
-                      textAlign: "right",
-                    }}
-                  >
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredOrders.map((o, idx) => (
-                  <tr
-                    key={o.orderGid + "_" + o.lineItemId + "_" + idx}
-                    style={{ borderBottom: "1px solid #f1f2f3" }}
-                  >
-                    {/* 1. Preview Image Thumbnails (Front, Back, Raw) */}
-                    <td style={{ padding: "12px 16px" }}>
-                      <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
-                        {/* Front Preview */}
-                        {(o.frontPreviewUrl || o.previewImageUrl) ? (
-                          <div
-                            style={{
-                              position: "relative",
-                              cursor: "pointer",
-                              width: "56px",
-                              height: "56px",
-                              borderRadius: "6px",
-                              overflow: "hidden",
-                              border: "1px solid #d4d6d8",
-                              background: "#fafafa",
-                            }}
-                            onClick={() => setActiveModalImage(normalizePreviewUrl(o.frontPreviewUrl || o.previewImageUrl, shop))}
-                            title="Click to view Front Design Preview"
-                          >
-                            <img
-                              src={normalizePreviewUrl(o.frontPreviewUrl || o.previewImageUrl, shop)}
-                              alt="Front Preview"
-                              onError={(e) => {
-                                const img = e.currentTarget;
-                                const raw = o.frontPreviewUrl || o.previewImageUrl;
-                                const match = raw?.match(/(?:preview|previews)\/([a-zA-Z0-9_.-]+)/);
-                                if (match && match[1] && !img.src.includes(`/api/preview/${match[1]}`)) {
-                                  img.src = `/api/preview/${match[1]}`;
-                                }
-                              }}
-                              style={{
-                                width: "100%",
-                                height: "100%",
-                                objectFit: "contain",
-                              }}
-                            />
-                            <div
-                              style={{
-                                position: "absolute",
-                                bottom: "2px",
-                                left: "2px",
-                                background: "rgba(15, 23, 42, 0.75)",
-                                color: "#fff",
-                                fontSize: "8px",
-                                padding: "1px 3px",
-                                borderRadius: "2px",
-                                fontWeight: 700,
-                              }}
-                            >
-                              FRONT
-                            </div>
-                          </div>
-                        ) : null}
-
-                        {/* Back Preview */}
-                        {o.backPreviewUrl ? (
-                          <div
-                            style={{
-                              position: "relative",
-                              cursor: "pointer",
-                              width: "56px",
-                              height: "56px",
-                              borderRadius: "6px",
-                              overflow: "hidden",
-                              border: "1px solid #d4d6d8",
-                              background: "#fafafa",
-                            }}
-                            onClick={() => setActiveModalImage(normalizePreviewUrl(o.backPreviewUrl, shop))}
-                            title="Click to view Back Design Preview"
-                          >
-                            <img
-                              src={normalizePreviewUrl(o.backPreviewUrl, shop)}
-                              alt="Back Preview"
-                              onError={(e) => {
-                                const img = e.currentTarget;
-                                const match = o.backPreviewUrl?.match(/(?:preview|previews)\/([a-zA-Z0-9_.-]+)/);
-                                if (match && match[1] && !img.src.includes(`/api/preview/${match[1]}`)) {
-                                  img.src = `/api/preview/${match[1]}`;
-                                }
-                              }}
-                              style={{
-                                width: "100%",
-                                height: "100%",
-                                objectFit: "contain",
-                              }}
-                            />
-                            <div
-                              style={{
-                                position: "absolute",
-                                bottom: "2px",
-                                left: "2px",
-                                background: "rgba(15, 23, 42, 0.75)",
-                                color: "#fff",
-                                fontSize: "8px",
-                                padding: "1px 3px",
-                                borderRadius: "2px",
-                                fontWeight: 700,
-                              }}
-                            >
-                              BACK
-                            </div>
-                          </div>
-                        ) : null}
-
-                        {/* Customer Raw Upload (Front / Main) */}
-                        {(o.frontUploadedUrl || o.uploadedImageUrl) ? (
-                          <div
-                            style={{
-                              position: "relative",
-                              cursor: "pointer",
-                              width: "56px",
-                              height: "56px",
-                              borderRadius: "6px",
-                              overflow: "hidden",
-                              border: "2px solid #008060",
-                              background: "#f0fdf4",
-                            }}
-                            onClick={() => setActiveModalImage(normalizePreviewUrl(o.frontUploadedUrl || o.uploadedImageUrl, shop))}
-                            title="Click to view Customer's Original Uploaded Photo"
-                          >
-                            <img
-                              src={normalizePreviewUrl(o.frontUploadedUrl || o.uploadedImageUrl, shop)}
-                              alt="Uploaded Logo / Photo"
-                              onError={(e) => {
-                                const img = e.currentTarget;
-                                const raw = o.frontUploadedUrl || o.uploadedImageUrl;
-                                const match = raw?.match(/(?:preview|previews)\/([a-zA-Z0-9_.-]+)/);
-                                if (match && match[1] && !img.src.includes(`/api/preview/${match[1]}`)) {
-                                  img.src = `/api/preview/${match[1]}`;
-                                }
-                              }}
-                              style={{
-                                width: "100%",
-                                height: "100%",
-                                objectFit: "contain",
-                              }}
-                            />
-                            <div
-                              style={{
-                                position: "absolute",
-                                top: "2px",
-                                left: "2px",
-                                background: "#008060",
-                                color: "#fff",
-                                fontSize: "8px",
-                                padding: "1px 3px",
-                                borderRadius: "2px",
-                                fontWeight: "bold",
-                              }}
-                            >
-                              {o.backUploadedUrl ? "RAW F" : "RAW"}
-                            </div>
-                          </div>
-                        ) : null}
-
-                        {/* Customer Back Raw Upload (if uploaded separately on Back) */}
-                        {o.backUploadedUrl && o.backUploadedUrl !== o.frontUploadedUrl ? (
-                          <div
-                            style={{
-                              position: "relative",
-                              cursor: "pointer",
-                              width: "56px",
-                              height: "56px",
-                              borderRadius: "6px",
-                              overflow: "hidden",
-                              border: "2px solid #008060",
-                              background: "#f0fdf4",
-                            }}
-                            onClick={() => setActiveModalImage(normalizePreviewUrl(o.backUploadedUrl, shop))}
-                            title="Click to view Customer's Back Uploaded Photo"
-                          >
-                            <img
-                              src={normalizePreviewUrl(o.backUploadedUrl, shop)}
-                              alt="Back Uploaded Logo / Photo"
-                              onError={(e) => {
-                                const img = e.currentTarget;
-                                const match = o.backUploadedUrl?.match(/(?:preview|previews)\/([a-zA-Z0-9_.-]+)/);
-                                if (match && match[1] && !img.src.includes(`/api/preview/${match[1]}`)) {
-                                  img.src = `/api/preview/${match[1]}`;
-                                }
-                              }}
-                              style={{
-                                width: "100%",
-                                height: "100%",
-                                objectFit: "contain",
-                              }}
-                            />
-                            <div
-                              style={{
-                                position: "absolute",
-                                top: "2px",
-                                left: "2px",
-                                background: "#008060",
-                                color: "#fff",
-                                fontSize: "8px",
-                                padding: "1px 3px",
-                                borderRadius: "2px",
-                                fontWeight: "bold",
-                              }}
-                            >
-                              RAW B
-                            </div>
-                          </div>
-                        ) : null}
-
-                        {!o.previewImageUrl && !o.frontPreviewUrl && !o.backPreviewUrl && !o.uploadedImageUrl && (
-                          <div
-                            style={{
-                              width: "56px",
-                              height: "56px",
-                              background: "#f0f2f5",
-                              borderRadius: "6px",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              fontSize: "11px",
-                              color: "#8c9196",
-                            }}
-                          >
-                            No Image
-                          </div>
-                        )}
-                      </div>
-                    </td>
-
-                    {/* 2. Order Name & Admin Link */}
-                    <td style={{ padding: "12px 16px", verticalAlign: "middle" }}>
-                      <a
-                        href={o.adminOrderUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        style={{
-                          fontWeight: 600,
-                          fontSize: "14px",
-                          color: "#0066cc",
-                          textDecoration: "none",
-                        }}
+          {filteredOrders.length === 0 ? (
+            <div style={{ padding: "48px 20px", textAlign: "center", color: "#64748b" }}>
+              <p style={{ margin: "0 0 12px", fontSize: "14px" }}>
+                No custom orders found matching <strong>&ldquo;{searchQuery}&rdquo;</strong>.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery("");
+                  setFilterTab("all");
+                }}
+                style={{
+                  padding: "6px 14px",
+                  borderRadius: "6px",
+                  border: "1px solid #cbd5e1",
+                  background: "#fff",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  color: "#0f172a",
+                }}
+              >
+                Clear Filters
+              </button>
+            </div>
+          ) : (
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
+                <thead>
+                  <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
+                    <th style={{ padding: "12px 18px", fontSize: "12px", fontWeight: 600, color: "#64748b" }}>
+                      Order
+                    </th>
+                    <th style={{ padding: "12px 18px", fontSize: "12px", fontWeight: 600, color: "#64748b" }}>
+                      Product
+                    </th>
+                    <th style={{ padding: "12px 18px", fontSize: "12px", fontWeight: 600, color: "#64748b" }}>
+                      Design Previews
+                    </th>
+                    <th style={{ padding: "12px 18px", fontSize: "12px", fontWeight: 600, color: "#64748b" }}>
+                      Customer Selections
+                    </th>
+                    <th style={{ padding: "12px 18px", fontSize: "12px", fontWeight: 600, color: "#64748b" }}>
+                      Date
+                    </th>
+                    <th
+                      style={{
+                        padding: "12px 18px",
+                        fontSize: "12px",
+                        fontWeight: 600,
+                        color: "#64748b",
+                        textAlign: "right",
+                      }}
+                    >
+                      Production &amp; Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredOrders.map((o: any, idx: number) => {
+                    const isReady = Boolean(o.printFileUrl || o.renderStatus === "completed");
+                    return (
+                      <tr
+                        key={o.orderGid + "_" + o.lineItemId + "_" + idx}
+                        style={{ borderBottom: "1px solid #f1f5f9" }}
                       >
-                        {o.shopifyOrderId}
-                      </a>
-                      <div style={{ fontSize: "11px", color: "#6d7175", marginTop: "2px" }}>
-                        ID: {o.numericOrderId}
-                      </div>
-                    </td>
+                        {/* 1. Order Number & Status */}
+                        <td style={{ padding: "14px 18px", verticalAlign: "middle" }}>
+                          <a
+                            href={o.adminOrderUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            style={{
+                              fontWeight: 700,
+                              fontSize: "14px",
+                              color: "#008060",
+                              textDecoration: "none",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "4px",
+                            }}
+                          >
+                            {o.shopifyOrderId} ↗
+                          </a>
+                          <div style={{ fontSize: "11px", color: "#64748b", marginTop: "2px" }}>
+                            Line item: {o.lineItemId}
+                          </div>
+                          {o.financialStatus && (
+                            <span
+                              style={{
+                                display: "inline-block",
+                                marginTop: "4px",
+                                background: "#f1f5f9",
+                                color: "#475569",
+                                padding: "2px 6px",
+                                borderRadius: "4px",
+                                fontSize: "10px",
+                                fontWeight: 700,
+                                textTransform: "uppercase",
+                              }}
+                            >
+                              {o.financialStatus}
+                            </span>
+                          )}
+                        </td>
 
-                    {/* 3. Product Info */}
-                    <td style={{ padding: "12px 16px", verticalAlign: "middle" }}>
-                      <div style={{ fontWeight: 500, fontSize: "13px" }}>{o.productTitle}</div>
-                      <div style={{ fontSize: "12px", color: "#6d7175" }}>Qty: {o.quantity}</div>
-                    </td>
+                        {/* 2. Product Title & Quantity */}
+                        <td style={{ padding: "14px 18px", verticalAlign: "middle" }}>
+                          <div style={{ fontWeight: 600, fontSize: "13px", color: "#0f172a" }}>
+                            {o.productTitle}
+                          </div>
+                          <span
+                            style={{
+                              display: "inline-block",
+                              marginTop: "3px",
+                              background: "#f8fafc",
+                              border: "1px solid #e2e8f0",
+                              padding: "2px 6px",
+                              borderRadius: "4px",
+                              fontSize: "11px",
+                              color: "#64748b",
+                              fontWeight: 600,
+                            }}
+                          >
+                            Qty: {o.quantity}
+                          </span>
+                        </td>
 
-                    {/* 4. Customer Customizations */}
-                    <td style={{ padding: "12px 16px", verticalAlign: "middle" }}>
-                      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                        {Object.entries(o.customerSelections).map(([key, val]) => {
-                          if (key.startsWith("_") || key === "Custom Design Preview") return null;
-
-                          const strVal = String(val || "");
-                          const isImage =
-                            key.toLowerCase().includes("upload") ||
-                            key.toLowerCase().includes("photo") ||
-                            key.toLowerCase().includes("image") ||
-                            strVal.startsWith("http") ||
-                            strVal.startsWith("data:image");
-
-                          if (isImage) {
-                            return (
-                              <div key={key} style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                                <span
+                        {/* 3. Previews (Front, Back, Uploaded) */}
+                        <td style={{ padding: "14px 18px", verticalAlign: "middle" }}>
+                          <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+                            {/* Front Preview */}
+                            {(o.frontPreviewUrl || o.previewImageUrl) ? (
+                              <div
+                                style={{
+                                  position: "relative",
+                                  cursor: "pointer",
+                                  width: "52px",
+                                  height: "52px",
+                                  borderRadius: "6px",
+                                  overflow: "hidden",
+                                  border: "1px solid #cbd5e1",
+                                  background: "#f8fafc",
+                                }}
+                                onClick={() => setActiveModalImage(normalizePreviewUrl(o.frontPreviewUrl || o.previewImageUrl, shop))}
+                                title="Click to view Front Design Preview"
+                              >
+                                <img
+                                  src={normalizePreviewUrl(o.frontPreviewUrl || o.previewImageUrl, shop)}
+                                  alt="Front Preview"
+                                  onError={(e) => {
+                                    const img = e.currentTarget;
+                                    const raw = o.frontPreviewUrl || o.previewImageUrl;
+                                    const match = raw?.match(/(?:preview|previews)\/([a-zA-Z0-9_.-]+)/);
+                                    if (match && match[1] && !img.src.includes(`/api/preview/${match[1]}`)) {
+                                      img.src = `/api/preview/${match[1]}`;
+                                    }
+                                  }}
                                   style={{
-                                    fontWeight: 600,
-                                    color: "#4a4f54",
-                                    background: "#f0f2f5",
-                                    padding: "2px 6px",
-                                    borderRadius: "4px",
-                                    fontSize: "12px",
+                                    width: "100%",
+                                    height: "100%",
+                                    objectFit: "contain",
+                                  }}
+                                />
+                                <div
+                                  style={{
+                                    position: "absolute",
+                                    bottom: "2px",
+                                    left: "2px",
+                                    background: "rgba(15, 23, 42, 0.75)",
+                                    color: "#fff",
+                                    fontSize: "8px",
+                                    padding: "1px 3px",
+                                    borderRadius: "2px",
+                                    fontWeight: 700,
                                   }}
                                 >
-                                  {key}:
-                                </span>
-                                <a
-                                  href={normalizePreviewUrl(strVal, shop)}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  download="customer_uploaded_image"
+                                  FRONT
+                                </div>
+                              </div>
+                            ) : null}
+
+                            {/* Back Preview */}
+                            {o.backPreviewUrl ? (
+                              <div
+                                style={{
+                                  position: "relative",
+                                  cursor: "pointer",
+                                  width: "52px",
+                                  height: "52px",
+                                  borderRadius: "6px",
+                                  overflow: "hidden",
+                                  border: "1px solid #cbd5e1",
+                                  background: "#f8fafc",
+                                }}
+                                onClick={() => setActiveModalImage(normalizePreviewUrl(o.backPreviewUrl, shop))}
+                                title="Click to view Back Design Preview"
+                              >
+                                <img
+                                  src={normalizePreviewUrl(o.backPreviewUrl, shop)}
+                                  alt="Back Preview"
+                                  onError={(e) => {
+                                    const img = e.currentTarget;
+                                    const match = o.backPreviewUrl?.match(/(?:preview|previews)\/([a-zA-Z0-9_.-]+)/);
+                                    if (match && match[1] && !img.src.includes(`/api/preview/${match[1]}`)) {
+                                      img.src = `/api/preview/${match[1]}`;
+                                    }
+                                  }}
+                                  style={{
+                                    width: "100%",
+                                    height: "100%",
+                                    objectFit: "contain",
+                                  }}
+                                />
+                                <div
+                                  style={{
+                                    position: "absolute",
+                                    bottom: "2px",
+                                    left: "2px",
+                                    background: "rgba(15, 23, 42, 0.75)",
+                                    color: "#fff",
+                                    fontSize: "8px",
+                                    padding: "1px 3px",
+                                    borderRadius: "2px",
+                                    fontWeight: 700,
+                                  }}
+                                >
+                                  BACK
+                                </div>
+                              </div>
+                            ) : null}
+
+                            {/* Raw Customer Uploaded Image */}
+                            {(o.frontUploadedUrl || o.uploadedImageUrl) ? (
+                              <div
+                                style={{
+                                  position: "relative",
+                                  cursor: "pointer",
+                                  width: "52px",
+                                  height: "52px",
+                                  borderRadius: "6px",
+                                  overflow: "hidden",
+                                  border: "2px solid #008060",
+                                  background: "#f0fdf4",
+                                }}
+                                onClick={() => setActiveModalImage(normalizePreviewUrl(o.frontUploadedUrl || o.uploadedImageUrl, shop))}
+                                title="Click to view Customer's Original Uploaded Photo"
+                              >
+                                <img
+                                  src={normalizePreviewUrl(o.frontUploadedUrl || o.uploadedImageUrl, shop)}
+                                  alt="Uploaded Logo / Photo"
+                                  onError={(e) => {
+                                    const img = e.currentTarget;
+                                    const raw = o.frontUploadedUrl || o.uploadedImageUrl;
+                                    const match = raw?.match(/(?:preview|previews)\/([a-zA-Z0-9_.-]+)/);
+                                    if (match && match[1] && !img.src.includes(`/api/preview/${match[1]}`)) {
+                                      img.src = `/api/preview/${match[1]}`;
+                                    }
+                                  }}
+                                  style={{
+                                    width: "100%",
+                                    height: "100%",
+                                    objectFit: "contain",
+                                  }}
+                                />
+                                <div
+                                  style={{
+                                    position: "absolute",
+                                    top: "2px",
+                                    left: "2px",
+                                    background: "#008060",
+                                    color: "#fff",
+                                    fontSize: "8px",
+                                    padding: "1px 3px",
+                                    borderRadius: "2px",
+                                    fontWeight: "bold",
+                                  }}
+                                >
+                                  RAW
+                                </div>
+                              </div>
+                            ) : null}
+                          </div>
+                        </td>
+
+                        {/* 4. Customer Customizations */}
+                        <td style={{ padding: "14px 18px", verticalAlign: "middle" }}>
+                          <div style={{ display: "flex", flexDirection: "column", gap: "5px" }}>
+                            {Object.entries(o.customerSelections).map(([key, val]) => {
+                              if (key.startsWith("_") || key === "Custom Design Preview") return null;
+
+                              const strVal = String(val || "");
+                              const isImage =
+                                key.toLowerCase().includes("upload") ||
+                                key.toLowerCase().includes("photo") ||
+                                key.toLowerCase().includes("image") ||
+                                strVal.startsWith("http") ||
+                                strVal.startsWith("data:image");
+
+                              if (isImage) {
+                                return (
+                                  <div key={key} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                    <span
+                                      style={{
+                                        fontWeight: 600,
+                                        color: "#475569",
+                                        background: "#f1f5f9",
+                                        padding: "2px 6px",
+                                        borderRadius: "4px",
+                                        fontSize: "11px",
+                                      }}
+                                    >
+                                      {key}:
+                                    </span>
+                                    <a
+                                      href={normalizePreviewUrl(strVal, shop)}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      download="customer_uploaded_image"
+                                      style={{
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        gap: "4px",
+                                        color: "#008060",
+                                        fontWeight: 600,
+                                        fontSize: "11px",
+                                        background: "#ecfdf5",
+                                        border: "1px solid #a7f3d0",
+                                        padding: "2px 6px",
+                                        borderRadius: "4px",
+                                        textDecoration: "none",
+                                      }}
+                                    >
+                                      📥 Download Raw
+                                    </a>
+                                  </div>
+                                );
+                              }
+
+                              return (
+                                <div
+                                  key={key}
                                   style={{
                                     display: "inline-flex",
                                     alignItems: "center",
-                                    gap: "4px",
-                                    color: "#008060",
-                                    fontWeight: 600,
+                                    gap: "6px",
                                     fontSize: "12px",
-                                    background: "#f0fdf4",
-                                    border: "1px solid #bbf7d0",
-                                    padding: "2px 8px",
-                                    borderRadius: "6px",
-                                    textDecoration: "none",
                                   }}
                                 >
-                                  📥 View / Download Raw Image
-                                </a>
-                              </div>
-                            );
-                          }
+                                  <span
+                                    style={{
+                                      fontWeight: 600,
+                                      color: "#475569",
+                                      background: "#f1f5f9",
+                                      padding: "2px 6px",
+                                      borderRadius: "4px",
+                                      fontSize: "11px",
+                                    }}
+                                  >
+                                    {key}:
+                                  </span>
+                                  <span style={{ color: "#0f172a", fontWeight: 600 }}>
+                                    {strVal}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </td>
 
-                          return (
-                            <div
-                              key={key}
-                              style={{
-                                display: "inline-flex",
-                                alignItems: "center",
-                                gap: "6px",
-                                fontSize: "12px",
-                              }}
-                            >
-                              <span
+                        {/* 5. Order Date */}
+                        <td
+                          style={{
+                            padding: "14px 18px",
+                            color: "#64748b",
+                            fontSize: "12px",
+                            verticalAlign: "middle",
+                          }}
+                        >
+                          {new Date(o.createdAt).toLocaleDateString()}
+                        </td>
+
+                        {/* 6. Production Print & Delete Actions */}
+                        <td
+                          style={{
+                            padding: "14px 18px",
+                            textAlign: "right",
+                            verticalAlign: "middle",
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: "inline-flex",
+                              gap: "6px",
+                              alignItems: "center",
+                              justifyContent: "flex-end",
+                            }}
+                          >
+                            {isReady && o.printFileUrl ? (
+                              <a
+                                href={o.printFileUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
                                 style={{
-                                  fontWeight: 600,
-                                  color: "#4a4f54",
-                                  background: "#f0f2f5",
-                                  padding: "2px 6px",
-                                  borderRadius: "4px",
+                                  padding: "6px 12px",
+                                  borderRadius: "6px",
+                                  background: "#008060",
+                                  color: "#fff",
+                                  textDecoration: "none",
+                                  fontSize: "12px",
+                                  fontWeight: 700,
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "4px",
                                 }}
                               >
-                                {key}:
-                              </span>
-                              <span style={{ color: "#202223", fontWeight: 500 }}>
-                                {strVal}
-                              </span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </td>
+                                📥 PDF
+                              </a>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleGeneratePrint(o)}
+                                disabled={fetcher.state !== "idle"}
+                                style={{
+                                  padding: "6px 10px",
+                                  borderRadius: "6px",
+                                  border: "1px solid #cbd5e1",
+                                  background: "#ffffff",
+                                  color: "#008060",
+                                  cursor: "pointer",
+                                  fontSize: "12px",
+                                  fontWeight: 600,
+                                }}
+                              >
+                                {fetcher.state !== "idle" ? "Rendering..." : "⚡ Generate PDF"}
+                              </button>
+                            )}
 
-                    {/* 5. Date */}
-                    <td
-                      style={{
-                        padding: "12px 16px",
-                        color: "#6d7175",
-                        fontSize: "13px",
-                        verticalAlign: "middle",
-                      }}
-                    >
-                      {new Date(o.createdAt).toLocaleDateString()}
-                    </td>
+                            {o.previewImageUrl && (
+                              <button
+                                type="button"
+                                onClick={() => setActiveModalImage(o.previewImageUrl)}
+                                title="View customer design snapshot"
+                                style={{
+                                  padding: "6px 10px",
+                                  borderRadius: "6px",
+                                  border: "1px solid #cbd5e1",
+                                  background: "#fff",
+                                  cursor: "pointer",
+                                  fontSize: "12px",
+                                  color: "#334155",
+                                  fontWeight: 600,
+                                }}
+                              >
+                                👁️ View
+                              </button>
+                            )}
 
-                    {/* 6. Action Buttons */}
-                    <td
-                      style={{
-                        padding: "12px 16px",
-                        textAlign: "right",
-                        verticalAlign: "middle",
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: "inline-flex",
-                          flexDirection: "column",
-                          gap: "6px",
-                          alignItems: "flex-end",
-                        }}
-                      >
-                        {o.previewImageUrl && (
-                          <button
-                            type="button"
-                            onClick={() => setActiveModalImage(o.previewImageUrl)}
-                            style={{
-                              padding: "5px 10px",
-                              borderRadius: "4px",
-                              border: "1px solid #c9cccf",
-                              background: "#fff",
-                              cursor: "pointer",
-                              fontSize: "12px",
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: "4px",
-                            }}
-                          >
-                            👁️ View Design
-                          </button>
-                        )}
+                            {/* DELETE BUTTON */}
+                            <button
+                              type="button"
+                              onClick={() => setDeleteTarget(o)}
+                              title="Delete customized order"
+                              style={{
+                                padding: "6px 10px",
+                                borderRadius: "6px",
+                                border: "1px solid #fecaca",
+                                background: "#fff5f5",
+                                cursor: "pointer",
+                                fontSize: "12px",
+                                color: "#dc2626",
+                                fontWeight: 600,
+                              }}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
 
-                        {o.printFileUrl ? (
-                          <a
-                            href={o.printFileUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            style={{
-                              padding: "5px 10px",
-                              borderRadius: "4px",
-                              background: "#008060",
-                              color: "#fff",
-                              textDecoration: "none",
-                              fontSize: "12px",
-                              fontWeight: 600,
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: "4px",
-                            }}
-                          >
-                            📥 Print PDF
-                          </a>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => handleGeneratePrint(o)}
-                            style={{
-                              padding: "5px 10px",
-                              borderRadius: "4px",
-                              border: "1px solid #008060",
-                              background: "#f0fdf4",
-                              color: "#008060",
-                              cursor: "pointer",
-                              fontSize: "12px",
-                              fontWeight: 600,
-                            }}
-                          >
-                            {fetcher.state !== "idle" ? "Rendering..." : "⚡ Generate 300 DPI"}
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      {/* DELETE CONFIRMATION MODAL */}
+      {deleteTarget && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(15, 23, 42, 0.6)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 9999,
+            padding: "20px",
+          }}
+          onClick={() => setDeleteTarget(null)}
+        >
+          <div
+            style={{
+              background: "#ffffff",
+              borderRadius: "14px",
+              width: "100%",
+              maxWidth: "440px",
+              boxShadow: "0 20px 25px -5px rgba(0,0,0,0.2)",
+              overflow: "hidden",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ padding: "20px 22px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "12px" }}>
+                <div
+                  style={{
+                    width: "40px",
+                    height: "40px",
+                    borderRadius: "50%",
+                    background: "#fee2e2",
+                    color: "#dc2626",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: "20px",
+                    flexShrink: 0,
+                  }}
+                >
+                  ⚠️
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: "#0f172a" }}>
+                    Delete Customized Order?
+                  </h3>
+                  <div style={{ fontSize: "12px", color: "#64748b", marginTop: "2px" }}>
+                    Order: {deleteTarget.shopifyOrderId} • {deleteTarget.productTitle}
+                  </div>
+                </div>
+              </div>
+
+              <p style={{ margin: 0, fontSize: "13px", color: "#475569", lineHeight: 1.5 }}>
+                Are you sure you want to remove this customized order snapshot from the production list?
+                This action cannot be undone.
+              </p>
+            </div>
+
+            <div
+              style={{
+                padding: "14px 22px",
+                borderTop: "1px solid #e2e8f0",
+                background: "#f8fafc",
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: "10px",
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setDeleteTarget(null)}
+                style={{
+                  padding: "8px 14px",
+                  borderRadius: "6px",
+                  background: "#fff",
+                  border: "1px solid #cbd5e1",
+                  color: "#334155",
+                  fontSize: "13px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                style={{
+                  padding: "8px 18px",
+                  borderRadius: "6px",
+                  background: "#dc2626",
+                  color: "#fff",
+                  border: "none",
+                  fontSize: "13px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                Delete Order
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -1030,7 +1325,8 @@ export default function CustomizedOrdersPage() {
             left: 0,
             right: 0,
             bottom: 0,
-            backgroundColor: "rgba(0, 0, 0, 0.75)",
+            backgroundColor: "rgba(15, 23, 42, 0.75)",
+            backdropFilter: "blur(4px)",
             zIndex: 9999,
             display: "flex",
             alignItems: "center",
@@ -1042,11 +1338,11 @@ export default function CustomizedOrdersPage() {
           <div
             style={{
               background: "#fff",
-              borderRadius: "12px",
+              borderRadius: "14px",
               padding: "20px",
               maxWidth: "600px",
               width: "100%",
-              boxShadow: "0 10px 30px rgba(0,0,0,0.3)",
+              boxShadow: "0 20px 25px -5px rgba(0,0,0,0.3)",
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
@@ -1062,19 +1358,21 @@ export default function CustomizedOrdersPage() {
                 marginBottom: "12px",
               }}
             >
-              <h3 style={{ margin: 0, fontSize: "16px" }}>🎨 Customer Design Preview</h3>
+              <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: "#0f172a" }}>
+                🎨 Customer Design Preview
+              </h3>
               <button
                 type="button"
                 onClick={() => setActiveModalImage(null)}
                 style={{
                   background: "none",
                   border: "none",
-                  fontSize: "18px",
+                  fontSize: "20px",
                   cursor: "pointer",
-                  color: "#6d7175",
+                  color: "#94a3b8",
                 }}
               >
-                ✕
+                &times;
               </button>
             </div>
             <img
@@ -1092,7 +1390,7 @@ export default function CustomizedOrdersPage() {
                 maxHeight: "500px",
                 objectFit: "contain",
                 borderRadius: "8px",
-                border: "1px solid #e1e3e5",
+                border: "1px solid #e2e8f0",
               }}
             />
             <div
@@ -1127,10 +1425,12 @@ export default function CustomizedOrdersPage() {
                 style={{
                   padding: "8px 16px",
                   borderRadius: "6px",
-                  border: "1px solid #c9cccf",
+                  border: "1px solid #cbd5e1",
                   background: "#fff",
                   cursor: "pointer",
                   fontSize: "13px",
+                  color: "#334155",
+                  fontWeight: 600,
                 }}
               >
                 Close

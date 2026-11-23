@@ -72,3 +72,62 @@ export async function updateCustomizedOrderPreview(
     },
   });
 }
+
+export async function deleteCustomizedOrder(
+  shopifyDomain: string,
+  options: { id?: string; shopifyOrderId?: string; lineItemId?: string },
+) {
+  const shop = await ensureShop(shopifyDomain);
+
+  // 1. Delete from database
+  if (options.id) {
+    await prisma.customizedOrder.deleteMany({
+      where: { id: options.id, shopId: shop.id },
+    });
+  }
+  if (options.shopifyOrderId) {
+    const rawId = options.shopifyOrderId.replace(/\D/g, "");
+    await prisma.customizedOrder.deleteMany({
+      where: {
+        shopId: shop.id,
+        OR: [
+          { shopifyOrderId: options.shopifyOrderId },
+          { shopifyOrderId: rawId },
+          { shopifyOrderId: `#${rawId}` },
+        ],
+        ...(options.lineItemId ? { shopifyLineItemId: options.lineItemId } : {}),
+      },
+    });
+  }
+
+  // 2. Add to hidden keys in shop settings so live GraphQL query does not restore it
+  let settings: any = {};
+  try {
+    settings = JSON.parse(shop.settings || "{}");
+  } catch {}
+
+  const hidden: string[] = settings.hiddenOrderKeys || [];
+  const keysToAdd: string[] = [];
+  if (options.id) keysToAdd.push(options.id);
+  if (options.shopifyOrderId) {
+    const rawId = options.shopifyOrderId.replace(/\D/g, "");
+    if (options.lineItemId) {
+      keysToAdd.push(`${options.shopifyOrderId}_${options.lineItemId}`);
+      keysToAdd.push(`${rawId}_${options.lineItemId}`);
+      keysToAdd.push(`#${rawId}_${options.lineItemId}`);
+    } else {
+      keysToAdd.push(options.shopifyOrderId);
+      keysToAdd.push(rawId);
+    }
+  }
+
+  const updatedHidden = Array.from(new Set([...hidden, ...keysToAdd]));
+  settings.hiddenOrderKeys = updatedHidden;
+
+  await prisma.shop.update({
+    where: { id: shop.id },
+    data: { settings: JSON.stringify(settings) },
+  });
+
+  return { success: true };
+}
