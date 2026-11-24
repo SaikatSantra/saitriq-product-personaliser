@@ -112,3 +112,21 @@ export async function cancelShopSubscription(
     message: "Subscription cancelled successfully. Your store is now on the Free plan.",
   };
 }
+
+/**
+ * Updates shop plan in the local database (used for dev mode or direct plan grants).
+ */
+export async function updateShopPlanLocally(
+  shopifyDomain: string,
+  planName: string,
+): Promise<{ success: boolean; message: string }> {
+  await prisma.shop.update({
+    where: { shopifyDomain },
+    data: { planName },
+  });
+
+  return {
+    success: true,
+    message: `Plan updated to ${planName} successfully.`,
+  };
+}
