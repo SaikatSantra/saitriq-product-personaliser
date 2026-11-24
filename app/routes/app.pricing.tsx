@@ -114,6 +114,27 @@ export default function PricingPage() {
         </div>
       )}
 
+      {/* Intro Header & Billing Info Note */}
+      <div style={{ marginBottom: "24px" }}>
+        <p style={{ margin: "0 0 6px", fontSize: "15px", color: "#475569" }}>
+          Choose the ideal plan for your personalization studio. All paid plans are billed on a{" "}
+          <strong style={{ color: "#0f172a" }}>monthly recurring basis (every 30 days)</strong> directly through your Shopify bill.
+        </p>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", fontSize: "12px", color: "#64748b" }}>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+            <span style={{ color: "#10b981", fontWeight: 700 }}>✓</span> Official Shopify Billing
+          </span>
+          <span>•</span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+            <span style={{ color: "#10b981", fontWeight: 700 }}>✓</span> Cancel or upgrade anytime
+          </span>
+          <span>•</span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+            <span style={{ color: "#10b981", fontWeight: 700 }}>✓</span> Instant template quota activation
+          </span>
+        </div>
+      </div>
+
       {/* Current Plan & Usage Summary Bar */}
       <div
         style={{
@@ -161,7 +182,7 @@ export default function PricingPage() {
                   fontWeight: 700,
                 }}
               >
-                {activePlanId}
+                {activePlanId} Plan
               </span>
             </div>
             <div style={{ fontSize: "18px", fontWeight: 700, color: "#0f172a", marginTop: "2px" }}>
@@ -173,10 +194,10 @@ export default function PricingPage() {
         {/* Quota Progress Bar */}
         <div style={{ minWidth: "240px", flex: "1", maxWidth: "340px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", color: "#64748b", marginBottom: "6px" }}>
-            <span>Template Quota</span>
+            <span>Template Quota Usage</span>
             <span>
               {billingInfo.templateLimit === Infinity
-                ? "Unlimited Capacity"
+                ? "Unlimited Templates"
                 : `${Math.round((billingInfo.currentTemplateCount / billingInfo.templateLimit) * 100)}% Used`}
             </span>
           </div>
@@ -224,9 +245,9 @@ export default function PricingPage() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+          gridTemplateColumns: "repeat(auto-fit, minmax(290px, 1fr))",
           gap: "24px",
-          marginBottom: "32px",
+          marginBottom: "36px",
         }}
       >
         {plans.map((p) => {
@@ -279,9 +300,9 @@ export default function PricingPage() {
               {/* Card Header */}
               <div style={{ padding: "26px 26px 20px", borderBottom: "1px solid #f1f5f9" }}>
                 <h3 style={{ margin: "0 0 6px", fontSize: "20px", fontWeight: 700, color: "#0f172a" }}>
-                  {p.name}
+                  {p.name} Plan
                 </h3>
-                <p style={{ margin: "0 0 16px", fontSize: "13px", color: "#64748b", minHeight: "36px" }}>
+                <p style={{ margin: "0 0 16px", fontSize: "13px", color: "#64748b", minHeight: "36px", lineHeight: 1.4 }}>
                   {p.description}
                 </p>
 
@@ -295,37 +316,62 @@ export default function PricingPage() {
                   </span>
                 </div>
 
+                <div style={{ fontSize: "12px", color: p.price > 0 ? "#2563eb" : "#10b981", fontWeight: 600, marginTop: "4px" }}>
+                  {p.intervalText}
+                </div>
+
                 <div
                   style={{
-                    marginTop: "12px",
-                    padding: "8px 12px",
+                    marginTop: "14px",
+                    padding: "10px 14px",
                     borderRadius: "8px",
-                    background: isCurrent ? "#ecfdf5" : "#f8fafc",
-                    border: `1px solid ${isCurrent ? "#a7f3d0" : "#e2e8f0"}`,
+                    background: isCurrent ? "#ecfdf5" : isStarter ? "#eff6ff" : isUnlimited ? "#f5f3ff" : "#f8fafc",
+                    border: `1px solid ${isCurrent ? "#a7f3d0" : isStarter ? "#bfdbfe" : isUnlimited ? "#ddd6fe" : "#e2e8f0"}`,
                     fontSize: "13px",
                     fontWeight: 700,
-                    color: isCurrent ? "#065f46" : "#1e293b",
+                    color: isCurrent ? "#065f46" : isStarter ? "#1e40af" : isUnlimited ? "#5b21b6" : "#1e293b",
                     display: "flex",
                     alignItems: "center",
-                    gap: "6px",
+                    gap: "8px",
                   }}
                 >
                   <span>📦</span>
                   <span>
                     {p.templateLimit === Infinity
-                      ? "Unlimited Templates"
-                      : `${p.templateLimit} Active Templates`}
+                      ? "Unlimited Personalization Templates"
+                      : `${p.templateLimit} Personalization Templates Included`}
                   </span>
                 </div>
               </div>
 
+              {/* Highlights Pill Tags */}
+              {p.highlights && (
+                <div style={{ padding: "12px 26px 0", display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                  {p.highlights.map((h, i) => (
+                    <span
+                      key={i}
+                      style={{
+                        fontSize: "11px",
+                        fontWeight: 600,
+                        background: "#f1f5f9",
+                        color: "#475569",
+                        padding: "2px 8px",
+                        borderRadius: "12px",
+                      }}
+                    >
+                      {h}
+                    </span>
+                  ))}
+                </div>
+              )}
+
               {/* Features List */}
-              <div style={{ padding: "24px 26px", flex: "1", display: "flex", flexDirection: "column", gap: "12px" }}>
+              <div style={{ padding: "20px 26px", flex: "1", display: "flex", flexDirection: "column", gap: "12px" }}>
                 <div style={{ fontSize: "12px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                  What's Included:
+                  Plan Capabilities:
                 </div>
                 {p.features.map((feat, idx) => (
-                  <div key={idx} style={{ display: "flex", alignItems: "flex-start", gap: "10px", fontSize: "13px", color: "#334155" }}>
+                  <div key={idx} style={{ display: "flex", alignItems: "flex-start", gap: "10px", fontSize: "13px", color: "#334155", lineHeight: 1.4 }}>
                     <span style={{ color: "#10b981", fontWeight: 800, lineHeight: 1 }}>✓</span>
                     <span>{feat}</span>
                   </div>
@@ -371,10 +417,10 @@ export default function PricingPage() {
                               textDecoration: "underline",
                             }}
                           >
-                            Cancel subscription & return to Free
+                            Cancel recurring subscription & return to Free
                           </button>
                         ) : (
-                          <div style={{ display: "flex", gap: "8px", justifyContent: "center", alignItems: "center" }}>
+                          <div style={{ display: "flex", gap: "8px", justifyContent: "center", alignItems: "center", flexWrap: "wrap" }}>
                             <span style={{ fontSize: "12px", color: "#64748b" }}>Are you sure?</span>
                             <button
                               type="button"
@@ -393,7 +439,7 @@ export default function PricingPage() {
                                 cursor: "pointer",
                               }}
                             >
-                              Yes, Downgrade to Free
+                              Yes, Return to Free
                             </button>
                             <button
                               type="button"
@@ -408,7 +454,7 @@ export default function PricingPage() {
                                 cursor: "pointer",
                               }}
                             >
-                              No
+                              Dismiss
                             </button>
                           </div>
                         )}
@@ -446,7 +492,7 @@ export default function PricingPage() {
                         ? "Redirecting to Shopify..."
                         : p.id === PLAN_FREE
                           ? "Downgrade to Free (2 Templates)"
-                          : `Upgrade to ${p.name}`}
+                          : `Upgrade to ${p.name} ($${p.price}/mo recurring)`}
                     </button>
                   </fetcher.Form>
                 )}
@@ -454,6 +500,126 @@ export default function PricingPage() {
             </div>
           );
         })}
+      </div>
+
+      {/* Feature Comparison Table */}
+      <div
+        style={{
+          background: "#ffffff",
+          borderRadius: "16px",
+          border: "1px solid #e2e8f0",
+          padding: "24px",
+          marginBottom: "32px",
+          boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
+        }}
+      >
+        <h3 style={{ margin: "0 0 16px", fontSize: "18px", fontWeight: 700, color: "#0f172a" }}>
+          Plan Comparison & Features
+        </h3>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "13px" }}>
+            <thead>
+              <tr style={{ borderBottom: "2px solid #e2e8f0" }}>
+                <th style={{ padding: "12px 16px", fontWeight: 700, color: "#475569" }}>Feature</th>
+                <th style={{ padding: "12px 16px", fontWeight: 700, color: "#0f172a", width: "22%" }}>Free ($0)</th>
+                <th style={{ padding: "12px 16px", fontWeight: 700, color: "#2563eb", width: "22%" }}>Starter ($5/mo)</th>
+                <th style={{ padding: "12px 16px", fontWeight: 700, color: "#7e22ce", width: "22%" }}>Unlimited ($20/mo)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style={{ borderBottom: "1px solid #f1f5f9" }}>
+                <td style={{ padding: "12px 16px", fontWeight: 600, color: "#1e293b" }}>Template Quota</td>
+                <td style={{ padding: "12px 16px", color: "#475569" }}>2 Templates</td>
+                <td style={{ padding: "12px 16px", fontWeight: 600, color: "#2563eb" }}>5 Templates</td>
+                <td style={{ padding: "12px 16px", fontWeight: 700, color: "#7e22ce" }}>Unlimited (No limits)</td>
+              </tr>
+              <tr style={{ borderBottom: "1px solid #f1f5f9" }}>
+                <td style={{ padding: "12px 16px", fontWeight: 600, color: "#1e293b" }}>Billing Frequency</td>
+                <td style={{ padding: "12px 16px", color: "#475569" }}>Free forever</td>
+                <td style={{ padding: "12px 16px", color: "#475569" }}>Recurring every 30 days</td>
+                <td style={{ padding: "12px 16px", color: "#475569" }}>Recurring every 30 days</td>
+              </tr>
+              <tr style={{ borderBottom: "1px solid #f1f5f9" }}>
+                <td style={{ padding: "12px 16px", fontWeight: 600, color: "#1e293b" }}>Linked Products & Variants</td>
+                <td style={{ padding: "12px 16px", color: "#475569" }}>Included</td>
+                <td style={{ padding: "12px 16px", color: "#475569" }}>Unlimited</td>
+                <td style={{ padding: "12px 16px", color: "#475569" }}>Unlimited</td>
+              </tr>
+              <tr style={{ borderBottom: "1px solid #f1f5f9" }}>
+                <td style={{ padding: "12px 16px", fontWeight: 600, color: "#1e293b" }}>Multi-Side Customization (Front & Back)</td>
+                <td style={{ padding: "12px 16px", color: "#10b981", fontWeight: 700 }}>✓</td>
+                <td style={{ padding: "12px 16px", color: "#10b981", fontWeight: 700 }}>✓</td>
+                <td style={{ padding: "12px 16px", color: "#10b981", fontWeight: 700 }}>✓</td>
+              </tr>
+              <tr style={{ borderBottom: "1px solid #f1f5f9" }}>
+                <td style={{ padding: "12px 16px", fontWeight: 600, color: "#1e293b" }}>300 DPI Print Output Files (PNG)</td>
+                <td style={{ padding: "12px 16px", color: "#10b981", fontWeight: 700 }}>✓</td>
+                <td style={{ padding: "12px 16px", color: "#10b981", fontWeight: 700 }}>✓</td>
+                <td style={{ padding: "12px 16px", color: "#10b981", fontWeight: 700 }}>✓</td>
+              </tr>
+              <tr style={{ borderBottom: "1px solid #f1f5f9" }}>
+                <td style={{ padding: "12px 16px", fontWeight: 600, color: "#1e293b" }}>300 DPI Production PDF Export</td>
+                <td style={{ padding: "12px 16px", color: "#94a3b8" }}>—</td>
+                <td style={{ padding: "12px 16px", color: "#10b981", fontWeight: 700 }}>✓</td>
+                <td style={{ padding: "12px 16px", color: "#10b981", fontWeight: 700 }}>✓</td>
+              </tr>
+              <tr style={{ borderBottom: "1px solid #f1f5f9" }}>
+                <td style={{ padding: "12px 16px", fontWeight: 600, color: "#1e293b" }}>Multi-language Storefront Customization</td>
+                <td style={{ padding: "12px 16px", color: "#94a3b8" }}>—</td>
+                <td style={{ padding: "12px 16px", color: "#10b981", fontWeight: 700 }}>✓</td>
+                <td style={{ padding: "12px 16px", color: "#10b981", fontWeight: 700 }}>✓</td>
+              </tr>
+              <tr>
+                <td style={{ padding: "12px 16px", fontWeight: 600, color: "#1e293b" }}>Merchant Support</td>
+                <td style={{ padding: "12px 16px", color: "#475569" }}>Standard Docs</td>
+                <td style={{ padding: "12px 16px", color: "#475569" }}>Priority Email</td>
+                <td style={{ padding: "12px 16px", fontWeight: 700, color: "#7e22ce" }}>24/7 VIP Priority</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Frequently Asked Questions */}
+      <div
+        style={{
+          background: "#ffffff",
+          borderRadius: "16px",
+          border: "1px solid #e2e8f0",
+          padding: "24px",
+          marginBottom: "32px",
+          boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
+        }}
+      >
+        <h3 style={{ margin: "0 0 16px", fontSize: "18px", fontWeight: 700, color: "#0f172a" }}>
+          Frequently Asked Questions
+        </h3>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "20px" }}>
+          <div>
+            <div style={{ fontWeight: 700, color: "#1e293b", fontSize: "14px", marginBottom: "4px" }}>
+              How does the recurring monthly billing work?
+            </div>
+            <div style={{ fontSize: "13px", color: "#64748b", lineHeight: 1.5 }}>
+              Paid plans are billed every 30 days directly through your regular Shopify monthly invoice. You will see a single consolidated charge from Shopify with zero hidden fees.
+            </div>
+          </div>
+          <div>
+            <div style={{ fontWeight: 700, color: "#1e293b", fontSize: "14px", marginBottom: "4px" }}>
+              What happens if I need more than 5 templates?
+            </div>
+            <div style={{ fontSize: "13px", color: "#64748b", lineHeight: 1.5 }}>
+              You can upgrade to the Unlimited plan ($20/month) at any time. The upgrade takes effect immediately so you can create unlimited custom product templates.
+            </div>
+          </div>
+          <div>
+            <div style={{ fontWeight: 700, color: "#1e293b", fontSize: "14px", marginBottom: "4px" }}>
+              Can I cancel or downgrade anytime?
+            </div>
+            <div style={{ fontSize: "13px", color: "#64748b", lineHeight: 1.5 }}>
+              Yes. You can cancel your paid subscription at any time with a single click. Your store will automatically return to the Free plan (up to 2 templates) without losing existing order data.
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Trust & Guarantee Banner */}
@@ -472,10 +638,10 @@ export default function PricingPage() {
         <span style={{ fontSize: "28px" }}>🛡️</span>
         <div style={{ flex: 1, minWidth: "260px" }}>
           <div style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a", marginBottom: "2px" }}>
-            Official Shopify Billing & 100% Secure
+            Official Shopify App Billing Integration
           </div>
           <div style={{ fontSize: "13px", color: "#64748b", lineHeight: 1.4 }}>
-            All subscriptions are processed securely through your Shopify store invoice. You can switch, upgrade, or cancel your plan at any time with automated prorated billing.
+            All subscriptions are authenticated and managed through the official Shopify Billing API. Charges are recurring every 30 days, prorated automatically, and protected by Shopify's merchant guarantees.
           </div>
         </div>
       </div>

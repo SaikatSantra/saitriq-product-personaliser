@@ -6,56 +6,69 @@ export interface PlanConfig {
   id: string;
   name: string;
   price: number;
+  intervalText: string;
   templateLimit: number;
   description: string;
   badge?: string;
   features: string[];
+  highlights: string[];
 }
 
 export const PLANS: Record<string, PlanConfig> = {
   [PLAN_FREE]: {
     id: PLAN_FREE,
-    name: "Free Plan",
+    name: "Free",
     price: 0,
+    intervalText: "Free forever",
     templateLimit: 2,
-    description: "Great for testing and single product personalization stores.",
+    description: "Ideal for new merchants testing product personalization on up to 2 products.",
+    highlights: ["2 active templates", "Free forever", "No credit card required"],
     features: [
-      "Up to 2 Personalization Templates",
-      "Full Visual Studio (Text & Photo layers)",
-      "Multi-side Customization (Front & Back)",
-      "300 DPI High-Resolution Print Output",
-      "Unlimited Storefront Custom Orders",
-      "Standard Community Support",
+      "Up to 2 active personalization templates",
+      "Full interactive visual studio for front & back sides",
+      "Text personalization with curated fonts & colors",
+      "Customer image/photo uploads with crop & zoom",
+      "300 DPI high-resolution print output files",
+      "Live cart preview & customized order line properties",
+      "Standard community & documentation support",
     ],
   },
   [PLAN_STARTER]: {
     id: PLAN_STARTER,
-    name: "Starter Plan",
+    name: "Starter",
     price: 5,
+    intervalText: "Billed $5/month (recurring every 30 days)",
     templateLimit: 5,
-    description: "Ideal for growing shops offering multiple custom products.",
+    description: "Perfect for growing stores expanding their customized product catalog.",
     badge: "Most Popular",
+    highlights: ["5 active templates", "Recurring monthly", "Cancel anytime"],
     features: [
-      "Up to 5 Personalization Templates",
-      "Everything in Free Plan",
-      "Multi-Language Storefront Translations",
-      "High-Performance Canvas Rendering",
-      "Priority Email Support",
+      "Up to 5 active personalization templates",
+      "Everything included in the Free plan",
+      "Unlimited customer orders & custom transactions",
+      "Multi-variant product assignment & color variants",
+      "High-resolution 300 DPI production PDF & PNG exports",
+      "Multi-language storefront customization texts",
+      "Priority email support",
     ],
   },
   [PLAN_UNLIMITED]: {
     id: PLAN_UNLIMITED,
-    name: "Unlimited Plan",
+    name: "Unlimited",
     price: 20,
+    intervalText: "Billed $20/month (recurring every 30 days)",
     templateLimit: Infinity,
-    description: "Unlimited scale for power merchants and print-on-demand brands.",
+    description: "Maximum scale for established print-on-demand brands & high-volume merchants.",
     badge: "Best Value",
+    highlights: ["Unlimited templates", "Recurring monthly", "VIP 24/7 support"],
     features: [
-      "Unlimited Personalization Templates",
-      "Everything in Starter Plan",
-      "Unlimited Products & Variants Linked",
-      "Dedicated High-Speed Rendering",
-      "24/7 Priority Support",
+      "Unlimited active personalization templates (no limits)",
+      "Everything included in the Starter plan",
+      "Unlimited products & variants linked across store",
+      "Ultra-fast high-res 300 DPI print rendering engine",
+      "Dedicated print-ready production files storage",
+      "All future template studio features & updates included",
+      "24/7 VIP priority support & personalized onboarding",
     ],
   },
 };
