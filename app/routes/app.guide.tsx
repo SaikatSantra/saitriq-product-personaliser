@@ -1,13 +1,14 @@
 import type { LoaderFunctionArgs } from "react-router";
-import { Link } from "react-router";
+import { Link, useLoaderData } from "react-router";
 import { authenticate } from "../shopify.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  await authenticate.admin(request);
-  return { ok: true };
+  const { session } = await authenticate.admin(request);
+  return { shop: session.shop };
 };
 
 export default function AppGuide() {
+  const { shop } = useLoaderData<typeof loader>();
   const steps = [
     {
       num: "1",
@@ -57,12 +58,14 @@ export default function AppGuide() {
       title: "Add the Personalizer Block to Your Theme",
       badge: "Theme Editor",
       points: [
-        "In Shopify Admin, go to Online Store → Themes → Customize.",
+        "In Shopify Admin, go to Online Store → Themes → Customize (or click the direct link below).",
         "Switch the page selector at the top to Products → Default product.",
         "Inside Product Information, click Add block → Apps → Product Personalizer.",
         "Position the button above or near Buy buttons, customize the accent color/button text if desired, and click Save.",
         "Shoppers can click 🎨 Customize This Product to personalize Front & Back, or use the normal Add to Cart button to buy the default product without customization.",
       ],
+      actionLabel: "Open Shopify Theme Editor (Product Page) ↗",
+      externalUrl: `https://${shop}/admin/themes/current/editor?template=product`,
     },
     {
       num: "6",
@@ -274,6 +277,31 @@ export default function AppGuide() {
                   >
                     {step.actionLabel}
                   </Link>
+                </div>
+              )}
+
+              {step.externalUrl && (
+                <div style={{ marginTop: "16px", marginLeft: "44px" }}>
+                  <a
+                    href={step.externalUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      background: "#008060",
+                      color: "#ffffff",
+                      fontWeight: 700,
+                      fontSize: "13px",
+                      padding: "8px 16px",
+                      borderRadius: "8px",
+                      textDecoration: "none",
+                      boxShadow: "0 1px 3px rgba(0, 128, 96, 0.2)",
+                    }}
+                  >
+                    {step.actionLabel}
+                  </a>
                 </div>
               )}
             </div>
