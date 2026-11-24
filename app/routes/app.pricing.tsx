@@ -34,8 +34,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   if (intent === "upgrade") {
     if (plan === PLAN_STARTER || plan === PLAN_UNLIMITED) {
       try {
-        // Initiates Shopify recurring app subscription charge redirect.
-        // We omit returnUrl so the Shopify SDK computes the valid canonical embedded App URL automatically.
+        // Initiates official Shopify recurring app subscription charge redirect.
         await billing.request({
           plan,
           isTest: true,
@@ -54,29 +53,33 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           console.error("[Shopify Billing UserErrors]:", JSON.stringify(error.errorData, null, 2));
         }
 
-        // In development / testing environments, if Shopify Billing API rejects the charge
-        // (e.g. Partner Dashboard billing settings not configured for draft app, or dev store limits),
-        // gracefully activate the plan locally so testing is not blocked.
-        const isDev = process.env.NODE_ENV !== "production";
-        if (isDev) {
-          await updateShopPlanLocally(session.shop, plan);
-          return {
-            success: true,
-            message: `Switched to ${plan} plan (development mode enabled).`,
-          };
-        }
-
-        const userErrMsg = Array.isArray(error?.errorData)
+        const rawUserErrMsg = Array.isArray(error?.errorData)
           ? error.errorData.map((e: any) => e.message || JSON.stringify(e)).join(", ")
           : error?.message || "Failed to initiate billing subscription with Shopify";
 
+        const isDistributionErr = rawUserErrMsg.toLowerCase().includes("public distribution");
+
         return {
           success: false,
-          message: `Billing Error: ${userErrMsg}`,
+          message: isDistributionErr
+            ? "Shopify Requirement: Apps without a public distribution cannot generate bills. To see the official Shopify payment approval screen, go to your Shopify Partner Dashboard → Apps → Saitriq Product Personaliser → Distribution, and select 'Public distribution'."
+            : `Shopify Billing Error: ${rawUserErrMsg}`,
+          isDistributionError: isDistributionErr,
+          requestedPlan: plan,
         };
       }
     }
     return { success: false, message: "Invalid plan selected" };
+  }
+
+  if (intent === "dev_activate") {
+    if (plan === PLAN_STARTER || plan === PLAN_UNLIMITED || plan === PLAN_FREE) {
+      await updateShopPlanLocally(session.shop, plan);
+      return {
+        success: true,
+        message: `Activated ${plan} plan in local development mode.`,
+      };
+    }
   }
 
   if (intent === "cancel") {
@@ -90,6 +93,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 export default function PricingPage() {
   const { billingInfo, plans } = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
+  const fetcherData = fetcher.data as
+    | {
+        success?: boolean;
+        message?: string;
+        isDistributionError?: boolean;
+        requestedPlan?: string;
+      }
+    | undefined;
   const [searchParams] = useSearchParams();
   const isUpgraded = searchParams.get("upgraded") === "true";
 
@@ -133,21 +144,95 @@ export default function PricingPage() {
         </div>
       )}
 
-      {/* Action Notification Message */}
-      {fetcher.data?.message && (
+      {/* Action Notification Message / Distribution Requirement Banner */}
+      {fetcherData?.message && (
         <div
           style={{
-            background: fetcher.data.success ? "#f0fdf4" : "#fef2f2",
-            border: `1px solid ${fetcher.data.success ? "#bbf7d0" : "#fecaca"}`,
-            borderRadius: "10px",
-            padding: "14px 18px",
+            background: fetcherData.success ? "#f0fdf4" : "#fef2f2",
+            border: `1px solid ${fetcherData.success ? "#bbf7d0" : "#fecaca"}`,
+            borderRadius: "12px",
+            padding: "16px 20px",
             marginBottom: "24px",
-            color: fetcher.data.success ? "#166534" : "#991b1b",
-            fontSize: "14px",
-            fontWeight: 600,
+            boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
           }}
         >
-          {fetcher.data.message}
+          <div
+            style={{
+              color: fetcherData.success ? "#166534" : "#991b1b",
+              fontSize: "14px",
+              fontWeight: 700,
+              marginBottom: fetcherData.isDistributionError ? "8px" : 0,
+            }}
+          >
+            {fetcherData.success ? "✓ Success" : "⚠️ Shopify Billing Action Required"}
+          </div>
+          <div
+            style={{
+              color: fetcherData.success ? "#15803d" : "#7f1d1d",
+              fontSize: "13.5px",
+              lineHeight: 1.5,
+            }}
+          >
+            {fetcherData.message}
+          </div>
+
+          {fetcherData.isDistributionError && (
+            <div
+              style={{
+                marginTop: "14px",
+                paddingTop: "12px",
+                borderTop: "1px solid #fee2e2",
+                display: "flex",
+                alignItems: "center",
+                gap: "12px",
+                flexWrap: "wrap",
+              }}
+            >
+              <a
+                href="https://partners.shopify.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  background: "#008060",
+                  color: "#ffffff",
+                  padding: "8px 14px",
+                  borderRadius: "8px",
+                  fontSize: "12.5px",
+                  fontWeight: 600,
+                  textDecoration: "none",
+                }}
+              >
+                Open Partner Dashboard → Distribution ↗
+              </a>
+
+              <fetcher.Form method="post">
+                <input type="hidden" name="intent" value="dev_activate" />
+                <input
+                  type="hidden"
+                  name="plan"
+                  value={fetcherData.requestedPlan || PLAN_STARTER}
+                />
+                <button
+                  type="submit"
+                  style={{
+                    background: "#ffffff",
+                    border: "1px solid #cbd5e1",
+                    color: "#334155",
+                    padding: "8px 14px",
+                    borderRadius: "8px",
+                    fontSize: "12.5px",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  Or Test in Dev Mode (Skip Shopify Charge)
+                </button>
+              </fetcher.Form>
+            </div>
+          )}
         </div>
       )}
 
