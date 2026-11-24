@@ -22,8 +22,8 @@
   <style>
     {% if block.settings.use_theme_button_style %}
       #saitriq-personalizer-{{ block.id }} .saitriq-customize-btn {
-        margin-top: {{ block.settings.button_margin_top | default: 8 }}px;
-        margin-bottom: {{ block.settings.button_margin_bottom | default: 12 }}px;
+        margin-top: {{ block.settings.button_margin_top | default: 8 | escape }}px;
+        margin-bottom: {{ block.settings.button_margin_bottom | default: 12 | escape }}px;
         {% if block.settings.button_full_width %}
           width: 100%;
         {% endif %}
@@ -31,15 +31,15 @@
       }
     {% else %}
       #saitriq-personalizer-{{ block.id }} .saitriq-customize-btn {
-        background-color: {{ block.settings.button_bg_color | default: '#008060' }};
-        color: {{ block.settings.button_text_color | default: '#ffffff' }};
-        border: {{ block.settings.button_border_width | default: 0 }}px solid {{ block.settings.button_border_color | default: '#008060' }};
-        border-radius: {{ block.settings.button_border_radius | default: 8 }}px;
-        font-size: {{ block.settings.button_font_size | default: 15 }}px;
-        font-weight: {{ block.settings.button_font_weight | default: '600' }};
-        padding: {{ block.settings.button_padding_vertical | default: 14 }}px {{ block.settings.button_padding_horizontal | default: 24 }}px;
-        margin-top: {{ block.settings.button_margin_top | default: 8 }}px;
-        margin-bottom: {{ block.settings.button_margin_bottom | default: 12 }}px;
+        background-color: {{ block.settings.button_bg_color | default: '#008060' | escape }};
+        color: {{ block.settings.button_text_color | default: '#ffffff' | escape }};
+        border: {{ block.settings.button_border_width | default: 0 | escape }}px solid {{ block.settings.button_border_color | default: '#008060' | escape }};
+        border-radius: {{ block.settings.button_border_radius | default: 8 | escape }}px;
+        font-size: {{ block.settings.button_font_size | default: 15 | escape }}px;
+        font-weight: {{ block.settings.button_font_weight | default: '600' | escape }};
+        padding: {{ block.settings.button_padding_vertical | default: 14 | escape }}px {{ block.settings.button_padding_horizontal | default: 24 | escape }}px;
+        margin-top: {{ block.settings.button_margin_top | default: 8 | escape }}px;
+        margin-bottom: {{ block.settings.button_margin_bottom | default: 12 | escape }}px;
         {% if block.settings.button_full_width %}
           width: 100%;
           display: flex;
@@ -62,8 +62,9 @@
         transition: all 0.2s ease-in-out;
       }
       #saitriq-personalizer-{{ block.id }} .saitriq-customize-btn:hover {
-        background-color: {{ block.settings.button_hover_bg_color | default: '#006e52' }};
-        color: {{ block.settings.button_hover_text_color | default: '#ffffff' }};
+        background-color: {{ block.settings.button_hover_bg_color | default: '#006e52' | escape }};
+        color: {{ block.settings.button_hover_text_color | default: '#ffffff' | escape }};
+        border-color: {{ block.settings.button_hover_border_color | default: '#006e52' | escape }};
         {% if block.settings.button_shadow %}
           box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
           transform: translateY(-1px);
@@ -73,16 +74,16 @@
   </style>
 
   <saitriq-personalizer
-    data-product-id="{{ current_product.id }}"
-    data-product-handle="{{ current_product.handle }}"
+    data-product-id="{{ current_product.id | escape }}"
+    data-product-handle="{{ current_product.handle | escape }}"
     data-product-title="{{ current_product.title | escape }}"
-    data-product-image="{{ base_image_url }}"
-    data-shop="{{ shop.permanent_domain }}"
-    data-app-url="{{ block.settings.app_url | default: '' }}"
+    data-product-image="{{ base_image_url | escape }}"
+    data-shop="{{ shop.permanent_domain | escape }}"
+    data-app-url="{{ block.settings.app_url | default: '' | escape }}"
     data-fabric-url="{{ 'fabric.min.js' | asset_url }}"
     data-button-text="{{ btn_text | escape }}"
     data-primary-color="{{ block.settings.button_bg_color | default: '#008060' | escape }}"
-    data-auto-open="{{ block.settings.auto_open | default: false }}"
+    data-auto-open="{{ block.settings.auto_open | default: false | escape }}"
     data-design-mode="{% if request.design_mode %}true{% else %}false{% endif %}"
     data-locale="{{ request.locale.iso_code | downcase }}"
     {% unless request.design_mode %}style="display: none;"{% endunless %}
@@ -222,7 +223,7 @@
             <button type="button" class="saitriq-close-btn-secondary">
               {{ 'personalizer.cancel' | t | default: 'Cancel' }}
             </button>
-            <button type="button" class="saitriq-submit-cart-btn" style="background-color: {{ block.settings.button_bg_color | default: '#008060' }};">
+            <button type="button" class="saitriq-submit-cart-btn" style="background-color: {{ block.settings.button_bg_color | default: '#008060' | escape }};">
               <span>{{ 'personalizer.add_to_cart' | t | default: 'Add to Cart with Design' }}</span>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
             </button>

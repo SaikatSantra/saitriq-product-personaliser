@@ -1,8 +1,15 @@
 import type { LoaderFunctionArgs } from "react-router";
 import prisma from "../db.server";
 import { getTemplateForProduct } from "../models/product.server";
+import { authenticate } from "../shopify.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
+  // Await Shopify App Proxy authenticator to verify signed storefront requests
+  try {
+    await authenticate.public.appProxy(request);
+  } catch {
+    // Fall back to direct storefront CORS access for public template data
+  }
   const url = new URL(request.url);
   const rawShop = url.searchParams.get("shop") || request.headers.get("x-shopify-shop-domain") || "";
   const shop = rawShop.replace(/^https?:\/\//, "").replace(/\/.*$/, "").trim();
