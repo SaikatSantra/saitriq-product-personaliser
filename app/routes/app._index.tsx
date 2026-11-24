@@ -621,83 +621,9 @@ export default function PersonalizerDashboard() {
       </div>
 
       {/* =========================================================================
-          PRODUCTION WORKFLOW PIPELINE (GRAPHICAL STEPPER)
+          RECENT TEMPLATES & RECENT CUSTOM ORDERS
       ========================================================================= */}
-      <div
-        style={{
-          background: "#ffffff",
-          border: "1px solid #e2e8f0",
-          borderRadius: "14px",
-          padding: "24px",
-          marginBottom: "28px",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.03)",
-        }}
-      >
-        <div style={{ marginBottom: "18px" }}>
-          <h3 style={{ fontSize: "16px", fontWeight: 700, margin: "0 0 4px", color: "#0f172a" }}>
-            How the Personalization Studio Works
-          </h3>
-          <p style={{ margin: 0, fontSize: "13px", color: "#64748b" }}>
-            From studio configuration to automated 300 DPI fulfillment in 4 seamless steps:
-          </p>
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "16px" }}>
-          
-          <div style={{ background: "#f8fafc", borderRadius: "10px", padding: "16px", border: "1px solid #f1f5f9" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
-              <span style={{ width: "26px", height: "26px", borderRadius: "50%", background: "#008060", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px", fontWeight: 700 }}>
-                1
-              </span>
-              <span style={{ fontWeight: 700, fontSize: "13px", color: "#0f172a" }}>Canvas Setup</span>
-            </div>
-            <p style={{ fontSize: "12px", color: "#64748b", margin: 0, lineHeight: 1.5 }}>
-              Define print areas, multi-side Front &amp; Back layers, font pickers, and upload dropzones in Template Studio.
-            </p>
-          </div>
-
-          <div style={{ background: "#f8fafc", borderRadius: "10px", padding: "16px", border: "1px solid #f1f5f9" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
-              <span style={{ width: "26px", height: "26px", borderRadius: "50%", background: "#008060", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px", fontWeight: 700 }}>
-                2
-              </span>
-              <span style={{ fontWeight: 700, fontSize: "13px", color: "#0f172a" }}>Assign Products</span>
-            </div>
-            <p style={{ fontSize: "12px", color: "#64748b", margin: 0, lineHeight: 1.5 }}>
-              Link Shopify catalog products. Color swatches and product variants sync automatically to underlay mockups.
-            </p>
-          </div>
-
-          <div style={{ background: "#f8fafc", borderRadius: "10px", padding: "16px", border: "1px solid #f1f5f9" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
-              <span style={{ width: "26px", height: "26px", borderRadius: "50%", background: "#008060", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px", fontWeight: 700 }}>
-                3
-              </span>
-              <span style={{ fontWeight: 700, fontSize: "13px", color: "#0f172a" }}>Shopper Customizes</span>
-            </div>
-            <p style={{ fontSize: "12px", color: "#64748b", margin: 0, lineHeight: 1.5 }}>
-              Customers click "Customize This Product", type multiline text, upload photos, and preview live before adding to cart.
-            </p>
-          </div>
-
-          <div style={{ background: "#f8fafc", borderRadius: "10px", padding: "16px", border: "1px solid #f1f5f9" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
-              <span style={{ width: "26px", height: "26px", borderRadius: "50%", background: "#008060", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px", fontWeight: 700 }}>
-                4
-              </span>
-              <span style={{ fontWeight: 700, fontSize: "13px", color: "#0f172a" }}>Shopify Files Sync</span>
-            </div>
-            <p style={{ fontSize: "12px", color: "#64748b", margin: 0, lineHeight: 1.5 }}>
-              Upon checkout, high-res design snapshots and customer raw photos upload directly to Shopify Files for fulfillment.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* =========================================================================
-          RECENT TEMPLATES TABLE & SETUP GUIDE
-      ========================================================================= */}
-      <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr", gap: "20px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "20px" }}>
         
         {/* Recent Templates Table */}
         <s-section heading="Personalization Templates">
@@ -727,132 +653,149 @@ export default function PersonalizerDashboard() {
                 </Link>
               </div>
             ) : (
-              <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
-                <thead>
-                  <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
-                    <th style={{ padding: "12px 16px", fontSize: "12px", color: "#64748b", fontWeight: 600 }}>Template Title</th>
-                    <th style={{ padding: "12px 16px", fontSize: "12px", color: "#64748b", fontWeight: 600 }}>Canvas Size</th>
-                    <th style={{ padding: "12px 16px", fontSize: "12px", color: "#64748b", fontWeight: 600 }}>Linked Products</th>
-                    <th style={{ padding: "12px 16px", fontSize: "12px", color: "#64748b", fontWeight: 600, textAlign: "right" }}>Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {templates.map((t) => (
-                    <tr key={t.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
-                      <td style={{ padding: "14px 16px", fontWeight: 600, fontSize: "13px", color: "#0f172a" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                          <span>🎨</span>
-                          <span>{t.title}</span>
-                        </div>
-                      </td>
-                      <td style={{ padding: "14px 16px", fontSize: "12px", color: "#64748b" }}>
-                        <span style={{ background: "#f1f5f9", padding: "3px 8px", borderRadius: "4px", fontWeight: 500 }}>
-                          {t.canvasWidth}×{t.canvasHeight} px ({t.printDpi} DPI)
-                        </span>
-                      </td>
-                      <td style={{ padding: "14px 16px", fontSize: "12px" }}>
-                        <span
-                          style={{
-                            color: (t.products?.length || 0) > 0 ? "#059669" : "#94a3b8",
-                            fontWeight: 600,
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "4px",
-                          }}
-                        >
-                          {(t.products?.length || 0) > 0 ? "✓ " : "○ "}
-                          {t.products?.length || 0} products linked
-                        </span>
-                      </td>
-                      <td style={{ padding: "14px 16px", textAlign: "right" }}>
-                        <Link
-                          to={`/app/templates/${t.id}`}
-                          style={{
-                            color: "#008060",
-                            fontSize: "12px",
-                            fontWeight: 700,
-                            textDecoration: "none",
-                            background: "#ecfdf5",
-                            padding: "6px 12px",
-                            borderRadius: "6px",
-                          }}
-                        >
-                          Open Studio &rarr;
-                        </Link>
-                      </td>
+              <div>
+                <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
+                  <thead>
+                    <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
+                      <th style={{ padding: "12px 14px", fontSize: "12px", color: "#64748b", fontWeight: 600 }}>Template Title</th>
+                      <th style={{ padding: "12px 14px", fontSize: "12px", color: "#64748b", fontWeight: 600 }}>Size</th>
+                      <th style={{ padding: "12px 14px", fontSize: "12px", color: "#64748b", fontWeight: 600 }}>Products</th>
+                      <th style={{ padding: "12px 14px", fontSize: "12px", color: "#64748b", fontWeight: 600, textAlign: "right" }}>Action</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {templates.map((t) => (
+                      <tr key={t.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                        <td style={{ padding: "12px 14px", fontWeight: 600, fontSize: "13px", color: "#0f172a" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                            <span>🎨</span>
+                            <span style={{ maxWidth: "160px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              {t.title}
+                            </span>
+                          </div>
+                        </td>
+                        <td style={{ padding: "12px 14px", fontSize: "12px", color: "#64748b" }}>
+                          <span style={{ background: "#f1f5f9", padding: "2px 6px", borderRadius: "4px", fontSize: "11px", fontWeight: 500 }}>
+                            {t.canvasWidth}×{t.canvasHeight}
+                          </span>
+                        </td>
+                        <td style={{ padding: "12px 14px", fontSize: "12px" }}>
+                          <span
+                            style={{
+                              color: (t.products?.length || 0) > 0 ? "#059669" : "#94a3b8",
+                              fontWeight: 600,
+                              fontSize: "12px",
+                            }}
+                          >
+                            {(t.products?.length || 0) > 0 ? "✓ " : "○ "}
+                            {t.products?.length || 0}
+                          </span>
+                        </td>
+                        <td style={{ padding: "12px 14px", textAlign: "right" }}>
+                          <Link
+                            to={`/app/templates/${t.id}`}
+                            style={{
+                              color: "#008060",
+                              fontSize: "12px",
+                              fontWeight: 700,
+                              textDecoration: "none",
+                              background: "#ecfdf5",
+                              padding: "4px 8px",
+                              borderRadius: "6px",
+                            }}
+                          >
+                            Studio &rarr;
+                          </Link>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div style={{ padding: "12px 16px", borderTop: "1px solid #f1f5f9", textAlign: "right", background: "#fafafa" }}>
+                  <Link to="/app/templates" style={{ fontSize: "12px", fontWeight: 600, color: "#008060", textDecoration: "none" }}>
+                    Manage All Templates ({totalTemplates}) &rarr;
+                  </Link>
+                </div>
+              </div>
             )}
           </div>
         </s-section>
 
-        {/* Quick App Guide & Storefront Test */}
-        <s-section heading="Storefront Test Drive">
-          <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "20px", boxShadow: "0 2px 6px rgba(0,0,0,0.02)" }}>
-            <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-              <div style={{ display: "flex", gap: "12px", alignItems: "flex-start" }}>
-                <div style={{ width: "32px", height: "32px", borderRadius: "8px", background: "#eff6ff", color: "#2563eb", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px", flexShrink: 0 }}>
-                  🛍️
-                </div>
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: "13px", color: "#0f172a" }}>Test on Live Storefront</div>
-                  <div style={{ color: "#64748b", fontSize: "12px", marginTop: "2px", lineHeight: 1.5 }}>
-                    Open any customized product page on your online store to preview the live personalizer modal and button.
-                  </div>
-                </div>
-              </div>
-
-              <div style={{ display: "flex", gap: "12px", alignItems: "flex-start" }}>
-                <div style={{ width: "32px", height: "32px", borderRadius: "8px", background: "#fef3c7", color: "#d97706", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px", flexShrink: 0 }}>
-                  🧩
-                </div>
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: "13px", color: "#0f172a" }}>Theme App Embed</div>
-                  <div style={{ color: "#64748b", fontSize: "12px", marginTop: "2px", lineHeight: 1.5 }}>
-                    Verify that "Product Personalizer" is toggled ON under <strong>Theme Settings &gt; App embeds</strong>.
-                  </div>
-                </div>
-              </div>
-
-              <div style={{ display: "flex", gap: "12px", alignItems: "flex-start" }}>
-                <div style={{ width: "32px", height: "32px", borderRadius: "8px", background: "#ecfdf5", color: "#059669", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px", flexShrink: 0 }}>
-                  🌐
-                </div>
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: "13px", color: "#0f172a" }}>In-App Translations</div>
-                  <div style={{ color: "#64748b", fontSize: "12px", marginTop: "2px", lineHeight: 1.5 }}>
-                    Manage translations for English, Spanish, French, German, etc. directly in App Settings without touching code.
-                  </div>
-                </div>
-              </div>
-
-              <div style={{ borderTop: "1px solid #f1f5f9", paddingTop: "14px", marginTop: "4px", display: "flex", flexDirection: "column", gap: "8px" }}>
-                <Link
-                  to="/app/guide"
-                  style={{
-                    color: "#008060",
-                    fontSize: "13px",
-                    fontWeight: 700,
-                    textDecoration: "none",
-                  }}
-                >
-                  📖 View Full Visual Setup Guide &rarr;
-                </Link>
+        {/* Recent Custom Orders Table */}
+        <s-section heading="Recent Custom Orders">
+          <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "12px", overflow: "hidden", boxShadow: "0 2px 6px rgba(0,0,0,0.02)" }}>
+            {orders.length === 0 ? (
+              <div style={{ padding: "48px 24px", textAlign: "center" }}>
+                <div style={{ fontSize: "40px", marginBottom: "10px" }}>📦</div>
+                <h4 style={{ margin: "0 0 6px", fontSize: "16px", fontWeight: 700, color: "#0f172a" }}>
+                  No Custom Orders Yet
+                </h4>
+                <p style={{ color: "#64748b", margin: "0 0 18px", fontSize: "13px" }}>
+                  When customers customize items on your storefront, orders will appear here.
+                </p>
                 <Link
                   to="/app/orders"
                   style={{
-                    color: "#64748b",
-                    fontSize: "12px",
-                    fontWeight: 500,
+                    background: "#008060",
+                    color: "#fff",
+                    padding: "9px 18px",
+                    borderRadius: "8px",
                     textDecoration: "none",
+                    fontSize: "13px",
+                    fontWeight: 600,
                   }}
                 >
-                  📦 Manage Customized Orders &rarr;
+                  View Custom Orders
                 </Link>
               </div>
-            </div>
+            ) : (
+              <div>
+                <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
+                  <thead>
+                    <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
+                      <th style={{ padding: "12px 14px", fontSize: "12px", color: "#64748b", fontWeight: 600 }}>Order</th>
+                      <th style={{ padding: "12px 14px", fontSize: "12px", color: "#64748b", fontWeight: 600 }}>Product</th>
+                      <th style={{ padding: "12px 14px", fontSize: "12px", color: "#64748b", fontWeight: 600, textAlign: "right" }}>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {orders.map((o: any, idx: number) => (
+                      <tr key={(o.shopifyOrderId || idx) + "_" + idx} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                        <td style={{ padding: "12px 14px", fontWeight: 600, fontSize: "12px", color: "#008060" }}>
+                          <Link to="/app/orders" style={{ color: "#008060", textDecoration: "none", fontWeight: 700 }}>
+                            {o.shopifyOrderId}
+                          </Link>
+                        </td>
+                        <td style={{ padding: "12px 14px", fontSize: "12px", color: "#0f172a", maxWidth: "160px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {o.productTitle}
+                        </td>
+                        <td style={{ padding: "12px 14px", textAlign: "right" }}>
+                          <Link
+                            to="/app/orders"
+                            style={{
+                              color: "#2563eb",
+                              fontSize: "12px",
+                              fontWeight: 600,
+                              textDecoration: "none",
+                              background: "#eff6ff",
+                              padding: "4px 8px",
+                              borderRadius: "6px",
+                            }}
+                          >
+                            Details &rarr;
+                          </Link>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div style={{ padding: "12px 16px", borderTop: "1px solid #f1f5f9", textAlign: "right", background: "#fafafa" }}>
+                  <Link to="/app/orders" style={{ fontSize: "12px", fontWeight: 600, color: "#008060", textDecoration: "none" }}>
+                    View All Orders ({totalOrders}) &rarr;
+                  </Link>
+                </div>
+              </div>
+            )}
           </div>
         </s-section>
       </div>

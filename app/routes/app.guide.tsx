@@ -79,116 +79,253 @@ export default function AppGuide() {
     },
   ];
 
+  const workflowSteps = [
+    {
+      num: "1",
+      title: "Canvas Setup",
+      description: "Define print bounding dimensions, dual-side Front & Back layers, font pickers, and upload dropzones in the Template Studio.",
+    },
+    {
+      num: "2",
+      title: "Assign Products",
+      description: "Link Shopify catalog products. Color swatches and product variants automatically sync to background mockups.",
+    },
+    {
+      num: "3",
+      title: "Shopper Customizes",
+      description: "Shoppers click 'Customize This Product' on your storefront, type personalized text, upload photos, and preview live before checkout.",
+    },
+    {
+      num: "4",
+      title: "Shopify Files Fulfillment",
+      description: "Upon checkout, 300 DPI high-res design snapshots and customer raw photo uploads automatically link to order line items for printing.",
+    },
+  ];
+
   return (
     <s-page heading="Setup guide">
       <s-button slot="primary-action" variant="primary" href="/app/templates">
         Create template
       </s-button>
+      <s-button slot="secondary-actions" href="/app/orders">
+        Custom orders
+      </s-button>
 
       {/* Polaris Info Banner */}
-      <div style={{ marginBottom: "16px" }}>
-        <s-banner tone="info" heading="Quick onboarding roadmap">
-          Follow this 6-step roadmap to configure 300 DPI templates, connect products from your Shopify catalog, customize language translations, and fulfill custom orders.
+      <div style={{ marginBottom: "20px" }}>
+        <s-banner tone="info" heading="Complete Onboarding & Configuration Guide">
+          This comprehensive guide contains all instructions for configuring 300 DPI templates, connecting Shopify catalog products, activating the theme app block, and fulfilling custom print orders.
         </s-banner>
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: "16px", marginBottom: "32px" }}>
-        {steps.map((step) => (
-          <div
-            key={step.num}
-            style={{
-              background: "#ffffff",
-              border: "1px solid #e2e8f0",
-              borderRadius: "12px",
-              padding: "20px 24px",
-              boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
-            }}
-          >
+      {/* 4-Step Production Workflow Stepper */}
+      <div
+        style={{
+          background: "#ffffff",
+          border: "1px solid #e2e8f0",
+          borderRadius: "14px",
+          padding: "24px",
+          marginBottom: "28px",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.03)",
+        }}
+      >
+        <div style={{ marginBottom: "18px" }}>
+          <h2 style={{ fontSize: "17px", fontWeight: 700, margin: "0 0 4px", color: "#0f172a" }}>
+            How the Personalization Studio Works
+          </h2>
+          <p style={{ margin: 0, fontSize: "13px", color: "#64748b" }}>
+            From studio configuration to automated 300 DPI fulfillment in 4 seamless steps:
+          </p>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "16px" }}>
+          {workflowSteps.map((ws) => (
             <div
+              key={ws.num}
               style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: "12px",
-                marginBottom: "12px",
-                flexWrap: "wrap",
+                background: "#f8fafc",
+                borderRadius: "10px",
+                padding: "16px",
+                border: "1px solid #f1f5f9",
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
                 <span
                   style={{
-                    width: "32px",
-                    height: "32px",
+                    width: "26px",
+                    height: "26px",
                     borderRadius: "50%",
                     background: "#008060",
-                    color: "#ffffff",
-                    display: "inline-flex",
+                    color: "#fff",
+                    display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    fontWeight: 800,
-                    fontSize: "14px",
-                    flexShrink: 0,
-                    boxShadow: "0 2px 4px rgba(0, 128, 96, 0.2)",
+                    fontSize: "12px",
+                    fontWeight: 700,
                   }}
                 >
-                  {step.num}
+                  {ws.num}
                 </span>
-                <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: "#0f172a" }}>
-                  {step.title}
-                </h3>
+                <span style={{ fontWeight: 700, fontSize: "13px", color: "#0f172a" }}>{ws.title}</span>
               </div>
-
-              <span
-                style={{
-                  background: "#f1f5f9",
-                  color: "#475569",
-                  fontSize: "11px",
-                  fontWeight: 600,
-                  padding: "4px 10px",
-                  borderRadius: "20px",
-                }}
-              >
-                {step.badge}
-              </span>
+              <p style={{ fontSize: "12px", color: "#64748b", margin: 0, lineHeight: 1.5 }}>
+                {ws.description}
+              </p>
             </div>
+          ))}
+        </div>
+      </div>
 
-            <ul
+      {/* Detailed 6-Step Implementation Roadmap */}
+      <div style={{ marginBottom: "28px" }}>
+        <h2 style={{ fontSize: "17px", fontWeight: 700, margin: "0 0 14px", color: "#0f172a" }}>
+          Step-by-Step Setup Roadmap
+        </h2>
+        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+          {steps.map((step) => (
+            <div
+              key={step.num}
               style={{
-                margin: "0 0 0 44px",
-                padding: 0,
-                display: "flex",
-                flexDirection: "column",
-                gap: "8px",
-                color: "#334155",
-                fontSize: "13.5px",
-                lineHeight: "1.55",
+                background: "#ffffff",
+                border: "1px solid #e2e8f0",
+                borderRadius: "12px",
+                padding: "20px 24px",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
               }}
             >
-              {step.points.map((pt, i) => (
-                <li key={i}>{pt}</li>
-              ))}
-            </ul>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "12px",
+                  marginBottom: "12px",
+                  flexWrap: "wrap",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                  <span
+                    style={{
+                      width: "32px",
+                      height: "32px",
+                      borderRadius: "50%",
+                      background: "#008060",
+                      color: "#ffffff",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontWeight: 800,
+                      fontSize: "14px",
+                      flexShrink: 0,
+                      boxShadow: "0 2px 4px rgba(0, 128, 96, 0.2)",
+                    }}
+                  >
+                    {step.num}
+                  </span>
+                  <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: "#0f172a" }}>
+                    {step.title}
+                  </h3>
+                </div>
 
-            {step.actionTo && (
-              <div style={{ marginTop: "16px", marginLeft: "44px" }}>
-                <Link
-                  to={step.actionTo}
+                <span
                   style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "6px",
-                    color: "#008060",
-                    fontWeight: 700,
-                    fontSize: "13px",
-                    textDecoration: "none",
+                    background: "#f1f5f9",
+                    color: "#475569",
+                    fontSize: "11px",
+                    fontWeight: 600,
+                    padding: "4px 10px",
+                    borderRadius: "20px",
                   }}
                 >
-                  {step.actionLabel}
-                </Link>
+                  {step.badge}
+                </span>
               </div>
-            )}
+
+              <ul
+                style={{
+                  margin: "0 0 0 44px",
+                  padding: 0,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "8px",
+                  color: "#334155",
+                  fontSize: "13.5px",
+                  lineHeight: "1.55",
+                }}
+              >
+                {step.points.map((pt, i) => (
+                  <li key={i}>{pt}</li>
+                ))}
+              </ul>
+
+              {step.actionTo && (
+                <div style={{ marginTop: "16px", marginLeft: "44px" }}>
+                  <Link
+                    to={step.actionTo}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      color: "#008060",
+                      fontWeight: 700,
+                      fontSize: "13px",
+                      textDecoration: "none",
+                    }}
+                  >
+                    {step.actionLabel}
+                  </Link>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Storefront Verification & Theme App Embed Checklist */}
+      <div
+        style={{
+          background: "#ffffff",
+          border: "1px solid #e2e8f0",
+          borderRadius: "14px",
+          padding: "24px",
+          marginBottom: "32px",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.03)",
+        }}
+      >
+        <h2 style={{ fontSize: "17px", fontWeight: 700, margin: "0 0 14px", color: "#0f172a" }}>
+          Storefront Verification &amp; Theme Checklist
+        </h2>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "16px" }}>
+          <div style={{ background: "#f8fafc", borderRadius: "10px", padding: "16px", border: "1px solid #f1f5f9" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
+              <span style={{ fontSize: "20px" }}>🛍️</span>
+              <span style={{ fontWeight: 700, fontSize: "14px", color: "#0f172a" }}>Test on Live Storefront</span>
+            </div>
+            <p style={{ fontSize: "12px", color: "#64748b", margin: 0, lineHeight: 1.5 }}>
+              Open any assigned product page on your online store to preview the live customizer modal, text inputs, and photo upload dropzone.
+            </p>
           </div>
-        ))}
+
+          <div style={{ background: "#f8fafc", borderRadius: "10px", padding: "16px", border: "1px solid #f1f5f9" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
+              <span style={{ fontSize: "20px" }}>🧩</span>
+              <span style={{ fontWeight: 700, fontSize: "14px", color: "#0f172a" }}>Theme App Embed &amp; Block</span>
+            </div>
+            <p style={{ fontSize: "12px", color: "#64748b", margin: 0, lineHeight: 1.5 }}>
+              Go to <strong>Online Store &gt; Themes &gt; Customize</strong>, open the default Product template, and ensure the <strong>Product Personalizer</strong> app block is added and saved.
+            </p>
+          </div>
+
+          <div style={{ background: "#f8fafc", borderRadius: "10px", padding: "16px", border: "1px solid #f1f5f9" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
+              <span style={{ fontSize: "20px" }}>🌐</span>
+              <span style={{ fontWeight: 700, fontSize: "14px", color: "#0f172a" }}>Multi-Language Translations</span>
+            </div>
+            <p style={{ fontSize: "12px", color: "#64748b", margin: 0, lineHeight: 1.5 }}>
+              Configure custom wording for English, Spanish, French, German, or Italian in <Link to="/app/settings" style={{ color: "#008060", fontWeight: 600 }}>App Settings</Link>.
+            </p>
+          </div>
+        </div>
       </div>
     </s-page>
   );
