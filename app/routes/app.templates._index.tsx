@@ -12,20 +12,20 @@ import {
 import { getShopBillingInfo } from "../models/billing.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session, billing } = await authenticate.admin(request);
+  const { admin, session, billing } = await authenticate.admin(request);
   const templates = await listTemplates(session.shop);
-  const billingInfo = await getShopBillingInfo(session.shop, billing);
+  const billingInfo = await getShopBillingInfo(session.shop, billing, admin);
   return { templates, billingInfo };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { session, billing } = await authenticate.admin(request);
+  const { admin, session, billing } = await authenticate.admin(request);
   const formData = await request.formData();
   const intent = formData.get("intent");
   const templateId = formData.get("templateId") as string;
 
   if (intent === "create") {
-    const billingInfo = await getShopBillingInfo(session.shop, billing);
+    const billingInfo = await getShopBillingInfo(session.shop, billing, admin);
     if (!billingInfo.canCreateMore) {
       return {
         success: false,
@@ -59,7 +59,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
 
   if (intent === "duplicate" && templateId) {
-    const billingInfo = await getShopBillingInfo(session.shop, billing);
+    const billingInfo = await getShopBillingInfo(session.shop, billing, admin);
     if (!billingInfo.canCreateMore) {
       return {
         success: false,

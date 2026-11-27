@@ -7,10 +7,10 @@ import { listCustomizedOrders } from "../models/order.server";
 import { getShopBillingInfo } from "../models/billing.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session, billing } = await authenticate.admin(request);
+  const { admin, session, billing } = await authenticate.admin(request);
   const templates = await listTemplates(session.shop);
   const orders = await listCustomizedOrders(session.shop);
-  const billingInfo = await getShopBillingInfo(session.shop, billing);
+  const billingInfo = await getShopBillingInfo(session.shop, billing, admin);
 
   const totalProductsLinked = templates.reduce(
     (acc: number, t: any) => acc + (t.products?.length || 0),

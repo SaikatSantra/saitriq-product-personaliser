@@ -32,28 +32,21 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   let primaryColor = "#008060";
   let defaultDpi = 300;
 
-  const normalizedShop = shop
-    ? shop.includes(".myshopify.com")
-      ? shop
-      : `${shop}.myshopify.com`
+  const candidateShop = shop.toLowerCase();
+  const normalizedShopCandidate = candidateShop.endsWith(".myshopify.com")
+    ? candidateShop
+    : candidateShop && /^[a-z0-9][a-z0-9-]*$/.test(candidateShop)
+      ? `${candidateShop}.myshopify.com`
+      : "";
+  const normalizedShop = /^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(normalizedShopCandidate)
+    ? normalizedShopCandidate
     : "";
 
   if (normalizedShop) {
     try {
-      let shopRecord = await prisma.shop.findUnique({
+      const shopRecord = await prisma.shop.findUnique({
         where: { shopifyDomain: normalizedShop },
       });
-      if (!shopRecord && shop) {
-        shopRecord = await prisma.shop.findFirst({
-          where: {
-            OR: [
-              { shopifyDomain: shop },
-              { shopifyDomain: normalizedShop },
-              { shopifyDomain: { contains: shop.replace(".myshopify.com", "") } },
-            ],
-          },
-        });
-      }
 
       if (shopRecord?.settings) {
         const parsed = JSON.parse(shopRecord.settings);

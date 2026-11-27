@@ -8,37 +8,137 @@ import {
   type ShopBillingInfo,
 } from "./billing.types";
 
+function resolvePlanFromSubscription(sub: any): string {
+  const subName = (sub?.name || "").toLowerCase();
+  if (subName.includes("unlimited")) {
+    return PLAN_UNLIMITED;
+  }
+  if (subName.includes("starter")) {
+    return PLAN_STARTER;
+  }
+
+  const priceAmount = Number(
+    sub?.lineItems?.[0]?.plan?.pricingDetails?.price?.amount ?? 0,
+  );
+  if (priceAmount >= 20) {
+    return PLAN_UNLIMITED;
+  }
+  if (priceAmount >= 5) {
+    return PLAN_STARTER;
+  }
+
+  return PLAN_FREE;
+}
+
 /**
- * Retrieves the current shop's plan, checks live Shopify billing subscriptions,
- * syncs local database state, and evaluates template quotas.
+ * Fetches the app's handle from Shopify Admin API and builds the Managed App Pricing URL.
+ */
+export async function getManagedPricingUrl(
+  shopifyDomain: string,
+  adminContext?: any,
+): Promise<string> {
+  const storeHandle = shopifyDomain.replace(".myshopify.com", "");
+  let appHandle = process.env.SHOPIFY_APP_HANDLE || "saitriq-product-personaliser";
+
+  if (adminContext && typeof adminContext.graphql === "function") {
+    try {
+      const response = await adminContext.graphql(`
+        query GetAppHandle {
+          currentAppInstallation {
+            app {
+              handle
+            }
+          }
+        }
+      `);
+      const json = await response.json();
+      const fetchedHandle = json?.data?.currentAppInstallation?.app?.handle;
+      if (fetchedHandle) {
+        appHandle = fetchedHandle;
+      }
+    } catch (err) {
+      console.warn("[Billing] Could not fetch app handle from Shopify:", err);
+    }
+  }
+
+  return `https://admin.shopify.com/store/${storeHandle}/charges/${appHandle}/pricing_plans`;
+}
+
+/**
+ * Retrieves the current shop's plan, checks live Shopify billing subscriptions
+ * (compatible with Shopify App Pricing / Managed Pricing), syncs local database state,
+ * and evaluates template quotas.
  */
 export async function getShopBillingInfo(
   shopifyDomain: string,
   billingContext?: any,
+  adminContext?: any,
 ): Promise<ShopBillingInfo> {
   const shop = await ensureShop(shopifyDomain);
 
   let activePlan = PLAN_FREE;
   let activeSubscription: any = null;
+  let shopifyChecked = false;
 
-  // 1. Check live Shopify Subscriptions via billing context
-  if (billingContext && typeof billingContext.check === "function") {
+  // 1. Prefer querying currentAppInstallation directly via Admin GraphQL (works for all Managed Pricing plan names)
+  if (adminContext && typeof adminContext.graphql === "function") {
+    try {
+      const response = await adminContext.graphql(`
+        query GetActiveSubscriptions {
+          currentAppInstallation {
+            activeSubscriptions {
+              id
+              name
+              status
+              test
+              currentPeriodEnd
+              lineItems {
+                id
+                plan {
+                  pricingDetails {
+                    __typename
+                    ... on AppRecurringPricing {
+                      price {
+                        amount
+                        currencyCode
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      `);
+      const json = await response.json();
+      const subs = json?.data?.currentAppInstallation?.activeSubscriptions;
+      if (Array.isArray(subs)) {
+        shopifyChecked = true;
+        const activeSub = subs.find((s: any) => s.status === "ACTIVE") || subs[0];
+        if (activeSub) {
+          activeSubscription = activeSub;
+          activePlan = resolvePlanFromSubscription(activeSub);
+        }
+      }
+    } catch (err) {
+      console.warn("[Billing] Could not query currentAppInstallation:", err);
+    }
+  }
+
+  // 2. Fallback to billing.check() if adminContext was not provided
+  if (!shopifyChecked && billingContext && typeof billingContext.check === "function") {
     try {
       const checkResult = await billingContext.check({
         plans: [PLAN_UNLIMITED, PLAN_STARTER],
         isTest: process.env.NODE_ENV !== "production",
       });
+      shopifyChecked = true;
 
       if (checkResult && checkResult.hasActivePayment) {
         const sub = checkResult.appSubscriptions?.[0];
         if (sub) {
           activeSubscription = sub;
-          const subName = (sub.name || "").toLowerCase();
-          if (subName.includes("unlimited")) {
-            activePlan = PLAN_UNLIMITED;
-          } else if (subName.includes("starter") || subName.includes("5")) {
-            activePlan = PLAN_STARTER;
-          }
+          activePlan = resolvePlanFromSubscription(sub);
         }
       }
     } catch (err) {
@@ -46,14 +146,14 @@ export async function getShopBillingInfo(
     }
   }
 
-  // 2. Fallback to local DB plan if not active on Shopify (e.g. manual grant or offline)
-  if (activePlan === PLAN_FREE && shop.planName && shop.planName !== "trial" && shop.planName !== "Free") {
+  // 3. Fallback to local DB plan only if Shopify could not be queried
+  if (!shopifyChecked && activePlan === PLAN_FREE && shop.planName && shop.planName !== "trial" && shop.planName !== "Free") {
     if (PLANS[shop.planName]) {
       activePlan = shop.planName;
     }
   }
 
-  // 3. Keep local DB planName in sync
+  // 4. Keep local DB planName in sync with Shopify
   if (shop.planName !== activePlan) {
     try {
       await prisma.shop.update({

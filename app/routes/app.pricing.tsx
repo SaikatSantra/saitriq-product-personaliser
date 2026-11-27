@@ -1,6 +1,5 @@
-import { useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
-import { useLoaderData, useFetcher, useSearchParams, Link } from "react-router";
+import { useLoaderData, useSearchParams, Link } from "react-router";
 import { authenticate } from "../shopify.server";
 import {
   PLANS,
@@ -10,104 +9,36 @@ import {
 } from "../models/billing.types";
 import {
   getShopBillingInfo,
-  cancelShopSubscription,
-  updateShopPlanLocally,
+  getManagedPricingUrl,
 } from "../models/billing.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session, billing } = await authenticate.admin(request);
-  const billingInfo = await getShopBillingInfo(session.shop, billing);
+  const { admin, session, billing } = await authenticate.admin(request);
+  const [billingInfo, managedPricingUrl] = await Promise.all([
+    getShopBillingInfo(session.shop, billing, admin),
+    getManagedPricingUrl(session.shop, admin),
+  ]);
 
   return {
     shop: session.shop,
     billingInfo,
     plans: Object.values(PLANS),
+    managedPricingUrl,
   };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { session, billing } = await authenticate.admin(request);
-  const formData = await request.formData();
-  const intent = formData.get("intent");
-  const plan = formData.get("plan") as string;
-
-  if (intent === "upgrade") {
-    if (plan === PLAN_STARTER || plan === PLAN_UNLIMITED) {
-      try {
-        // Initiates official Shopify recurring app subscription charge redirect.
-        await billing.request({
-          plan,
-          isTest: true,
-        });
-      } catch (error: any) {
-        // Re-throw if error is a redirect response from Shopify App Bridge (302 or 401)
-        if (
-          error instanceof Response ||
-          (error && typeof error === "object" && "status" in error && "headers" in error)
-        ) {
-          throw error;
-        }
-
-        console.error("[Shopify Billing Request Notice]:", error);
-        if (error?.errorData) {
-          console.error("[Shopify Billing UserErrors]:", JSON.stringify(error.errorData, null, 2));
-        }
-
-        const rawUserErrMsg = Array.isArray(error?.errorData)
-          ? error.errorData.map((e: any) => e.message || JSON.stringify(e)).join(", ")
-          : error?.message || "Failed to initiate billing subscription with Shopify";
-
-        const isDistributionErr = rawUserErrMsg.toLowerCase().includes("public distribution");
-
-        return {
-          success: false,
-          message: isDistributionErr
-            ? "Shopify Requirement: Apps without a public distribution cannot generate bills. To see the official Shopify payment approval screen, go to your Shopify Partner Dashboard → Apps → Saitriq Product Personaliser → Distribution, and select 'Public distribution'."
-            : `Shopify Billing Error: ${rawUserErrMsg}`,
-          isDistributionError: isDistributionErr,
-          requestedPlan: plan,
-        };
-      }
-    }
-    return { success: false, message: "Invalid plan selected" };
-  }
-
-  if (intent === "dev_activate") {
-    if (plan === PLAN_STARTER || plan === PLAN_UNLIMITED || plan === PLAN_FREE) {
-      await updateShopPlanLocally(session.shop, plan);
-      return {
-        success: true,
-        message: `Activated ${plan} plan in local development mode.`,
-      };
-    }
-  }
-
-  if (intent === "cancel") {
-    const result = await cancelShopSubscription(session.shop, billing);
-    return result;
-  }
-
-  return { success: false, message: "Action not recognized" };
+  const { admin, session, redirect } = await authenticate.admin(request);
+  const managedPricingUrl = await getManagedPricingUrl(session.shop, admin);
+  return redirect(managedPricingUrl, { target: "_top" });
 };
 
 export default function PricingPage() {
-  const { billingInfo, plans } = useLoaderData<typeof loader>();
-  const fetcher = useFetcher<typeof action>();
-  const fetcherData = fetcher.data as
-    | {
-        success?: boolean;
-        message?: string;
-        isDistributionError?: boolean;
-        requestedPlan?: string;
-      }
-    | undefined;
+  const { billingInfo, plans, managedPricingUrl } = useLoaderData<typeof loader>();
   const [searchParams] = useSearchParams();
   const isUpgraded = searchParams.get("upgraded") === "true";
 
-  const [confirmCancel, setConfirmCancel] = useState(false);
-
   const activePlanId = billingInfo.activePlan;
-  const isSubmitting = fetcher.state === "submitting" || fetcher.state === "loading";
 
   const templateLimitText =
     billingInfo.templateLimit === Infinity
@@ -141,98 +72,6 @@ export default function PricingPage() {
               <strong>{templateLimitText} templates</strong>.
             </div>
           </div>
-        </div>
-      )}
-
-      {/* Action Notification Message / Distribution Requirement Banner */}
-      {fetcherData?.message && (
-        <div
-          style={{
-            background: fetcherData.success ? "#f0fdf4" : "#fef2f2",
-            border: `1px solid ${fetcherData.success ? "#bbf7d0" : "#fecaca"}`,
-            borderRadius: "12px",
-            padding: "16px 20px",
-            marginBottom: "24px",
-            boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
-          }}
-        >
-          <div
-            style={{
-              color: fetcherData.success ? "#166534" : "#991b1b",
-              fontSize: "14px",
-              fontWeight: 700,
-              marginBottom: fetcherData.isDistributionError ? "8px" : 0,
-            }}
-          >
-            {fetcherData.success ? "✓ Success" : "⚠️ Shopify Billing Action Required"}
-          </div>
-          <div
-            style={{
-              color: fetcherData.success ? "#15803d" : "#7f1d1d",
-              fontSize: "13.5px",
-              lineHeight: 1.5,
-            }}
-          >
-            {fetcherData.message}
-          </div>
-
-          {fetcherData.isDistributionError && (
-            <div
-              style={{
-                marginTop: "14px",
-                paddingTop: "12px",
-                borderTop: "1px solid #fee2e2",
-                display: "flex",
-                alignItems: "center",
-                gap: "12px",
-                flexWrap: "wrap",
-              }}
-            >
-              <a
-                href="https://partners.shopify.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  background: "#008060",
-                  color: "#ffffff",
-                  padding: "8px 14px",
-                  borderRadius: "8px",
-                  fontSize: "12.5px",
-                  fontWeight: 600,
-                  textDecoration: "none",
-                }}
-              >
-                Open Partner Dashboard → Distribution ↗
-              </a>
-
-              <fetcher.Form method="post">
-                <input type="hidden" name="intent" value="dev_activate" />
-                <input
-                  type="hidden"
-                  name="plan"
-                  value={fetcherData.requestedPlan || PLAN_STARTER}
-                />
-                <button
-                  type="submit"
-                  style={{
-                    background: "#ffffff",
-                    border: "1px solid #cbd5e1",
-                    color: "#334155",
-                    padding: "8px 14px",
-                    borderRadius: "8px",
-                    fontSize: "12.5px",
-                    fontWeight: 600,
-                    cursor: "pointer",
-                  }}
-                >
-                  Or Test in Dev Mode (Skip Shopify Charge)
-                </button>
-              </fetcher.Form>
-            </div>
-          )}
         </div>
       )}
 
@@ -522,101 +361,53 @@ export default function PricingPage() {
                       ✓ Current Active Plan
                     </button>
 
-                    {/* Allow cancelling paid subscription to return to free */}
                     {(isStarter || isUnlimited) && (
                       <div style={{ marginTop: "10px", textAlign: "center" }}>
-                        {!confirmCancel ? (
-                          <button
-                            type="button"
-                            onClick={() => setConfirmCancel(true)}
-                            style={{
-                              background: "none",
-                              border: "none",
-                              color: "#ef4444",
-                              fontSize: "12px",
-                              fontWeight: 600,
-                              cursor: "pointer",
-                              textDecoration: "underline",
-                            }}
-                          >
-                            Cancel recurring subscription & return to Free
-                          </button>
-                        ) : (
-                          <div style={{ display: "flex", gap: "8px", justifyContent: "center", alignItems: "center", flexWrap: "wrap" }}>
-                            <span style={{ fontSize: "12px", color: "#64748b" }}>Are you sure?</span>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                fetcher.submit({ intent: "cancel" }, { method: "POST" });
-                                setConfirmCancel(false);
-                              }}
-                              style={{
-                                background: "#ef4444",
-                                border: "none",
-                                color: "#ffffff",
-                                padding: "4px 10px",
-                                borderRadius: "6px",
-                                fontSize: "11px",
-                                fontWeight: 700,
-                                cursor: "pointer",
-                              }}
-                            >
-                              Yes, Return to Free
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setConfirmCancel(false)}
-                              style={{
-                                background: "#f1f5f9",
-                                border: "1px solid #cbd5e1",
-                                color: "#475569",
-                                padding: "4px 8px",
-                                borderRadius: "6px",
-                                fontSize: "11px",
-                                cursor: "pointer",
-                              }}
-                            >
-                              Dismiss
-                            </button>
-                          </div>
-                        )}
+                        <a
+                          href={managedPricingUrl}
+                          target="_top"
+                          rel="noopener noreferrer"
+                          style={{
+                            color: "#475569",
+                            fontSize: "12px",
+                            fontWeight: 600,
+                            textDecoration: "underline",
+                          }}
+                        >
+                          Manage or cancel plan on Shopify ↗
+                        </a>
                       </div>
                     )}
                   </div>
                 ) : (
-                  <fetcher.Form method="POST">
-                    <input type="hidden" name="intent" value={p.id === PLAN_FREE ? "cancel" : "upgrade"} />
-                    <input type="hidden" name="plan" value={p.id} />
-                    <button
-                      type="submit"
-                      disabled={isSubmitting}
-                      style={{
-                        width: "100%",
-                        padding: "12px 18px",
-                        borderRadius: "10px",
-                        background: isStarter ? "#2563eb" : isUnlimited ? "#0f172a" : "#ffffff",
-                        border: isStarter
-                          ? "none"
-                          : isUnlimited
-                            ? "none"
-                            : "1px solid #cbd5e1",
-                        color: isStarter || isUnlimited ? "#ffffff" : "#1e293b",
-                        fontWeight: 700,
-                        fontSize: "14px",
-                        cursor: isSubmitting ? "not-allowed" : "pointer",
-                        boxShadow: isStarter
-                          ? "0 4px 12px rgba(37, 99, 235, 0.25)"
-                          : "none",
-                        transition: "all 0.15s ease",
-                      }}
-                    >
-                      {isSubmitting
-                        ? "Redirecting to Shopify..."
-                        : p.id === PLAN_FREE
-                          ? "Downgrade to Free (2 Templates)"
-                          : `Upgrade to ${p.name} ($${p.price}/mo recurring)`}
-                    </button>
-                  </fetcher.Form>
+                  <a
+                    href={managedPricingUrl}
+                    target="_top"
+                    rel="noopener noreferrer"
+                    style={{
+                      display: "block",
+                      textAlign: "center",
+                      textDecoration: "none",
+                      width: "100%",
+                      boxSizing: "border-box",
+                      padding: "12px 18px",
+                      borderRadius: "10px",
+                      background: isStarter ? "#2563eb" : isUnlimited ? "#0f172a" : "#ffffff",
+                      border: isStarter || isUnlimited ? "none" : "1px solid #cbd5e1",
+                      color: isStarter || isUnlimited ? "#ffffff" : "#1e293b",
+                      fontWeight: 700,
+                      fontSize: "14px",
+                      cursor: "pointer",
+                      boxShadow: isStarter
+                        ? "0 4px 12px rgba(37, 99, 235, 0.25)"
+                        : "none",
+                      transition: "all 0.15s ease",
+                    }}
+                  >
+                    {p.id === PLAN_FREE
+                      ? "Switch to Free on Shopify ↗"
+                      : `Choose ${p.name} on Shopify ($${p.price}/mo) ↗`}
+                  </a>
                 )}
               </div>
             </div>
@@ -760,10 +551,10 @@ export default function PricingPage() {
         <span style={{ fontSize: "28px" }}>🛡️</span>
         <div style={{ flex: 1, minWidth: "260px" }}>
           <div style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a", marginBottom: "2px" }}>
-            Official Shopify App Billing Integration
+            Official Shopify App Pricing Integration
           </div>
           <div style={{ fontSize: "13px", color: "#64748b", lineHeight: 1.4 }}>
-            All subscriptions are authenticated and managed through the official Shopify Billing API. Charges are recurring every 30 days, prorated automatically, and protected by Shopify's merchant guarantees.
+            All subscriptions are securely hosted and managed through Shopify App Pricing. Charges are recurring every 30 days, prorated automatically, and protected by Shopify's merchant guarantees.
           </div>
         </div>
       </div>

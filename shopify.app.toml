@@ -1,16 +1,12 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
-name = "saitriq product personaliser"
-client_id = "d6328924d55e229862620d053ae6269f"
-application_url = "https://example.com"
+client_id = "3c19c389c0a3d2bc15e10d9ea0f0c898"
+name = "ire product personaliser"
+application_url = "https://saitriq-product-personaliser.vercel.app"
 embedded = true
 
-[access_scopes]
-# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "read_products,write_products,read_orders,write_app_proxy,read_files,write_files"
-
 [webhooks]
-api_version = "2026-10"
+api_version = "2027-01"
 
   [[webhooks.subscriptions]]
   uri = "/webhooks/app/uninstalled"
@@ -19,12 +15,6 @@ api_version = "2026-10"
   [[webhooks.subscriptions]]
   uri = "/webhooks/app/scopes_update"
   topics = [ "app/scopes_update" ]
-
-  # Note: To declare orders/create in shopify.app.toml, request Protected Customer Data in Partner Dashboard
-  # (Partners Dashboard > Apps > API access > Protected customer data).
-  # [[webhooks.subscriptions]]
-  # uri = "/webhooks/orders/create"
-  # topics = [ "orders/create" ]
 
   [[webhooks.subscriptions]]
   uri = "/webhooks/customers/data_request"
@@ -38,8 +28,16 @@ api_version = "2026-10"
   uri = "/webhooks/shop/redact"
   compliance_topics = [ "shop/redact" ]
 
+[access_scopes]
+# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
+scopes = "read_files,read_orders,read_products,write_app_proxy,write_files,write_products"
+
 [auth]
-redirect_urls = [ "https://example.com/api/auth" ]
+redirect_urls = [
+  "https://saitriq-product-personaliser.vercel.app/auth/callback",
+  "https://saitriq-product-personaliser.vercel.app/auth/shopify/callback",
+  "https://saitriq-product-personaliser.vercel.app/api/auth/callback"
+]
 
 [app_proxy]
 url = "/api/storefront"
