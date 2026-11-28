@@ -1,0 +1,597 @@
+{
+  "buildManifest": {
+    "serverBundles": {
+      "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0": {
+        "id": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
+        "file": "build/server/nodejs_eyJydW50aW1lIjoibm9kZWpzIn0/index.js",
+        "config": {
+          "runtime": "nodejs"
+        }
+      }
+    },
+    "routeIdToServerBundleId": {
+      "routes/api.storefront.preview.$filename": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/webhooks.customers.data_request": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/webhooks.app.scopes_update": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/webhooks.customers.redact": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/webhooks.app.uninstalled": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/webhooks.products.update": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/api.storefront.template": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/webhooks.orders.create": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/api.preview.$filename": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/api.storefront.upload": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/api.storefront._index": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/webhooks.shop.redact": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/api.ai.remove-bg": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/auth.login": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/auth.$": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/_index": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/app.templates._index": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/app.templates.$id": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/app.additional": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/app.settings": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/app.pricing": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/app.orders": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/app._index": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/app.guide": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0"
+    },
+    "routes": {
+      "root": {
+        "id": "root",
+        "file": "app/root.tsx",
+        "path": "",
+        "config": {}
+      },
+      "routes/api.storefront.preview.$filename": {
+        "id": "routes/api.storefront.preview.$filename",
+        "parentId": "root",
+        "file": "app/routes/api.storefront.preview.$filename.ts",
+        "path": "api/storefront/preview/:filename",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/webhooks.customers.data_request": {
+        "id": "routes/webhooks.customers.data_request",
+        "parentId": "root",
+        "file": "app/routes/webhooks.customers.data_request.tsx",
+        "path": "webhooks/customers/data_request",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/webhooks.app.scopes_update": {
+        "id": "routes/webhooks.app.scopes_update",
+        "parentId": "root",
+        "file": "app/routes/webhooks.app.scopes_update.tsx",
+        "path": "webhooks/app/scopes_update",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/webhooks.customers.redact": {
+        "id": "routes/webhooks.customers.redact",
+        "parentId": "root",
+        "file": "app/routes/webhooks.customers.redact.tsx",
+        "path": "webhooks/customers/redact",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/webhooks.app.uninstalled": {
+        "id": "routes/webhooks.app.uninstalled",
+        "parentId": "root",
+        "file": "app/routes/webhooks.app.uninstalled.tsx",
+        "path": "webhooks/app/uninstalled",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/webhooks.products.update": {
+        "id": "routes/webhooks.products.update",
+        "parentId": "root",
+        "file": "app/routes/webhooks.products.update.tsx",
+        "path": "webhooks/products/update",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/api.storefront.template": {
+        "id": "routes/api.storefront.template",
+        "parentId": "root",
+        "file": "app/routes/api.storefront.template.ts",
+        "path": "api/storefront/template",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/webhooks.orders.create": {
+        "id": "routes/webhooks.orders.create",
+        "parentId": "root",
+        "file": "app/routes/webhooks.orders.create.tsx",
+        "path": "webhooks/orders/create",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/api.preview.$filename": {
+        "id": "routes/api.preview.$filename",
+        "parentId": "root",
+        "file": "app/routes/api.preview.$filename.ts",
+        "path": "api/preview/:filename",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/api.storefront.upload": {
+        "id": "routes/api.storefront.upload",
+        "parentId": "root",
+        "file": "app/routes/api.storefront.upload.ts",
+        "path": "api/storefront/upload",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/api.storefront._index": {
+        "id": "routes/api.storefront._index",
+        "parentId": "root",
+        "file": "app/routes/api.storefront._index.ts",
+        "path": "api/storefront",
+        "index": true,
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/webhooks.shop.redact": {
+        "id": "routes/webhooks.shop.redact",
+        "parentId": "root",
+        "file": "app/routes/webhooks.shop.redact.tsx",
+        "path": "webhooks/shop/redact",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/api.ai.remove-bg": {
+        "id": "routes/api.ai.remove-bg",
+        "parentId": "root",
+        "file": "app/routes/api.ai.remove-bg.ts",
+        "path": "api/ai/remove-bg",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/auth.login": {
+        "id": "routes/auth.login",
+        "parentId": "root",
+        "file": "app/routes/auth.login/route.tsx",
+        "path": "auth/login",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/auth.$": {
+        "id": "routes/auth.$",
+        "parentId": "root",
+        "file": "app/routes/auth.$.tsx",
+        "path": "auth/*",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/_index": {
+        "id": "routes/_index",
+        "parentId": "root",
+        "file": "app/routes/_index/route.tsx",
+        "index": true,
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/app": {
+        "id": "routes/app",
+        "parentId": "root",
+        "file": "app/routes/app.tsx",
+        "path": "app",
+        "config": {}
+      },
+      "routes/app.templates._index": {
+        "id": "routes/app.templates._index",
+        "parentId": "routes/app",
+        "file": "app/routes/app.templates._index.tsx",
+        "path": "templates",
+        "index": true,
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/app.templates.$id": {
+        "id": "routes/app.templates.$id",
+        "parentId": "routes/app",
+        "file": "app/routes/app.templates.$id.tsx",
+        "path": "templates/:id",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/app.additional": {
+        "id": "routes/app.additional",
+        "parentId": "routes/app",
+        "file": "app/routes/app.additional.tsx",
+        "path": "additional",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/app.settings": {
+        "id": "routes/app.settings",
+        "parentId": "routes/app",
+        "file": "app/routes/app.settings.tsx",
+        "path": "settings",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/app.pricing": {
+        "id": "routes/app.pricing",
+        "parentId": "routes/app",
+        "file": "app/routes/app.pricing.tsx",
+        "path": "pricing",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/app.orders": {
+        "id": "routes/app.orders",
+        "parentId": "routes/app",
+        "file": "app/routes/app.orders.tsx",
+        "path": "orders",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/app._index": {
+        "id": "routes/app._index",
+        "parentId": "routes/app",
+        "file": "app/routes/app._index.tsx",
+        "index": true,
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/app.guide": {
+        "id": "routes/app.guide",
+        "parentId": "routes/app",
+        "file": "app/routes/app.guide.tsx",
+        "path": "guide",
+        "config": {
+          "runtime": "nodejs"
+        }
+      }
+    }
+  },
+  "reactRouterConfig": {
+    "appDirectory": "D:/Saitriq/Projects - apps/saitriq-product-personaliser/app",
+    "basename": "/",
+    "buildDirectory": "D:/Saitriq/Projects - apps/saitriq-product-personaliser/build",
+    "future": {
+      "unstable_optimizeDeps": false,
+      "v8_passThroughRequests": false,
+      "v8_trailingSlashAwareDataRequests": false,
+      "unstable_previewServerPrerendering": false,
+      "v8_middleware": false,
+      "v8_splitRouteModules": false,
+      "v8_viteEnvironmentApi": false
+    },
+    "routes": {
+      "root": {
+        "id": "root",
+        "file": "root.tsx",
+        "path": ""
+      },
+      "routes/api.storefront.preview.$filename": {
+        "id": "routes/api.storefront.preview.$filename",
+        "parentId": "root",
+        "file": "routes/api.storefront.preview.$filename.ts",
+        "path": "api/storefront/preview/:filename"
+      },
+      "routes/webhooks.customers.data_request": {
+        "id": "routes/webhooks.customers.data_request",
+        "parentId": "root",
+        "file": "routes/webhooks.customers.data_request.tsx",
+        "path": "webhooks/customers/data_request"
+      },
+      "routes/webhooks.app.scopes_update": {
+        "id": "routes/webhooks.app.scopes_update",
+        "parentId": "root",
+        "file": "routes/webhooks.app.scopes_update.tsx",
+        "path": "webhooks/app/scopes_update"
+      },
+      "routes/webhooks.customers.redact": {
+        "id": "routes/webhooks.customers.redact",
+        "parentId": "root",
+        "file": "routes/webhooks.customers.redact.tsx",
+        "path": "webhooks/customers/redact"
+      },
+      "routes/webhooks.app.uninstalled": {
+        "id": "routes/webhooks.app.uninstalled",
+        "parentId": "root",
+        "file": "routes/webhooks.app.uninstalled.tsx",
+        "path": "webhooks/app/uninstalled"
+      },
+      "routes/webhooks.products.update": {
+        "id": "routes/webhooks.products.update",
+        "parentId": "root",
+        "file": "routes/webhooks.products.update.tsx",
+        "path": "webhooks/products/update"
+      },
+      "routes/api.storefront.template": {
+        "id": "routes/api.storefront.template",
+        "parentId": "root",
+        "file": "routes/api.storefront.template.ts",
+        "path": "api/storefront/template"
+      },
+      "routes/webhooks.orders.create": {
+        "id": "routes/webhooks.orders.create",
+        "parentId": "root",
+        "file": "routes/webhooks.orders.create.tsx",
+        "path": "webhooks/orders/create"
+      },
+      "routes/api.preview.$filename": {
+        "id": "routes/api.preview.$filename",
+        "parentId": "root",
+        "file": "routes/api.preview.$filename.ts",
+        "path": "api/preview/:filename"
+      },
+      "routes/api.storefront.upload": {
+        "id": "routes/api.storefront.upload",
+        "parentId": "root",
+        "file": "routes/api.storefront.upload.ts",
+        "path": "api/storefront/upload"
+      },
+      "routes/api.storefront._index": {
+        "id": "routes/api.storefront._index",
+        "parentId": "root",
+        "file": "routes/api.storefront._index.ts",
+        "path": "api/storefront",
+        "index": true
+      },
+      "routes/webhooks.shop.redact": {
+        "id": "routes/webhooks.shop.redact",
+        "parentId": "root",
+        "file": "routes/webhooks.shop.redact.tsx",
+        "path": "webhooks/shop/redact"
+      },
+      "routes/api.ai.remove-bg": {
+        "id": "routes/api.ai.remove-bg",
+        "parentId": "root",
+        "file": "routes/api.ai.remove-bg.ts",
+        "path": "api/ai/remove-bg"
+      },
+      "routes/auth.login": {
+        "id": "routes/auth.login",
+        "parentId": "root",
+        "file": "routes/auth.login/route.tsx",
+        "path": "auth/login"
+      },
+      "routes/auth.$": {
+        "id": "routes/auth.$",
+        "parentId": "root",
+        "file": "routes/auth.$.tsx",
+        "path": "auth/*"
+      },
+      "routes/_index": {
+        "id": "routes/_index",
+        "parentId": "root",
+        "file": "routes/_index/route.tsx",
+        "index": true
+      },
+      "routes/app": {
+        "id": "routes/app",
+        "parentId": "root",
+        "file": "routes/app.tsx",
+        "path": "app"
+      },
+      "routes/app.templates._index": {
+        "id": "routes/app.templates._index",
+        "parentId": "routes/app",
+        "file": "routes/app.templates._index.tsx",
+        "path": "templates",
+        "index": true
+      },
+      "routes/app.templates.$id": {
+        "id": "routes/app.templates.$id",
+        "parentId": "routes/app",
+        "file": "routes/app.templates.$id.tsx",
+        "path": "templates/:id"
+      },
+      "routes/app.additional": {
+        "id": "routes/app.additional",
+        "parentId": "routes/app",
+        "file": "routes/app.additional.tsx",
+        "path": "additional"
+      },
+      "routes/app.settings": {
+        "id": "routes/app.settings",
+        "parentId": "routes/app",
+        "file": "routes/app.settings.tsx",
+        "path": "settings"
+      },
+      "routes/app.pricing": {
+        "id": "routes/app.pricing",
+        "parentId": "routes/app",
+        "file": "routes/app.pricing.tsx",
+        "path": "pricing"
+      },
+      "routes/app.orders": {
+        "id": "routes/app.orders",
+        "parentId": "routes/app",
+        "file": "routes/app.orders.tsx",
+        "path": "orders"
+      },
+      "routes/app._index": {
+        "id": "routes/app._index",
+        "parentId": "routes/app",
+        "file": "routes/app._index.tsx",
+        "index": true
+      },
+      "routes/app.guide": {
+        "id": "routes/app.guide",
+        "parentId": "routes/app",
+        "file": "routes/app.guide.tsx",
+        "path": "guide"
+      }
+    },
+    "routeDiscovery": {
+      "mode": "lazy",
+      "manifestPath": "/__manifest"
+    },
+    "serverBuildFile": "index.js",
+    "serverModuleFormat": "esm",
+    "ssr": true,
+    "subResourceIntegrity": false,
+    "allowedActionOrigins": false,
+    "unstable_routeConfig": [
+      {
+        "id": "root",
+        "path": "",
+        "file": "root.tsx",
+        "children": [
+          {
+            "id": "routes/api.storefront.preview.$filename",
+            "file": "routes/api.storefront.preview.$filename.ts",
+            "path": "api/storefront/preview/:filename"
+          },
+          {
+            "id": "routes/webhooks.customers.data_request",
+            "file": "routes/webhooks.customers.data_request.tsx",
+            "path": "webhooks/customers/data_request"
+          },
+          {
+            "id": "routes/webhooks.app.scopes_update",
+            "file": "routes/webhooks.app.scopes_update.tsx",
+            "path": "webhooks/app/scopes_update"
+          },
+          {
+            "id": "routes/webhooks.customers.redact",
+            "file": "routes/webhooks.customers.redact.tsx",
+            "path": "webhooks/customers/redact"
+          },
+          {
+            "id": "routes/webhooks.app.uninstalled",
+            "file": "routes/webhooks.app.uninstalled.tsx",
+            "path": "webhooks/app/uninstalled"
+          },
+          {
+            "id": "routes/webhooks.products.update",
+            "file": "routes/webhooks.products.update.tsx",
+            "path": "webhooks/products/update"
+          },
+          {
+            "id": "routes/api.storefront.template",
+            "file": "routes/api.storefront.template.ts",
+            "path": "api/storefront/template"
+          },
+          {
+            "id": "routes/webhooks.orders.create",
+            "file": "routes/webhooks.orders.create.tsx",
+            "path": "webhooks/orders/create"
+          },
+          {
+            "id": "routes/api.preview.$filename",
+            "file": "routes/api.preview.$filename.ts",
+            "path": "api/preview/:filename"
+          },
+          {
+            "id": "routes/api.storefront.upload",
+            "file": "routes/api.storefront.upload.ts",
+            "path": "api/storefront/upload"
+          },
+          {
+            "id": "routes/api.storefront._index",
+            "file": "routes/api.storefront._index.ts",
+            "path": "api/storefront",
+            "index": true
+          },
+          {
+            "id": "routes/webhooks.shop.redact",
+            "file": "routes/webhooks.shop.redact.tsx",
+            "path": "webhooks/shop/redact"
+          },
+          {
+            "id": "routes/api.ai.remove-bg",
+            "file": "routes/api.ai.remove-bg.ts",
+            "path": "api/ai/remove-bg"
+          },
+          {
+            "id": "routes/auth.login",
+            "file": "routes/auth.login/route.tsx",
+            "path": "auth/login"
+          },
+          {
+            "id": "routes/auth.$",
+            "file": "routes/auth.$.tsx",
+            "path": "auth/*"
+          },
+          {
+            "id": "routes/_index",
+            "file": "routes/_index/route.tsx",
+            "index": true
+          },
+          {
+            "id": "routes/app",
+            "file": "routes/app.tsx",
+            "path": "app",
+            "children": [
+              {
+                "id": "routes/app.templates._index",
+                "file": "routes/app.templates._index.tsx",
+                "path": "templates",
+                "index": true
+              },
+              {
+                "id": "routes/app.templates.$id",
+                "file": "routes/app.templates.$id.tsx",
+                "path": "templates/:id"
+              },
+              {
+                "id": "routes/app.additional",
+                "file": "routes/app.additional.tsx",
+                "path": "additional"
+              },
+              {
+                "id": "routes/app.settings",
+                "file": "routes/app.settings.tsx",
+                "path": "settings"
+              },
+              {
+                "id": "routes/app.pricing",
+                "file": "routes/app.pricing.tsx",
+                "path": "pricing"
+              },
+              {
+                "id": "routes/app.orders",
+                "file": "routes/app.orders.tsx",
+                "path": "orders"
+              },
+              {
+                "id": "routes/app._index",
+                "file": "routes/app._index.tsx",
+                "index": true
+              },
+              {
+                "id": "routes/app.guide",
+                "file": "routes/app.guide.tsx",
+                "path": "guide"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "viteConfig": {
+    "build": {
+      "assetsDir": "assets"
+    }
+  }
+}
